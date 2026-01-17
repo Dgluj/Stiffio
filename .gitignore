@@ -1,0 +1,17 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.env
+
+# --- Arduino ---
+build/
+libraries/
+*.hex
+*.elf
+
+# --- Sistema y VS Code ---
+.vscode/
+.DS_Store
+Thumbs.db
