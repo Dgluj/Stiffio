@@ -34,6 +34,8 @@ float hp_out2 = 0, lp_out2 = 0, prev_in2 = 0;
 // VARIABLES GLOBALES
 // ======================================================================
 TFT_eSPI tft = TFT_eSPI();
+TFT_eSprite graphSprite = TFT_eSprite(&tft); // Sprite para gráficos sin parpadeo
+
 XPT2046_Touchscreen touch(TOUCH_CS, TOUCH_IRQ);
 MAX30105 sensorProx;
 MAX30105 sensorDist;
@@ -43,14 +45,18 @@ enum Estado { MENU, MEDICION };
 Estado pantallaActual = MENU;
 bool medicionActiva = false;
 
-// Buffer Gráfico (2 segundos @ 50Hz = 100 muestras)
-#define BUFFER_SIZE 100
+// Buffer Gráfico (4 segundos @ 50Hz = 200 muestras)
+// Pantalla de 400px ancho / 200 muestras = 2 pixeles por paso
+#define BUFFER_SIZE 200
 float buffer_s1[BUFFER_SIZE];
 float buffer_s2[BUFFER_SIZE];
 int bufferIndex = 0;
 
+// Contador Absoluto de Muestras (Para el Eje X Móvil)
+unsigned long totalMuestras = 0; 
+
 // Tiempos
-unsigned long lastSampleTime = 0;
+unsigned long lastSampleTime = 0; 
 const unsigned long SAMPLE_INTERVAL = 20000; // 50Hz
 unsigned long lastDrawTime = 0;
 const unsigned long DRAW_INTERVAL = 40; // ~25fps
@@ -61,14 +67,14 @@ const unsigned long DRAW_INTERVAL = 40; // ~25fps
 #define GRAPH_W 400
 #define GRAPH_H 180
 
-// Botones Menú (Estilo Display_TFT.ino)
+// Botones Menú
 int btnW = 300; int btnH = 70;
 int btnX = (480 - btnW) / 2;
 int btnY1 = 85;  // Test Rápido
 int btnY2 = 185; // Estudio Completo
 
 // ======================================================================
-// FUNCIONES DE FILTRADO (Tu lógica original)
+// FUNCIONES DE FILTRADO
 // ======================================================================
 float aplicarFiltros(float rawInput, float &hp_out, float &lp_out, float &prev_in) {
   // 1. Normalización básica (opcional, pero ayuda a mantener números manejables)
@@ -157,26 +163,27 @@ void prepararPantallaMedicion() {
   tft.setTextColor(TFT_RED); tft.drawString("S1: Proximal", 40, 270, 2);
   tft.setTextColor(TFT_CYAN); tft.drawString("S2: Distal", 40, 290, 2);
 
-  // Ejes estáticos (2 segundos fijos)
-  tft.drawRect(GRAPH_X, GRAPH_Y, GRAPH_W, GRAPH_H, TFT_DARKGREY);
-  tft.setTextDatum(TC_DATUM);
-  tft.setTextColor(TFT_SILVER);
-  tft.drawString("0s", GRAPH_X, GRAPH_Y + GRAPH_H + 5, 2);
-  tft.drawString("1s", GRAPH_X + GRAPH_W/2, GRAPH_Y + GRAPH_H + 5, 2);
-  tft.drawString("2s", GRAPH_X + GRAPH_W, GRAPH_Y + GRAPH_H + 5, 2);
+  // Marco del gráfico
+  tft.drawRect(GRAPH_X - 1, GRAPH_Y - 1, GRAPH_W + 2, GRAPH_H + 2, TFT_DARKGREY);
+
+  // --- EJE Y (AMPLITUD) ---
+  // El "0" lo dejamos fijo a la izquierda como referencia
+  tft.setTextDatum(MR_DATUM);
+  tft.setTextColor(TFT_GREEN); 
+  tft.drawString("0", GRAPH_X - 5, GRAPH_Y + GRAPH_H/2, 2); 
 }
 
 // ======================================================================
-// LÓGICA DE DIBUJADO DE ONDA
+// LÓGICA DE DIBUJADO (SPRITE + EJE MÓVIL)
 // ======================================================================
 void actualizarGrafico() {
-  // Limpiar solo el área interna del gráfico
-  tft.fillRect(GRAPH_X + 1, GRAPH_Y + 1, GRAPH_W - 2, GRAPH_H - 2, TFT_BLACK);
+  // 1. Limpiar Sprite (Fondo Negro)
+  graphSprite.fillSprite(TFT_BLACK);
   
-  // Línea central de referencia (0)
-  tft.drawLine(GRAPH_X, GRAPH_Y + GRAPH_H/2, GRAPH_X + GRAPH_W, GRAPH_Y + GRAPH_H/2, tft.color565(30,30,30));
+  // 2. Línea Central Fija (Referencia Nivel 0)
+  graphSprite.drawFastHLine(0, GRAPH_H/2, GRAPH_W, tft.color565(0, 50, 0)); 
 
-  // Autoescala
+  // 3. Autoescala
   float minV = -50, maxV = 50;
   for(int i=0; i<BUFFER_SIZE; i++) {
     if(buffer_s1[i] < minV) minV = buffer_s1[i];
@@ -186,39 +193,64 @@ void actualizarGrafico() {
   }
 
   // Clamp anti-ruido (Para que no haga zoom en estática)
-  if((maxV - minV) < 200) {
+  if((maxV - minV) < 150) {
     float mid = (maxV + minV) / 2;
-    maxV = mid + 100; minV = mid - 100;
+    maxV = mid + 75; minV = mid - 75;
   }
   
-  // Dibujar
-  float xStep = (float)GRAPH_W / (float)BUFFER_SIZE;
+  // 4. Dibujar Onda + Rejilla Móvil
+  // Recorremos el buffer de izquierda (antiguo) a derecha (nuevo)
+  float xStep = (float)GRAPH_W / (float)BUFFER_SIZE; 
+  
+  // Configuración texto para los segundos
+  graphSprite.setTextDatum(TC_DATUM); 
+  graphSprite.setTextColor(TFT_SILVER);
 
   for (int i = 0; i < BUFFER_SIZE - 1; i++) {
-    // Dibujamos el buffer tal cual (Barrido constante)
-    // Usamos indices circulares para mantener continuidad
+    // Índices circulares
     int idx = (bufferIndex + i) % BUFFER_SIZE;
     int nextIdx = (bufferIndex + i + 1) % BUFFER_SIZE;
-    
-    // Ignorar puntos vacíos al inicio
+
+    // Coordenadas X en pantalla
+    int x1 = (int)(i * xStep);
+    int x2 = (int)((i + 1) * xStep);
+
+    // --- LÓGICA DE EJE X MÓVIL ---
+    // Calculamos a qué muestra histórica corresponde este píxel
+    // totalMuestras = final del buffer (borde derecho)
+    // restamos para saber la antiguedad hacia la izquierda
+    long absoluteSample = totalMuestras - (BUFFER_SIZE - 1) + i;
+
+    // Si es múltiplo de 50 (cada 1 segundo exacto a 50Hz)
+    if (absoluteSample > 0 && absoluteSample % 50 == 0) {
+      // Línea vertical gris que se mueve
+      graphSprite.drawFastVLine(x1, 0, GRAPH_H, tft.color565(50, 50, 50));
+      
+      // Texto "Xs" que viaja con la línea
+      String label = String(absoluteSample / 50) + "s";
+      graphSprite.drawString(label, x1, GRAPH_H - 20, 2); 
+    }
+
+        // Ignorar si no hay datos
     if(buffer_s1[idx] == 0 && buffer_s1[nextIdx] == 0) continue;
 
-    int y1A = map((long)buffer_s1[idx], (long)minV, (long)maxV, GRAPH_Y + GRAPH_H, GRAPH_Y);
-    int y1B = map((long)buffer_s1[nextIdx], (long)minV, (long)maxV, GRAPH_Y + GRAPH_H, GRAPH_Y);
-    
-    int y2A = map((long)buffer_s2[idx], (long)minV, (long)maxV, GRAPH_Y + GRAPH_H, GRAPH_Y);
-    int y2B = map((long)buffer_s2[nextIdx], (long)minV, (long)maxV, GRAPH_Y + GRAPH_H, GRAPH_Y);
+    // Mapeo Y
+    int y1A = map((long)buffer_s1[idx], (long)minV, (long)maxV, GRAPH_H, 0);
+    int y1B = map((long)buffer_s1[nextIdx], (long)minV, (long)maxV, GRAPH_H, 0);
+    int y2A = map((long)buffer_s2[idx], (long)minV, (long)maxV, GRAPH_H, 0);
+    int y2B = map((long)buffer_s2[nextIdx], (long)minV, (long)maxV, GRAPH_H, 0);
 
-    // Restricciones visuales (Clipping)
-    y1A = constrain(y1A, GRAPH_Y, GRAPH_Y+GRAPH_H); y1B = constrain(y1B, GRAPH_Y, GRAPH_Y+GRAPH_H);
-    y2A = constrain(y2A, GRAPH_Y, GRAPH_Y+GRAPH_H); y2B = constrain(y2B, GRAPH_Y, GRAPH_Y+GRAPH_H);
+    // Clipping (Seguridad visual)
+    y1A = constrain(y1A, 0, GRAPH_H-1); y1B = constrain(y1B, 0, GRAPH_H-1);
+    y2A = constrain(y2A, 0, GRAPH_H-1); y2B = constrain(y2B, 0, GRAPH_H-1);
 
-    int x1 = GRAPH_X + (int)(i * xStep);
-    int x2 = GRAPH_X + (int)((i + 1) * xStep);
-
-    tft.drawLine(x1, y1A, x2, y1B, TFT_RED);
-    tft.drawLine(x1, y2A, x2, y2B, TFT_CYAN);
+    // Dibujar líneas de señal
+    graphSprite.drawLine(x1, y1A, x2, y1B, TFT_RED);
+    graphSprite.drawLine(x1, y2A, x2, y2B, TFT_CYAN);
   }
+
+  // 5. Estampar Sprite
+  graphSprite.pushSprite(GRAPH_X, GRAPH_Y);
 }
 
 // ======================================================================
@@ -243,9 +275,10 @@ void loop() {
         if (iniciarSensores()) {
           pantallaActual = MEDICION;
           medicionActiva = true;
+          totalMuestras = 0; // <--- RESETEAR CONTADOR DE TIEMPO
           prepararPantallaMedicion();
         } else {
-          tft.drawString("ERROR I2C", 240, 160, 4);
+          tft.drawString("ERROR DE SENSOR", 240, 160, 4);
           delay(2000);
           dibujarMenuPrincipal();
         }
@@ -292,6 +325,9 @@ void loop() {
          buffer_s2[bufferIndex] = aplicarFiltros(raw2, hp_out2, lp_out2, prev_in2);
       }
 
+      // Incrementar contador total (para el eje X móvil)
+      totalMuestras++;
+
       // Buffer circular
       bufferIndex++;
       if (bufferIndex >= BUFFER_SIZE) bufferIndex = 0;
@@ -314,10 +350,15 @@ void setup() {
   pinMode(LCD_LED_PIN, OUTPUT);
   digitalWrite(LCD_LED_PIN, HIGH);
 
+  // TFT y Sprite
   tft.init();
   tft.setRotation(1);
   tft.setSwapBytes(true);
 
+  graphSprite.setColorDepth(8); // 8 bits es ligero y rápido
+  graphSprite.createSprite(GRAPH_W, GRAPH_H);
+
+  // Touch
   touch.begin();
   touch.setRotation(1);
 
