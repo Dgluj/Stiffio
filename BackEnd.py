@@ -87,7 +87,18 @@ class SignalProcessor:
             self.distal_filtered.clear()
             self.distal_filtered.extend(smoothed)
 
+    def get_signals(self):
+        """Retorna las señales FILTRADAS (EMA) para graficar"""
+        time_axis = np.linspace(0, len(self.proximal_filtered)/self.fs, len(self.proximal_filtered))
+        return (
+            time_axis,
+            # Devolvemos las filtradas para que la gráfica se vea suave
+            list(self.proximal_filtered),
+            list(self.distal_filtered)
+        )
+    
 
+    '''
     def detect_wave_peaks(self, signal):
         """
         Detección robusta de PICOS (máximos) de onda PPG reflejada.
@@ -193,7 +204,7 @@ class SignalProcessor:
             # Si algún sensor no está OK, limpiar buffers y no procesar
             self.clear_buffers()
             return
-        
+     
         # 1. Trae los últimos datos del microcontrolador
         self.update_data()
         # --- AÑADIDO ---
@@ -202,23 +213,13 @@ class SignalProcessor:
         self.filter_signals() # (Esta función ya tiene su propio check "if > 10" adentro)
         # 3. Calcula PWV sobre las señales filtradas
         self.calculate_pwv() # (Esta función ya tiene su check "if < MAX_POINTS" adentro)
-    
+     '''  
 
-    def get_signals(self):
-        """Retorna las señales FILTRADAS (EMA) para graficar"""
-        time_axis = np.linspace(0, len(self.proximal_filtered)/self.fs, len(self.proximal_filtered))
-        return (
-            time_axis,
-            # Devolvemos las filtradas para que la gráfica se vea suave
-            list(self.proximal_filtered),
-            list(self.distal_filtered)
-        )
-    
-
+'''
     def get_metrics(self):
         """Retorna las métricas calculadas"""
         return {'pwv': self.pwv}
-
+'''
 
 # Instancia global
 processor = SignalProcessor()
