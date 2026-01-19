@@ -29,49 +29,36 @@
 #define COLOR_S2             TFT_BLUE // Azul oscuro para contraste en blanco
 
 // ======================================================================
-// FILTROS
+// VARIABLES COMPARTIDAS (MULTICORE)
 // ======================================================================
-const float alpha_hp = 0.95; // Alpha HP (Pasa Altos): Elimina la deriva (DC) y la respiración lenta.
-const float alpha_lp = 0.15; // Alpha LP (Pasa Bajos): Elimina el ruido eléctrico "dientes de sierra". // Cuanto más bajo, más suave la curva
+// El buffer ahora es 'volatile' porque se comparte entre núcleos
+#define BUFFER_SIZE 320 // Ajustado al ancho del gráfico
+volatile float buffer_s1[BUFFER_SIZE];
+volatile float buffer_s2[BUFFER_SIZE];
+volatile int writeHead = 0; // Índice de escritura del sensor
 
-// Umbral para detectar dedo (Evita que arranque con ruido)
-const long FINGER_THRESHOLD = 50000; 
+// Variables de estado compartidas
+volatile bool medicionActiva = false;
+volatile bool dedo1ok = false;
+volatile bool dedo2ok = false;
+volatile unsigned long totalMuestras = 0;
 
-// Variables de estado para los filtros 
-float hp_out1 = 0, lp_out1 = 0, prev_in1 = 0;
-float hp_out2 = 0, lp_out2 = 0, prev_in2 = 0;
+// Semáforo para proteger la memoria (evita que se lea mientras se escribe)
+portMUX_TYPE bufferMux = portMUX_INITIALIZER_UNLOCKED;
 
 // ======================================================================
 // VARIABLES GLOBALES
 // ======================================================================
 TFT_eSPI tft = TFT_eSPI();
 TFT_eSprite graphSprite = TFT_eSprite(&tft); // Sprite para gráficos sin parpadeo
-
 XPT2046_Touchscreen touch(TOUCH_CS, TOUCH_IRQ);
+
 MAX30105 sensorProx;
 MAX30105 sensorDist;
 
 // Estados
 enum Estado { MENU, MEDICION };
 Estado pantallaActual = MENU;
-bool medicionActiva = false;
-bool dedoPresente = false;
-
-// Buffer Gráfico (4 segundos @ 50Hz = 200 muestras)
-// Pantalla de 400px ancho / 200 muestras = 2 pixeles por paso
-#define BUFFER_SIZE 200
-float buffer_s1[BUFFER_SIZE];
-float buffer_s2[BUFFER_SIZE];
-int bufferIndex = 0;
-
-// Contador Absoluto de Muestras (Para el Eje X Móvil)
-unsigned long totalMuestras = 0; 
-
-// Tiempos
-unsigned long lastSampleTime = 0; 
-const unsigned long SAMPLE_INTERVAL = 20000; // 50Hz
-unsigned long lastDrawTime = 0;
-const unsigned long DRAW_INTERVAL = 40; // ~25fps
 
 // Coordenadas Gráfico
 #define GRAPH_X 40
@@ -85,42 +72,92 @@ int btnX = (480 - btnW) / 2;
 int btnY1 = 85;  // Test Rápido
 int btnY2 = 185; // Estudio Completo
 
+// Tiempos de Refresco Visual (El muestreo va aparte)
+unsigned long lastDrawTime = 0;
+const unsigned long DRAW_INTERVAL = 40; // ~25fps visuales
+
+// ======================================================================
+// TAREA NÚCLEO 0: SENSOR Y MATEMÁTICA (NO TOCAR UI AQUÍ)
+// ======================================================================
+void TaskSensores(void *pvParameters) {
+  // Variables locales del filtro (Fórmula Mágica)
+  const int NUM_READINGS = 4;
+  long readings1[NUM_READINGS] = {0};
+  long readings2[NUM_READINGS] = {0};
+  int readIndex = 0;
+  long total1 = 0, total2 = 0;
+  float dc1 = 0, dc2 = 0;
+  const float alpha = 0.95;
+  const long FINGER_THRESHOLD = 50000;
+
+  // Loop infinito de alta velocidad
+  for (;;) {
+    if (medicionActiva) {
+      
+      long ir1 = sensorProx.getIR();
+      long ir2 = sensorDist.getIR();
+
+      // Actualizar estado global de dedos
+      dedo1ok = (ir1 > FINGER_THRESHOLD);
+      dedo2ok = (ir2 > FINGER_THRESHOLD);
+
+      if (dedo1ok && dedo2ok) {
+        // --- PROCESAMIENTO MATEMÁTICO (TU CÓDIGO) ---
+        total1 -= readings1[readIndex]; readings1[readIndex] = ir1; total1 += readings1[readIndex];
+        long smooth1 = total1 / NUM_READINGS;
+        dc1 = (alpha * dc1) + (1.0 - alpha) * smooth1;
+        float val1 = smooth1 - dc1;
+
+        total2 -= readings2[readIndex]; readings2[readIndex] = ir2; total2 += readings2[readIndex];
+        long smooth2 = total2 / NUM_READINGS;
+        dc2 = (alpha * dc2) + (1.0 - alpha) * smooth2;
+        float val2 = smooth2 - dc2;
+
+        readIndex = (readIndex + 1) % NUM_READINGS;
+
+        // --- GUARDADO SEGURO EN BUFFER COMPARTIDO ---
+        portENTER_CRITICAL(&bufferMux); 
+        buffer_s1[writeHead] = val1;
+        buffer_s2[writeHead] = val2;
+        writeHead++;
+        if (writeHead >= BUFFER_SIZE) writeHead = 0;
+        totalMuestras++;
+        portEXIT_CRITICAL(&bufferMux);
+
+      } else {
+         // Reset filtros si no hay dedo
+         dc1 = ir1; total1 = ir1 * NUM_READINGS;
+         dc2 = ir2; total2 = ir2 * NUM_READINGS;
+         for(int i=0; i<NUM_READINGS; i++) { readings1[i]=ir1; readings2[i]=ir2; }
+      }
+    }
+    
+    // CONTROL DE TIEMPO EXACTO: 10ms = 100Hz
+    // Esto garantiza que el tiempo fluya real, sin dilatarse
+    vTaskDelay(pdMS_TO_TICKS(10)); 
+  }
+}
+
 // ======================================================================
 // FUNCIONES
 // ======================================================================
-float aplicarFiltros(float rawInput, float &hp_out, float &lp_out, float &prev_in) {
-  // 1. Normalización básica (opcional, pero ayuda a mantener números manejables)
-  float input = rawInput; // Usamos un factor de escala simple en lugar de dividir por MAX_ADC para no perder precisión en float
-
-  // 2. Filtro Pasa Altos (High Pass) -> Elimina Deriva/Gravedad
-  hp_out = alpha_hp * (hp_out + input - prev_in); // Formula: y[i] = alpha * (y[i-1] + x[i] - x[i-1])
-  prev_in = input;
-
-  // 3. Filtro Pasa Bajos (Low Pass) -> Suaviza Picos
-  lp_out = (alpha_lp * hp_out) + ((1.0 - alpha_lp) * lp_out); // Formula: y[i] = alpha * x[i] + (1-alpha) * y[i-1]
-
-  return lp_out;
-}
-
 bool iniciarSensores() {
-  Wire.begin(SDA1, SCL1, I2C_SPEED_FAST);
-  Wire1.begin(SDA2, SCL2, I2C_SPEED_FAST);
+  Wire.begin(SDA1, SCL1, 400000);
+  Wire1.begin(SDA2, SCL2, 400000);
 
   if (!sensorProx.begin(Wire, I2C_SPEED_FAST)) return false;
   if (!sensorDist.begin(Wire1, I2C_SPEED_FAST)) return false;
 
-  // Configuración estable (sampleAverage=4 ayuda mucho al hardware, aumentar a 8 para menos ruido eléctrico)
-  sensorProx.setup(0x2F, 8, 2, 400, 411, 4096);
-  sensorDist.setup(0x2F, 8, 2, 400, 411, 4096);
+  // Configuración Rápida y Suave
+  sensorProx.setup(31, 4, 2, 100, 411, 4096);
+  sensorDist.setup(31, 4, 2, 100, 411, 4096);
   
-  // Resetear filtros
-  hp_out1 = 0; lp_out1 = 0; prev_in1 = sensorProx.getIR();
-  hp_out2 = 0; lp_out2 = 0; prev_in2 = sensorDist.getIR();
-  
-  // Limpiar buffer
+  // Limpiar Buffers Globales
+  portENTER_CRITICAL(&bufferMux);
   for(int i=0; i<BUFFER_SIZE; i++) { buffer_s1[i]=0; buffer_s2[i]=0; }
-  bufferIndex = 0;
-  totalMuestras = 0; // Resetear tiempo
+  writeHead = 0;
+  totalMuestras = 0;
+  portEXIT_CRITICAL(&bufferMux);
   
   return true;
 }
@@ -182,13 +219,27 @@ void prepararPantallaMedicion() {
 }
 
 // ======================================================================
-// LÓGICA DE DIBUJADO
+// ACTUALIZAR GRÁFICO (ADAPTADO A MULTICORE)
 // ======================================================================
 void actualizarGrafico() {
+  // 1. COPIA SEGURA DE DATOS (SNAPSHOT)
+  // Copiamos los datos del núcleo 0 a variables locales para dibujar tranquilos
+  float localBuf1[BUFFER_SIZE];
+  float localBuf2[BUFFER_SIZE];
+  int localHead;
+  unsigned long localTotalMuestras;
+
+  portENTER_CRITICAL(&bufferMux);
+  memcpy(localBuf1, (const void*)buffer_s1, sizeof(buffer_s1));
+  memcpy(localBuf2, (const void*)buffer_s2, sizeof(buffer_s2));
+  localHead = writeHead;
+  localTotalMuestras = totalMuestras;
+  portEXIT_CRITICAL(&bufferMux);
+
   // 1. Limpiar Sprite (Fondo Blanco)
   graphSprite.fillSprite(COLOR_FONDO_MEDICION);
 
-  // 1. VERIFICAR DEDOS Y MOSTRAR MENSAJES ESPECÍFICOS
+  // 2. VERIFICAR DEDOS Y MOSTRAR MENSAJES ESPECÍFICOS
   // Si falta ALGUNO de los dos, detenemos el graficado y mostramos alerta
   if (!dedo1ok || !dedo2ok) {
     graphSprite.setTextDatum(MC_DATUM);
@@ -214,25 +265,23 @@ void actualizarGrafico() {
   }
   // --- AMBOS dedos están puestos ---
   
-  // 2. Línea Central Fija (Referencia Nivel 0)
+  // 3. Línea Central Fija (Referencia Nivel 0)
   graphSprite.drawFastHLine(0, GRAPH_H/2, GRAPH_W, TFT_LIGHTGREY); 
 
-  // 3. Autoescala
+  // 4. Autoescala
   float minV = -50, maxV = 50;
   for(int i=0; i<BUFFER_SIZE; i++) {
-    if(buffer_s1[i] < minV) minV = buffer_s1[i];
-    if(buffer_s1[i] > maxV) maxV = buffer_s1[i];
-    if(buffer_s2[i] < minV) minV = buffer_s2[i];
-    if(buffer_s2[i] > maxV) maxV = buffer_s2[i];
+    if(localBuf1[i] < minV) minV = localBuf1[i];
+    if(localBuf1[i] > maxV) maxV = localBuf1[i];
   }
 
   // Clamp anti-ruido (Para que no haga zoom en estática)
-  if((maxV - minV) < 600) {
+  if((maxV - minV) < 100) {
     float mid = (maxV + minV) / 2;
-    maxV = mid + 300; minV = mid - 300;
+    maxV = mid + 50; minV = mid - 50;
   }
   
-  // 4. Dibujar Onda + Rejilla Móvil
+  // 5. Dibujar Onda + Rejilla Móvil
   float xStep = (float)GRAPH_W / (float)BUFFER_SIZE; // Recorremos el buffer de izquierda (antiguo) a derecha (nuevo)
   
   // Configuración texto para los segundos
@@ -240,35 +289,34 @@ void actualizarGrafico() {
   graphSprite.setTextColor(COLOR_EJE);
 
   for (int i = 0; i < BUFFER_SIZE - 1; i++) {
-    // Índices circulares
-    int idx = (bufferIndex + i) % BUFFER_SIZE;
-    int nextIdx = (bufferIndex + i + 1) % BUFFER_SIZE;
+    // Truco: Usamos 'localHead' para alinear el gráfico siempre igual
+    // Esto hace que la onda vieja salga por la izq y la nueva entre por la derecha
+    int idx = (localHead + i) % BUFFER_SIZE;
+    int nextIdx = (localHead + i + 1) % BUFFER_SIZE;
 
     // Coordenadas X en pantalla
     int x1 = (int)(i * xStep);
     int x2 = (int)((i + 1) * xStep);
 
     // EJE X MÓVIL
-    // Calculamos a qué muestra histórica corresponde este píxel
-    long absoluteSample = totalMuestras - (BUFFER_SIZE - 1) + i; // totalMuestras = final del buffer (borde derecho), restamos para saber la antiguedad hacia la izquierda
+    // Calculamos el tiempo basado en el contador total del Núcleo 0
+    long absoluteSample = localTotalMuestras - (BUFFER_SIZE - 1) + i; // totalMuestras = final del buffer (borde derecho), restamos para saber la antiguedad hacia la izquierda
 
-    if (absoluteSample > 0 && absoluteSample % 50 == 0) { // Si es múltiplo de 50 (cada 1 segundo exacto a 50Hz)
-      
+    if (absoluteSample > 0 && absoluteSample % 100 == 0) { // Cada 100 muestras = 1 segundo
       graphSprite.drawFastVLine(x1, 0, GRAPH_H, COLOR_GRILLA); // Línea vertical tenue
-      
       // Texto "Xs" que viaja con la línea
-      String label = String(absoluteSample / 50) + "s";
+      String label = String(absoluteSample / 100) + "s";
       graphSprite.drawString(label, x1, GRAPH_H - 20, 2); 
     }
 
     // Ignorar si no hay datos
-    if(buffer_s1[idx] == 0 && buffer_s1[nextIdx] == 0) continue;
+    if(localBuf1[idx] == 0 && localBuf1[nextIdx] == 0) continue;
 
     // Mapeo Y
-    int y1A = map((long)buffer_s1[idx], (long)minV, (long)maxV, GRAPH_H, 0);
-    int y1B = map((long)buffer_s1[nextIdx], (long)minV, (long)maxV, GRAPH_H, 0);
-    int y2A = map((long)buffer_s2[idx], (long)minV, (long)maxV, GRAPH_H, 0);
-    int y2B = map((long)buffer_s2[nextIdx], (long)minV, (long)maxV, GRAPH_H, 0);
+    int y1A = map((long)localBuf1[idx], (long)minV, (long)maxV, GRAPH_H, 0);
+    int y1B = map((long)localBuf1[nextIdx], (long)minV, (long)maxV, GRAPH_H, 0);
+    int y2A = map((long)localBuf2[idx], (long)minV, (long)maxV, GRAPH_H, 0);
+    int y2B = map((long)localBuf2[nextIdx], (long)minV, (long)maxV, GRAPH_H, 0);
 
     // Clipping (Seguridad visual)
     y1A = constrain(y1A, 0, GRAPH_H-1); y1B = constrain(y1B, 0, GRAPH_H-1);
@@ -281,6 +329,50 @@ void actualizarGrafico() {
 
   // 5. Estampar Sprite
   graphSprite.pushSprite(GRAPH_X, GRAPH_Y);
+}
+
+// ======================================================================
+// SETUP
+// ======================================================================
+void setup() {
+  Serial.begin(115200);
+  pinMode(BUZZER_PIN, OUTPUT);
+  pinMode(LCD_LED_PIN, OUTPUT);
+  digitalWrite(LCD_LED_PIN, HIGH);
+
+  // Inicializar Pantalla
+  tft.init();
+  tft.setRotation(1);
+  tft.setSwapBytes(true);
+  graphSprite.setColorDepth(8); 
+  graphSprite.createSprite(GRAPH_W, GRAPH_H);
+
+  // Inicializar Touch
+  touch.begin();
+  touch.setRotation(1);
+
+  // Inicializar Sensores (Se hace una vez antes de arrancar la tarea)
+  // No iniciamos la medición todavía
+  if (!iniciarSensores()) {
+     tft.fillScreen(TFT_RED);
+     tft.drawString("ERROR SENSOR", 240, 160, 4);
+     while(1); // Bloquear si falla hardware
+  }
+
+  // --- LANZAR EL SEGUNDO NÚCLEO ---
+  // Esto crea la tarea paralela que se encargará del sensor siempre
+  xTaskCreatePinnedToCore(
+    TaskSensores,   // Función
+    "SensorTask",   // Nombre
+    10000,          // Stack size
+    NULL,           // Parametros
+    1,              // Prioridad
+    NULL,           // Handle
+    0               // NÚCLEO 0
+  );
+
+  // Dibujar tu Menú Original
+  dibujarMenuPrincipal();
 }
 
 // ======================================================================
@@ -303,23 +395,26 @@ void loop() {
         tft.setTextColor(TFT_WHITE);
         tft.drawString("Inicializando...", 240, 160, 4);
         
-        if (iniciarSensores()) {
-          pantallaActual = MEDICION;
-          medicionActiva = true;
-          dedo1ok = false; dedo2ok = false; // Reset estado dedos
-          prepararPantallaMedicion();
-        } else {
-          tft.drawString("ERROR DE SENSOR", 240, 160, 4);
-          delay(2000);
-          dibujarMenuPrincipal();
-        }
-        delay(300); // Debounce
+        // Reiniciamos buffer antes de empezar
+        portENTER_CRITICAL(&bufferMux);
+        totalMuestras = 0;
+        writeHead = 0;
+        for(int i=0; i<BUFFER_SIZE; i++) { buffer_s1[i]=0; buffer_s2[i]=0; }
+        portEXIT_CRITICAL(&bufferMux);
+
+        pantallaActual = MEDICION;
+        prepararPantallaMedicion();
+        
+        // ¡ESTO ACTIVA AL OTRO NÚCLEO!
+        medicionActiva = true; 
+        
+        delay(500); 
       }
     }
     else if (pantallaActual == MEDICION) {
       // Botón VOLVER (Esquina inferior derecha)
       if (x > 380 && y > 260) {
-        medicionActiva = false;
+        medicionActiva = false; // El otro núcleo deja de procesar
         pantallaActual = MENU;
         dibujarMenuPrincipal();
         delay(300);
@@ -327,66 +422,12 @@ void loop() {
     }
   }
 
-  // LÓGICA DE MEDICIÓN (Sin delays bloqueantes)
+  // SOLO REFRESCO DE PANTALLA
+  // Ya no hay lectura de sensor aquí.
   if (medicionActiva && pantallaActual == MEDICION) {
-    
-    // 1. Muestreo a 50Hz (Exacto)
-    if (micros() - lastSampleTime >= SAMPLE_INTERVAL) {
-      lastSampleTime = micros();
-
-      float raw1 = (float)sensorProx.getIR();
-      float raw2 = (float)sensorDist.getIR();
-
-      // 1. Detección individual de presencia
-      dedo1ok = (raw1 > FINGER_THRESHOLD);
-      dedo2ok = (raw2 > FINGER_THRESHOLD);
-
-      // 2. Condición maestra: ¿Están AMBOS?
-      if (dedo1ok && dedo2ok) {
-         // SI -> Filtrar, Guardar y Avanzar Tiempo
-         buffer_s1[bufferIndex] = aplicarFiltros(raw1, hp_out1, lp_out1, prev_in1);
-         buffer_s2[bufferIndex] = aplicarFiltros(raw2, hp_out2, lp_out2, prev_in2);
-         
-         totalMuestras++; // El tiempo SOLO avanza aquí
-         bufferIndex++;
-         if (bufferIndex >= BUFFER_SIZE) bufferIndex = 0;
-         
-      } else {
-         // NO -> Pausar todo y resetear filtros para evitar saltos al volver
-         prev_in1 = raw1; prev_in2 = raw2;
-         hp_out1 = 0; hp_out2 = 0;
-         // No avanzamos totalMuestras ni bufferIndex
-      }
-    }
-
-    // Refresco de Pantalla (~25-30 FPS)
     if (millis() - lastDrawTime >= DRAW_INTERVAL) {
       lastDrawTime = millis();
       actualizarGrafico();
     }
   }
-}
-
-// ======================================================================
-// SETUP
-// ======================================================================
-void setup() {
-  Serial.begin(115200);
-  pinMode(BUZZER_PIN, OUTPUT);
-  pinMode(LCD_LED_PIN, OUTPUT);
-  digitalWrite(LCD_LED_PIN, HIGH);
-
-  // TFT y Sprite
-  tft.init();
-  tft.setRotation(1);
-  tft.setSwapBytes(true);
-
-  graphSprite.setColorDepth(8); // 8 bits es ligero y rápido
-  graphSprite.createSprite(GRAPH_W, GRAPH_H);
-
-  // Touch
-  touch.begin();
-  touch.setRotation(1);
-
-  dibujarMenuPrincipal();
 }
