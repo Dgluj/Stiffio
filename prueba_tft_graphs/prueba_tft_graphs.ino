@@ -29,14 +29,17 @@
 #define COLOR_S2             TFT_BLUE // Azul oscuro para contraste en blanco
 
 // ======================================================================
-// FILTROS (Basado en Microcontrolador.ino)
+// FILTROS
 // ======================================================================
 // Alpha HP (Pasa Altos): Elimina la deriva (DC) y la respiración lenta.
 // Alpha LP (Pasa Bajos): Elimina el ruido eléctrico "dientes de sierra".
 const float alpha_hp = 0.95; 
-const float alpha_lp = 0.4;  // Cuanto más bajo, más suave la curva
+const float alpha_lp = 0.15;  // Cuanto más bajo, más suave la curva
 
-// Variables de estado para los filtros (memoria anterior)
+// Umbral para detectar dedo (Evita que arranque con ruido)
+const long FINGER_THRESHOLD = 50000; 
+
+// Variables de estado para los filtros 
 float hp_out1 = 0, lp_out1 = 0, prev_in1 = 0;
 float hp_out2 = 0, lp_out2 = 0, prev_in2 = 0;
 
@@ -54,6 +57,7 @@ MAX30105 sensorDist;
 enum Estado { MENU, MEDICION };
 Estado pantallaActual = MENU;
 bool medicionActiva = false;
+bool dedoPresente = false;
 
 // Buffer Gráfico (4 segundos @ 50Hz = 200 muestras)
 // Pantalla de 400px ancho / 200 muestras = 2 pixeles por paso
@@ -113,9 +117,9 @@ bool iniciarSensores() {
   if (!sensorProx.begin(Wire, I2C_SPEED_FAST)) return false;
   if (!sensorDist.begin(Wire1, I2C_SPEED_FAST)) return false;
 
-  // Configuración estable (sampleAverage=4 ayuda mucho al hardware)
-  sensorProx.setup(0x2F, 4, 2, 400, 411, 4096);
-  sensorDist.setup(0x2F, 4, 2, 400, 411, 4096);
+  // Configuración estable (sampleAverage=4 ayuda mucho al hardware, aumentar a 8 para menos ruido eléctrico)
+  sensorProx.setup(0x2F, 8, 2, 400, 411, 4096);
+  sensorDist.setup(0x2F, 8, 2, 400, 411, 4096);
   
   // Resetear filtros
   hp_out1 = 0; lp_out1 = 0; prev_in1 = sensorProx.getIR();
@@ -124,6 +128,7 @@ bool iniciarSensores() {
   // Limpiar buffer
   for(int i=0; i<BUFFER_SIZE; i++) { buffer_s1[i]=0; buffer_s2[i]=0; }
   bufferIndex = 0;
+  totalMuestras = 0; // Resetear tiempo
   
   return true;
 }
@@ -140,7 +145,7 @@ void dibujarBoton(int x, int y, int w, int h, String texto, uint16_t color) {
 }
 
 void dibujarMenuPrincipal() {
-  tft.fillScreen(TFT_BLACK);
+  tft.fillScreen(TFT_BLACK); // Menú se queda negro
   
   // Header / Logo simulado
   tft.setTextDatum(MC_DATUM);
@@ -166,6 +171,7 @@ void prepararPantallaMedicion() {
   // Botón Volver
   tft.fillRoundRect(380, 270, 90, 45, 8, TFT_RED);
   tft.setTextDatum(MC_DATUM);
+  tft.setTextColor(TFT_WHITE);
   tft.drawString("VOLVER", 425, 292, 2);
 
   // Leyendas
@@ -187,11 +193,21 @@ void prepararPantallaMedicion() {
 // LÓGICA DE DIBUJADO (SPRITE + EJE MÓVIL)
 // ======================================================================
 void actualizarGrafico() {
-  // 1. Limpiar Sprite (Fondo Negro)
-  graphSprite.fillSprite(TFT_BLACK);
+  // 1. Limpiar Sprite (Fondo Blanco)
+  graphSprite.fillSprite(COLOR_FONDO_MEDICION);
+
+  // Mensaje si no detecta dedo
+  if (!dedoPresente) {
+    graphSprite.setTextDatum(MC_DATUM);
+    graphSprite.setTextColor(TFT_BLACK);
+    graphSprite.drawString("ESPERANDO DEDOS...", GRAPH_W/2, GRAPH_H/2 - 20, 4);
+    graphSprite.drawString("Colocar sensores", GRAPH_W/2, GRAPH_H/2 + 20, 2);
+    graphSprite.pushSprite(GRAPH_X, GRAPH_Y);
+    return; // No dibujar ondas si no hay dedo
+  }
   
   // 2. Línea Central Fija (Referencia Nivel 0)
-  graphSprite.drawFastHLine(0, GRAPH_H/2, GRAPH_W, tft.color565(0, 50, 0)); 
+  graphSprite.drawFastHLine(0, GRAPH_H/2, GRAPH_W, TFT_LIGHTGREY); 
 
   // 3. Autoescala
   float minV = -50, maxV = 50;
@@ -203,9 +219,9 @@ void actualizarGrafico() {
   }
 
   // Clamp anti-ruido (Para que no haga zoom en estática)
-  if((maxV - minV) < 150) {
+  if((maxV - minV) < 600) {
     float mid = (maxV + minV) / 2;
-    maxV = mid + 75; minV = mid - 75;
+    maxV = mid + 300; minV = mid - 300;
   }
   
   // 4. Dibujar Onda + Rejilla Móvil
@@ -214,7 +230,7 @@ void actualizarGrafico() {
   
   // Configuración texto para los segundos
   graphSprite.setTextDatum(TC_DATUM); 
-  graphSprite.setTextColor(TFT_SILVER);
+  graphSprite.setTextColor(COLOR_EJE);
 
   for (int i = 0; i < BUFFER_SIZE - 1; i++) {
     // Índices circulares
@@ -233,8 +249,8 @@ void actualizarGrafico() {
 
     // Si es múltiplo de 50 (cada 1 segundo exacto a 50Hz)
     if (absoluteSample > 0 && absoluteSample % 50 == 0) {
-      // Línea vertical gris que se mueve
-      graphSprite.drawFastVLine(x1, 0, GRAPH_H, tft.color565(50, 50, 50));
+      // Línea vertical tenue
+      graphSprite.drawFastVLine(x1, 0, GRAPH_H, COLOR_GRILLA);
       
       // Texto "Xs" que viaja con la línea
       String label = String(absoluteSample / 50) + "s";
@@ -255,8 +271,8 @@ void actualizarGrafico() {
     y2A = constrain(y2A, 0, GRAPH_H-1); y2B = constrain(y2B, 0, GRAPH_H-1);
 
     // Dibujar líneas de señal
-    graphSprite.drawLine(x1, y1A, x2, y1B, TFT_RED);
-    graphSprite.drawLine(x1, y2A, x2, y2B, TFT_CYAN);
+    graphSprite.drawLine(x1, y1A, x2, y1B, COLOR_S1);
+    graphSprite.drawLine(x1, y2A, x2, y2B, COLOR_S2);
   }
 
   // 5. Estampar Sprite
@@ -280,12 +296,13 @@ void loop() {
       if (x > btnX && x < btnX + btnW && y > btnY1 && y < btnY1 + btnH) {
         tft.fillScreen(TFT_BLACK);
         tft.setTextDatum(MC_DATUM);
+        tft.setTextColor(TFT_WHITE);
         tft.drawString("Inicializando...", 240, 160, 4);
         
         if (iniciarSensores()) {
           pantallaActual = MEDICION;
           medicionActiva = true;
-          totalMuestras = 0; // <--- RESETEAR CONTADOR DE TIEMPO
+          dedoPresente = false; // Asumimos que no hay dedo al iniciar
           prepararPantallaMedicion();
         } else {
           tft.drawString("ERROR DE SENSOR", 240, 160, 4);
@@ -293,10 +310,6 @@ void loop() {
           dibujarMenuPrincipal();
         }
         delay(300); // Debounce
-      }
-      // Botón ESTUDIO COMPLETO (Sin acción)
-      else if (x > btnX && x < btnX + btnW && y > btnY2 && y < btnY2 + btnH) {
-         // Placeholder
       }
     }
     
@@ -322,25 +335,31 @@ void loop() {
       float raw1 = (float)sensorProx.getIR();
       float raw2 = (float)sensorDist.getIR();
 
-      // Aplicar filtros (HP + LP)
-      // Si la lectura es muy baja (dedo fuera), reseteamos filtros para evitar "coletazos"
-      if (raw1 < 50000 || raw2 < 50000) {
-         buffer_s1[bufferIndex] = 0;
-         buffer_s2[bufferIndex] = 0;
-         // Reset filtros suave
+      // AJUSTE 5: Lógica de inicio/pausa según detección de dedo
+      // Si la lectura es menor al umbral, NO avanzamos el tiempo ni el buffer
+      if (raw1 < FINGER_THRESHOLD || raw2 < FINGER_THRESHOLD) {
+         dedoPresente = false;
+         
+         // Reseteamos filtros para que no den saltos al volver el dedo
          prev_in1 = raw1; prev_in2 = raw2;
          hp_out1 = 0; hp_out2 = 0;
+         
+         // NO incrementamos totalMuestras -> El tiempo se pausa
+         // NO incrementamos bufferIndex -> El gráfico se pausa
+
       } else {
+         dedoPresente = true;
+         // Aplicamos filtros solo si hay señal válida
          buffer_s1[bufferIndex] = aplicarFiltros(raw1, hp_out1, lp_out1, prev_in1);
          buffer_s2[bufferIndex] = aplicarFiltros(raw2, hp_out2, lp_out2, prev_in2);
+      
+         // Incrementar contador total (para el eje X móvil)
+         totalMuestras++;
+
+         // Buffer circular
+         bufferIndex++;
+         if (bufferIndex >= BUFFER_SIZE) bufferIndex = 0;
       }
-
-      // Incrementar contador total (para el eje X móvil)
-      totalMuestras++;
-
-      // Buffer circular
-      bufferIndex++;
-      if (bufferIndex >= BUFFER_SIZE) bufferIndex = 0;
     }
 
     // 2. Refresco de Pantalla (~25-30 FPS)
