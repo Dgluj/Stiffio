@@ -31,10 +31,8 @@
 // ======================================================================
 // FILTROS
 // ======================================================================
-// Alpha HP (Pasa Altos): Elimina la deriva (DC) y la respiración lenta.
-// Alpha LP (Pasa Bajos): Elimina el ruido eléctrico "dientes de sierra".
-const float alpha_hp = 0.95; 
-const float alpha_lp = 0.15;  // Cuanto más bajo, más suave la curva
+const float alpha_hp = 0.95; // Alpha HP (Pasa Altos): Elimina la deriva (DC) y la respiración lenta.
+const float alpha_lp = 0.15; // Alpha LP (Pasa Bajos): Elimina el ruido eléctrico "dientes de sierra". // Cuanto más bajo, más suave la curva
 
 // Umbral para detectar dedo (Evita que arranque con ruido)
 const long FINGER_THRESHOLD = 50000; 
@@ -88,28 +86,22 @@ int btnY1 = 85;  // Test Rápido
 int btnY2 = 185; // Estudio Completo
 
 // ======================================================================
-// FUNCIONES DE FILTRADO
+// FUNCIONES
 // ======================================================================
 float aplicarFiltros(float rawInput, float &hp_out, float &lp_out, float &prev_in) {
   // 1. Normalización básica (opcional, pero ayuda a mantener números manejables)
-  // Usamos un factor de escala simple en lugar de dividir por MAX_ADC para no perder precisión en float
-  float input = rawInput; 
+  float input = rawInput; // Usamos un factor de escala simple en lugar de dividir por MAX_ADC para no perder precisión en float
 
   // 2. Filtro Pasa Altos (High Pass) -> Elimina Deriva/Gravedad
-  // Formula: y[i] = alpha * (y[i-1] + x[i] - x[i-1])
-  hp_out = alpha_hp * (hp_out + input - prev_in);
+  hp_out = alpha_hp * (hp_out + input - prev_in); // Formula: y[i] = alpha * (y[i-1] + x[i] - x[i-1])
   prev_in = input;
 
   // 3. Filtro Pasa Bajos (Low Pass) -> Suaviza Picos
-  // Formula: y[i] = alpha * x[i] + (1-alpha) * y[i-1]
-  lp_out = (alpha_lp * hp_out) + ((1.0 - alpha_lp) * lp_out);
+  lp_out = (alpha_lp * hp_out) + ((1.0 - alpha_lp) * lp_out); // Formula: y[i] = alpha * x[i] + (1-alpha) * y[i-1]
 
   return lp_out;
 }
 
-// ======================================================================
-// INICIALIZACIÓN
-// ======================================================================
 bool iniciarSensores() {
   Wire.begin(SDA1, SCL1, I2C_SPEED_FAST);
   Wire1.begin(SDA2, SCL2, I2C_SPEED_FAST);
@@ -190,21 +182,37 @@ void prepararPantallaMedicion() {
 }
 
 // ======================================================================
-// LÓGICA DE DIBUJADO (SPRITE + EJE MÓVIL)
+// LÓGICA DE DIBUJADO
 // ======================================================================
 void actualizarGrafico() {
   // 1. Limpiar Sprite (Fondo Blanco)
   graphSprite.fillSprite(COLOR_FONDO_MEDICION);
 
-  // Mensaje si no detecta dedo
-  if (!dedoPresente) {
+  // 1. VERIFICAR DEDOS Y MOSTRAR MENSAJES ESPECÍFICOS
+  // Si falta ALGUNO de los dos, detenemos el graficado y mostramos alerta
+  if (!dedo1ok || !dedo2ok) {
     graphSprite.setTextDatum(MC_DATUM);
-    graphSprite.setTextColor(TFT_BLACK);
-    graphSprite.drawString("ESPERANDO DEDOS...", GRAPH_W/2, GRAPH_H/2 - 20, 4);
-    graphSprite.drawString("Colocar sensores", GRAPH_W/2, GRAPH_H/2 + 20, 2);
+    
+    if (!dedo1ok && !dedo2ok) {
+       // Faltan ambos
+       graphSprite.setTextColor(TFT_BLACK);
+       graphSprite.drawString("ESPERANDO AMBOS DEDOS...", GRAPH_W/2, GRAPH_H/2, 4);
+    } 
+    else if (!dedo1ok) {
+       // Falta solo S1
+       graphSprite.setTextColor(COLOR_S1); // Mensaje en ROJO
+       graphSprite.drawString("COLOCAR SENSOR PROXIMAL (S1)", GRAPH_W/2, GRAPH_H/2, 4);
+    } 
+    else if (!dedo2ok) {
+       // Falta solo S2
+       graphSprite.setTextColor(COLOR_S2); // Mensaje en AZUL
+       graphSprite.drawString("COLOCAR SENSOR DISTAL (S2)", GRAPH_W/2, GRAPH_H/2, 4);
+    }
+
     graphSprite.pushSprite(GRAPH_X, GRAPH_Y);
-    return; // No dibujar ondas si no hay dedo
+    return; // Salir sin dibujar ondas
   }
+  // --- AMBOS dedos están puestos ---
   
   // 2. Línea Central Fija (Referencia Nivel 0)
   graphSprite.drawFastHLine(0, GRAPH_H/2, GRAPH_W, TFT_LIGHTGREY); 
@@ -225,8 +233,7 @@ void actualizarGrafico() {
   }
   
   // 4. Dibujar Onda + Rejilla Móvil
-  // Recorremos el buffer de izquierda (antiguo) a derecha (nuevo)
-  float xStep = (float)GRAPH_W / (float)BUFFER_SIZE; 
+  float xStep = (float)GRAPH_W / (float)BUFFER_SIZE; // Recorremos el buffer de izquierda (antiguo) a derecha (nuevo)
   
   // Configuración texto para los segundos
   graphSprite.setTextDatum(TC_DATUM); 
@@ -241,23 +248,20 @@ void actualizarGrafico() {
     int x1 = (int)(i * xStep);
     int x2 = (int)((i + 1) * xStep);
 
-    // --- LÓGICA DE EJE X MÓVIL ---
+    // EJE X MÓVIL
     // Calculamos a qué muestra histórica corresponde este píxel
-    // totalMuestras = final del buffer (borde derecho)
-    // restamos para saber la antiguedad hacia la izquierda
-    long absoluteSample = totalMuestras - (BUFFER_SIZE - 1) + i;
+    long absoluteSample = totalMuestras - (BUFFER_SIZE - 1) + i; // totalMuestras = final del buffer (borde derecho), restamos para saber la antiguedad hacia la izquierda
 
-    // Si es múltiplo de 50 (cada 1 segundo exacto a 50Hz)
-    if (absoluteSample > 0 && absoluteSample % 50 == 0) {
-      // Línea vertical tenue
-      graphSprite.drawFastVLine(x1, 0, GRAPH_H, COLOR_GRILLA);
+    if (absoluteSample > 0 && absoluteSample % 50 == 0) { // Si es múltiplo de 50 (cada 1 segundo exacto a 50Hz)
+      
+      graphSprite.drawFastVLine(x1, 0, GRAPH_H, COLOR_GRILLA); // Línea vertical tenue
       
       // Texto "Xs" que viaja con la línea
       String label = String(absoluteSample / 50) + "s";
       graphSprite.drawString(label, x1, GRAPH_H - 20, 2); 
     }
 
-        // Ignorar si no hay datos
+    // Ignorar si no hay datos
     if(buffer_s1[idx] == 0 && buffer_s1[nextIdx] == 0) continue;
 
     // Mapeo Y
@@ -302,7 +306,7 @@ void loop() {
         if (iniciarSensores()) {
           pantallaActual = MEDICION;
           medicionActiva = true;
-          dedoPresente = false; // Asumimos que no hay dedo al iniciar
+          dedo1ok = false; dedo2ok = false; // Reset estado dedos
           prepararPantallaMedicion();
         } else {
           tft.drawString("ERROR DE SENSOR", 240, 160, 4);
@@ -312,8 +316,6 @@ void loop() {
         delay(300); // Debounce
       }
     }
-    
-    // --- ESTADO: MEDICION ---
     else if (pantallaActual == MEDICION) {
       // Botón VOLVER (Esquina inferior derecha)
       if (x > 380 && y > 260) {
@@ -335,34 +337,29 @@ void loop() {
       float raw1 = (float)sensorProx.getIR();
       float raw2 = (float)sensorDist.getIR();
 
-      // AJUSTE 5: Lógica de inicio/pausa según detección de dedo
-      // Si la lectura es menor al umbral, NO avanzamos el tiempo ni el buffer
-      if (raw1 < FINGER_THRESHOLD || raw2 < FINGER_THRESHOLD) {
-         dedoPresente = false;
-         
-         // Reseteamos filtros para que no den saltos al volver el dedo
-         prev_in1 = raw1; prev_in2 = raw2;
-         hp_out1 = 0; hp_out2 = 0;
-         
-         // NO incrementamos totalMuestras -> El tiempo se pausa
-         // NO incrementamos bufferIndex -> El gráfico se pausa
+      // 1. Detección individual de presencia
+      dedo1ok = (raw1 > FINGER_THRESHOLD);
+      dedo2ok = (raw2 > FINGER_THRESHOLD);
 
-      } else {
-         dedoPresente = true;
-         // Aplicamos filtros solo si hay señal válida
+      // 2. Condición maestra: ¿Están AMBOS?
+      if (dedo1ok && dedo2ok) {
+         // SI -> Filtrar, Guardar y Avanzar Tiempo
          buffer_s1[bufferIndex] = aplicarFiltros(raw1, hp_out1, lp_out1, prev_in1);
          buffer_s2[bufferIndex] = aplicarFiltros(raw2, hp_out2, lp_out2, prev_in2);
-      
-         // Incrementar contador total (para el eje X móvil)
-         totalMuestras++;
-
-         // Buffer circular
+         
+         totalMuestras++; // El tiempo SOLO avanza aquí
          bufferIndex++;
          if (bufferIndex >= BUFFER_SIZE) bufferIndex = 0;
+         
+      } else {
+         // NO -> Pausar todo y resetear filtros para evitar saltos al volver
+         prev_in1 = raw1; prev_in2 = raw2;
+         hp_out1 = 0; hp_out2 = 0;
+         // No avanzamos totalMuestras ni bufferIndex
       }
     }
 
-    // 2. Refresco de Pantalla (~25-30 FPS)
+    // Refresco de Pantalla (~25-30 FPS)
     if (millis() - lastDrawTime >= DRAW_INTERVAL) {
       lastDrawTime = millis();
       actualizarGrafico();
