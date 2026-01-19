@@ -19,6 +19,16 @@
 #define SCL2 17
 
 // ======================================================================
+// COLORES PERSONALIZADOS (MODO BLANCO)
+// ======================================================================
+#define COLOR_FONDO_MEDICION TFT_WHITE
+#define COLOR_TEXTO_MEDICION TFT_BLACK
+#define COLOR_EJE            TFT_DARKGREY
+#define COLOR_GRILLA         0xE71C // Gris muy claro
+#define COLOR_S1             TFT_RED
+#define COLOR_S2             TFT_BLUE // Azul oscuro para contraste en blanco
+
+// ======================================================================
 // FILTROS (Basado en Microcontrolador.ino)
 // ======================================================================
 // Alpha HP (Pasa Altos): Elimina la deriva (DC) y la respiración lenta.
@@ -145,13 +155,13 @@ void dibujarMenuPrincipal() {
 }
 
 void prepararPantallaMedicion() {
-  tft.fillScreen(TFT_BLACK);
+  tft.fillScreen(COLOR_FONDO_MEDICION);
   
   // Header
-  tft.fillRect(0, 0, 480, 40, tft.color565(20,20,20));
+  tft.fillRect(0, 0, 480, 40, TFT_BLACK);
   tft.setTextDatum(ML_DATUM);
   tft.setTextColor(TFT_WHITE);
-  tft.drawString("Monitor en Tiempo Real (2s)", 10, 20, 4);
+  tft.drawString("Monitor en Tiempo Real", 10, 20, 4);
 
   // Botón Volver
   tft.fillRoundRect(380, 270, 90, 45, 8, TFT_RED);
@@ -160,16 +170,16 @@ void prepararPantallaMedicion() {
 
   // Leyendas
   tft.setTextDatum(TL_DATUM);
-  tft.setTextColor(TFT_RED); tft.drawString("S1: Proximal", 40, 270, 2);
-  tft.setTextColor(TFT_CYAN); tft.drawString("S2: Distal", 40, 290, 2);
+  tft.setTextColor(COLOR_S1); tft.drawString("S1: Proximal", 40, 270, 2);
+  tft.setTextColor(COLOR_S2); tft.drawString("S2: Distal", 40, 290, 2);
 
   // Marco del gráfico
-  tft.drawRect(GRAPH_X - 1, GRAPH_Y - 1, GRAPH_W + 2, GRAPH_H + 2, TFT_DARKGREY);
+  tft.drawRect(GRAPH_X - 1, GRAPH_Y - 1, GRAPH_W + 2, GRAPH_H + 2, TFT_BLACK);
 
   // --- EJE Y (AMPLITUD) ---
   // El "0" lo dejamos fijo a la izquierda como referencia
   tft.setTextDatum(MR_DATUM);
-  tft.setTextColor(TFT_GREEN); 
+  tft.setTextColor(TFT_BLACK); 
   tft.drawString("0", GRAPH_X - 5, GRAPH_Y + GRAPH_H/2, 2); 
 }
 
