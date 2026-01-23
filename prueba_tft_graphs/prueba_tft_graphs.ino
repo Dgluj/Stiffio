@@ -48,6 +48,9 @@ volatile int porcentajeEstabilizacion = 0;
 volatile bool s1ok = false;
 volatile bool s2ok = false;
 
+// --- VARIABLE RITMO CARDÍACO ---
+volatile int bpmMostrado = 0; // Entero puro, sin decimales
+
 // Semáforo para proteger la memoria (evita que se lea mientras se escribe)
 portMUX_TYPE bufferMux = portMUX_INITIALIZER_UNLOCKED;
 
@@ -82,7 +85,7 @@ unsigned long lastDrawTime = 0;
 const unsigned long DRAW_INTERVAL = 40; // ~25fps visuales
 
 // ======================================================================
-// TAREA NÚCLEO 0: SENSOR Y MATEMÁTICA (NO TOCAR UI AQUÍ)
+// TAREA NÚCLEO 0: TAREA DE SENSORES (38 FPS + CÁLCULO BPM)
 // ======================================================================
 void TaskSensores(void *pvParameters) {
 
@@ -105,6 +108,18 @@ void TaskSensores(void *pvParameters) {
   unsigned long startContactTime = 0; 
   unsigned long baseTime = 0;         
   const unsigned long TIEMPO_ESTABILIZACION = 3000; 
+
+  // --- ALGORITMO HR (RITMO CARDÍACO) ---
+  float lastValS2 = 0;
+  unsigned long lastBeatTime = 0;
+  const int REFRACTORY_PERIOD = 300; // ms (Mínimo tiempo entre latidos)
+  const float BEAT_THRESHOLD = 20.0; // Sensibilidad de pendiente
+  
+  // Promedio de 10 muestras (Máxima estabilidad)
+  const int BPM_AVG_SIZE = 10;
+  int bpmBuffer[BPM_AVG_SIZE] = {0};
+  int bpmIdx = 0;
+  int validSamples = 0;
 
   // Loop infinito de alta velocidad
   for (;;) {
@@ -157,6 +172,40 @@ void TaskSensores(void *pvParameters) {
           float valFinal1 = sum1 / MA_SIZE;
           float valFinal2 = sum2 / MA_SIZE;
 
+          // --------------------------
+          // CÁLCULO BPM (HR)
+          // --------------------------
+          // Usamos Sensor 2 (Muñeca/Rosa) y criterio de pendiente
+          unsigned long now = millis();
+          float delta = valFinal2 - lastValS2;
+          lastValS2 = valFinal2;
+
+          if (faseMedicion == 2) { // Solo calculamos HR si ya estamos midiendo
+             if (delta > BEAT_THRESHOLD && (now - lastBeatTime > REFRACTORY_PERIOD)) {
+                unsigned long deltaT = now - lastBeatTime;
+                lastBeatTime = now;
+                
+                int instantBPM = 60000 / deltaT;
+
+                // Rango fisiológico aceptable (evita ruido extremo)
+                if (instantBPM > 40 && instantBPM < 200) {
+                   bpmBuffer[bpmIdx] = instantBPM;
+                   bpmIdx = (bpmIdx + 1) % BPM_AVG_SIZE;
+                   if (validSamples < BPM_AVG_SIZE) validSamples++;
+
+                   // Calcular promedio si tenemos suficientes datos
+                   if (validSamples >= 4) { 
+                      long totalBPM = 0;
+                      // Sumamos buffer completo si está lleno, o parcial si no
+                      int limit = (validSamples == BPM_AVG_SIZE) ? BPM_AVG_SIZE : validSamples;
+                      for(int i=0; i<limit; i++) totalBPM += bpmBuffer[i];
+                      
+                      bpmMostrado = totalBPM / limit;
+                   }
+                }
+             }
+          }
+
           // --- MAQUINA DE ESTADOS ---
 
           if (faseMedicion == 0) {
@@ -199,6 +248,8 @@ void TaskSensores(void *pvParameters) {
              s1_lp = 0; s1_dc = 0;
              s2_lp = 0; s2_dc = 0;
              sensorProx.nextSample(); sensorDist.nextSample();
+             bpmMostrado = 0; 
+             validSamples = 0;
           }
         }
       }
@@ -300,8 +351,7 @@ void actualizarGrafico() {
   int localHead;
   int localFase = faseMedicion;
   int localPorcentaje = porcentajeEstabilizacion;
-  bool localS1 = s1ok;
-  bool localS2 = s2ok;
+  int localBPM = bpmMostrado;
 
   portENTER_CRITICAL(&bufferMux);
   if (localFase == 2) {
@@ -338,6 +388,17 @@ void actualizarGrafico() {
     return;
   }
 
+  // Mostrar BPM en la esquina superior derecha
+  if (localBPM > 0) {
+    graphSprite.setTextDatum(TR_DATUM);
+    graphSprite.setTextColor(TFT_BLACK);
+    graphSprite.drawString("HR: " + String(localBPM) + " BPM", GRAPH_W - 10, 10, 4);
+  } else {
+    graphSprite.setTextDatum(TR_DATUM);
+    graphSprite.setTextColor(TFT_LIGHTGREY);
+    graphSprite.drawString("HR: -- BPM", GRAPH_W - 10, 10, 4);
+  }
+  
   // FASE 2: GRÁFICO
   graphSprite.drawFastHLine(0, GRAPH_H/2, GRAPH_W, TFT_LIGHTGREY); 
 
