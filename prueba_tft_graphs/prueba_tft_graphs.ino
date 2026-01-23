@@ -4,6 +4,8 @@
 #include <Wire.h>
 #include "MAX30105.h"
 
+#include "LogoStiffio.h" 
+
 // ======================================================================
 // CONFIGURACIÓN HARDWARE
 // ======================================================================
@@ -36,10 +38,11 @@
 #define BUFFER_SIZE 320 // Ajustado al ancho del gráfico
 volatile float buffer_s1[BUFFER_SIZE];
 volatile float buffer_s2[BUFFER_SIZE];
+volatile unsigned long buffer_time[BUFFER_SIZE]; 
 volatile int writeHead = 0; // Índice de escritura del sensor
 
+// Control de flujo
 volatile bool medicionActiva = false;
-
 // Estados: 0=Esperando, 1=Estabilizando, 2=Midiendo
 volatile int faseMedicion = 0; 
 volatile int porcentajeEstabilizacion = 0;
@@ -48,8 +51,13 @@ volatile int porcentajeEstabilizacion = 0;
 volatile bool s1ok = false;
 volatile bool s2ok = false;
 
-// --- VARIABLE RITMO CARDÍACO ---
-volatile int bpmMostrado = 0; // Entero puro, sin decimales
+// --- VARIABLES RESULTADOS (BPM y PWV) ---
+volatile int bpmMostrado = 0; 
+volatile float pwvMostrado = 0.0; 
+
+// Variables de Paciente (Ingresadas en UI)
+int pacienteEdad = 0;
+int pacienteAltura = 0; // en cm
 
 // Semáforo para proteger la memoria (evita que se lea mientras se escribe)
 portMUX_TYPE bufferMux = portMUX_INITIALIZER_UNLOCKED;
@@ -64,9 +72,20 @@ XPT2046_Touchscreen touch(TOUCH_CS, TOUCH_IRQ);
 MAX30105 sensorProx;
 MAX30105 sensorDist;
 
-// Estados
-enum Estado { MENU, MEDICION };
+// Estados de Pantalla (Fusionados)
+enum Estado { MENU, PANTALLA_EDAD, PANTALLA_ALTURA, PANTALLA_RESUMEN, MEDICION };
 Estado pantallaActual = MENU;
+
+// Variables de Input UI
+String edadInput = ""; 
+String alturaInput = "";
+
+// Diseño UI
+int tstartX = 180; int tstartY = 140; 
+int tgapX = 55; int tgapY = 45; 
+int btnW = 300; int btnH = 70;
+int btnX = (480 - btnW) / 2;
+int btnY1 = 85; int btnY2 = 185; 
 
 // Coordenadas Gráfico
 #define GRAPH_X 40
@@ -74,15 +93,16 @@ Estado pantallaActual = MENU;
 #define GRAPH_W 400
 #define GRAPH_H 180
 
-// Botones Menú
-int btnW = 300; int btnH = 70;
-int btnX = (480 - btnW) / 2;
-int btnY1 = 85;  // Test Rápido
-int btnY2 = 185; // Estudio Completo
-
 // Tiempos de Refresco Visual (El muestreo va aparte)
 unsigned long lastDrawTime = 0;
 const unsigned long DRAW_INTERVAL = 40; // ~25fps visuales
+
+// ======================================================================
+// FUNCIONES AUXILIARES SONIDO
+// ======================================================================
+void sonarPitido() {
+  digitalWrite(BUZZER_PIN, HIGH); delay(60); digitalWrite(BUZZER_PIN, LOW);
+}
 
 // ======================================================================
 // TAREA NÚCLEO 0: TAREA DE SENSORES (38 FPS + CÁLCULO BPM)
@@ -102,21 +122,31 @@ void TaskSensores(void *pvParameters) {
   float bufMA2[MA_SIZE] = {0};
   int idxMA = 0;
 
+  // Variables Tiempo
   unsigned long startContactTime = 0; 
   unsigned long baseTime = 0;         
   const unsigned long TIEMPO_ESTABILIZACION = 10000; // 10 Segundos de calibración
 
-  // --- ALGORITMO HR (RITMO CARDÍACO) ---
+  // Variables HR y PWV
+  float lastValS1 = 0;
   float lastValS2 = 0;
+  
+  unsigned long timePeakS1 = 0; 
+  bool waitingForS2 = false;    
+  
   unsigned long lastBeatTime = 0;
-  const int REFRACTORY_PERIOD = 300; // ms (Mínimo tiempo entre latidos)
-  const float BEAT_THRESHOLD = 20.0; // Sensibilidad de pendiente
+  const int REFRACTORY_PERIOD = 250; // ms (Mínimo tiempo entre latidos)
+  const float BEAT_THRESHOLD = 15.0; // Sensibilidad de pendiente
   
   // Promedio de 10 muestras (Máxima estabilidad)
-  const int BPM_AVG_SIZE = 10;
-  int bpmBuffer[BPM_AVG_SIZE] = {0};
+  const int AVG_SIZE = 10;
+  int bpmBuffer[AVG_SIZE] = {0};
   int bpmIdx = 0;
   int validSamples = 0;
+
+  float pwvBuffer[AVG_SIZE] = {0.0};
+  int pwvIdx = 0;
+  int validSamplesPWV = 0;
 
   // Loop infinito de alta velocidad
   for (;;) {
@@ -136,11 +166,9 @@ void TaskSensores(void *pvParameters) {
 
         if (currentS1 && currentS2) {
           // --- FILTRADO (SIN INVERSIÓN) ---
-          
           // Inicializar si es el primer dato
           if (s1_lp == 0) s1_lp = ir1; 
           if (s2_lp == 0) s2_lp = ir2;
-
           // Filtro Paso Bajo (Low Pass) - Suaviza "dientes"
           s1_lp = (s1_lp * ALPHA_LP) + (ir1 * (1.0 - ALPHA_LP));
           s2_lp = (s2_lp * ALPHA_LP) + (ir2 * (1.0 - ALPHA_LP));
@@ -148,7 +176,6 @@ void TaskSensores(void *pvParameters) {
           // Filtro DC (High Pass) - Centra en 0
           if (s1_dc == 0) s1_dc = ir1;
           if (s2_dc == 0) s2_dc = ir2;
-
           s1_dc = (s1_dc * ALPHA_DC) + (s1_lp * (1.0 - ALPHA_DC));
           s2_dc = (s2_dc * ALPHA_DC) + (s2_lp * (1.0 - ALPHA_DC));
 
@@ -158,7 +185,7 @@ void TaskSensores(void *pvParameters) {
           float rawVal1 = s1_lp - s1_dc;
           float rawVal2 = s2_lp - s2_dc;
 
-          // Media Móvil
+          // Media Móvil, suavizado
           bufMA1[idxMA] = rawVal1;
           bufMA2[idxMA] = rawVal2;
           idxMA = (idxMA + 1) % MA_SIZE;
@@ -174,33 +201,71 @@ void TaskSensores(void *pvParameters) {
           // --------------------------
           // Usamos Sensor 2 (Muñeca/Rosa) y criterio de pendiente
           unsigned long now = millis();
-          float delta = valFinal2 - lastValS2;
+          float deltaS1 = valFinal1 - lastValS1;
+          float deltaS2 = valFinal2 - lastValS2;
+          lastValS1 = valFinal1;
           lastValS2 = valFinal2;
 
-          if (faseMedicion == 2) { // Solo calculamos HR si ya estamos midiendo
-             if (delta > BEAT_THRESHOLD && (now - lastBeatTime > REFRACTORY_PERIOD)) {
-                unsigned long deltaT = now - lastBeatTime;
-                lastBeatTime = now;
-                
-                int instantBPM = 60000 / deltaT;
+          if (faseMedicion == 2) {
+             
+             // A) Detectar subida en S1 (CUELLO)
+             if (deltaS1 > BEAT_THRESHOLD && !waitingForS2) {
+                 if (now - timePeakS1 > REFRACTORY_PERIOD) {
+                     timePeakS1 = now;
+                     waitingForS2 = true; // Cronómetro iniciado
+                 }
+             }
 
-                // Rango fisiológico aceptable (evita ruido extremo)
+             // B) Detectar subida en S2 (DEDO)
+             if (deltaS2 > BEAT_THRESHOLD && (now - lastBeatTime > REFRACTORY_PERIOD)) {
+                
+                // --- CALCULAR HR ---
+                unsigned long deltaBeat = now - lastBeatTime;
+                lastBeatTime = now;
+                int instantBPM = 60000 / deltaBeat;
+
                 if (instantBPM > 40 && instantBPM < 200) {
                    bpmBuffer[bpmIdx] = instantBPM;
-                   bpmIdx = (bpmIdx + 1) % BPM_AVG_SIZE;
+                   bpmIdx = (bpmIdx + 1) % AVG_SIZE;
+                   if (validSamplesBPM < AVG_SIZE) validSamplesBPM++;
                    
-                   // Contamos muestras válidas
-                   if (validSamples < BPM_AVG_SIZE) validSamples++;
-
-                   // CONDICIÓN ESTRICTA:
-                   // Solo actualizamos la variable global si el buffer está LLENO (10 muestras)
-                   if (validSamples >= BPM_AVG_SIZE) { 
-                      long totalBPM = 0;
-                      for(int i=0; i<BPM_AVG_SIZE; i++) totalBPM += bpmBuffer[i];
-                      
-                      // Promedio perfecto de 10 latidos
-                      bpmMostrado = totalBPM / BPM_AVG_SIZE;
+                   if (validSamplesBPM >= AVG_SIZE) {
+                      long total = 0;
+                      for(int i=0; i<AVG_SIZE; i++) total += bpmBuffer[i];
+                      bpmMostrado = total / AVG_SIZE;
                    }
+                }
+
+                // --- CALCULAR PWV ---
+                if (waitingForS2) {
+                    long transitTime = now - timePeakS1; // Delta T (ms)
+                    waitingForS2 = false; 
+                    
+                    // IMPORTANTE: Filtramos tiempos absurdos.
+                    // Si es < 20ms, probablemente sea ruido o medición "dedo-dedo".
+                    // Un tránsito real cuello-dedo suele ser > 60ms.
+                    if (transitTime > 20 && transitTime < 400) {
+                        
+                        // FÓRMULA CORREGIDA: 0.436 * Altura
+                        // pacienteAltura está en cm, pasamos a metros dividiendo por 100
+                        float distMeters = (pacienteAltura * 0.436) / 100.0;
+                        
+                        // PWV = Metros / Segundos
+                        float instantPWV = distMeters / (transitTime / 1000.0);
+                        
+                        // Filtro de realismo (3 m/s a 30 m/s es lo humano posible)
+                        if (instantPWV > 3.0 && instantPWV < 30.0) {
+                            pwvBuffer[pwvIdx] = instantPWV;
+                            pwvIdx = (pwvIdx + 1) % AVG_SIZE;
+                            if (validSamplesPWV < AVG_SIZE) validSamplesPWV++;
+                            
+                            if (validSamplesPWV >= AVG_SIZE) {
+                                float totalPWV = 0;
+                                for(int i=0; i<AVG_SIZE; i++) totalPWV += pwvBuffer[i];
+                                pwvMostrado = totalPWV / AVG_SIZE;
+                            }
+                        }
+                    }
                 }
              }
           }
@@ -211,22 +276,16 @@ void TaskSensores(void *pvParameters) {
              faseMedicion = 1; 
              startContactTime = millis();
           }
-          else if (faseMedicion == 1) {
+          else if (faseMedicion == 1) { 
              unsigned long transcurrido = millis() - startContactTime;
              porcentajeEstabilizacion = (transcurrido * 100) / TIEMPO_ESTABILIZACION;
-             
              if (transcurrido >= TIEMPO_ESTABILIZACION) {
-                faseMedicion = 2;
-                baseTime = millis(); 
-
+                faseMedicion = 2; baseTime = millis(); 
                 portENTER_CRITICAL(&bufferMux);
                 writeHead = 0;
                 for(int i=0; i<BUFFER_SIZE; i++) { buffer_s1[i]=0; buffer_s2[i]=0; buffer_time[i]=0; }
-                for(int i=0; i<MA_SIZE; i++) { bufMA1[i]=0; bufMA2[i]=0; }
-                
-                bpmMostrado = 0;   // Reset BPM display
-                validSamples = 0;  // Reset contador de latidos válidos
-                
+                bpmMostrado = 0; pwvMostrado = 0.0;
+                validSamplesBPM = 0; validSamplesPWV = 0;
                 portEXIT_CRITICAL(&bufferMux);
              }
           }
@@ -250,8 +309,8 @@ void TaskSensores(void *pvParameters) {
              s1_lp = 0; s1_dc = 0;
              s2_lp = 0; s2_dc = 0;
              sensorProx.nextSample(); sensorDist.nextSample();
-             bpmMostrado = 0; 
-             validSamples = 0;
+             bpmMostrado = 0; pwvMostrado = 0.0;
+             validSamplesBPM = 0; validSamplesPWV = 0;
           }
         }
       }
@@ -276,7 +335,6 @@ bool iniciarSensores() {
   // CONFIGURACIÓN SUAVIZADA (SampleAvg 8)
   // Al promediar 8 muestras hardware, la señal sale mucho más limpia.
   // para que no sature y tenga buena definición.
-  
   sensorProx.setup(20, 8, 2, 400, 411, 4096); // Antes 60, luego 40, luego 30 (Igual al otro)
   sensorDist.setup(30, 8, 2, 400, 411, 4096); // Se queda en 30 (El "Golden Standard")
   
@@ -286,57 +344,119 @@ bool iniciarSensores() {
 // ======================================================================
 // INTERFAZ GRÁFICA (UI)
 // ======================================================================
-void dibujarBoton(int x, int y, int w, int h, String texto, uint16_t color) {
-  tft.fillRoundRect(x, y, w, h, 12, color);
-  tft.drawRoundRect(x, y, w, h, 12, TFT_WHITE);
-  tft.setTextDatum(MC_DATUM);
-  tft.setTextColor(TFT_WHITE);
-  tft.drawString(texto, x + w/2, y + h/2 + 5, 4); // Ajuste visual texto
+void dibujarBotonVolver() {
+  int circX = 50, circY = 275, r = 22;
+  tft.fillCircle(circX, circY, r, TFT_WHITE);
+  tft.fillTriangle(circX-11, circY, circX+2, circY-7, circX+2, circY+7, TFT_BLACK);
+  tft.fillRect(circX+1, circY-2, 9, 5, TFT_BLACK); 
+}
+
+void dibujarBotonSiguiente() {
+  int circX = 430, circY = 275, r = 22;
+  tft.fillCircle(circX, circY, r, tft.color565(0, 180, 0));
+  tft.fillTriangle(circX+11, circY, circX-2, circY-7, circX-2, circY+7, TFT_WHITE);
+  tft.fillRect(circX-10, circY-2, 9, 5, TFT_WHITE);
+}
+
+void actualizarDisplayEdad() {
+  tft.fillRect(190, 60, 100, 35, tft.color565(20, 20, 20));
+  tft.drawRoundRect(190, 60, 100, 35, 4, TFT_WHITE);
+  tft.setTextColor(TFT_CYAN); tft.drawString(edadInput, 240, 77, 4);
+}
+
+void dibujarTecladoEdad() {
+  pantallaActual = PANTALLA_EDAD;
+  tft.fillScreen(TFT_BLACK);
+  tft.setTextDatum(MC_DATUM); tft.setTextColor(TFT_WHITE);
+  tft.drawString("INGRESE EDAD", 240, 30, 4);
+  actualizarDisplayEdad();
+  
+  for (int i = 0; i < 11; i++) {
+    int row = i / 3; int col = i % 3;
+    if (i == 9) { col = 1; row = 3; } if (i == 10) { col = 2; row = 3; }
+    int kX = tstartX + (col * tgapX); int kY = tstartY + (row * tgapY);
+    uint16_t colorBtn = (i == 10) ? tft.color565(180, 0, 0) : tft.color565(40, 40, 40);
+    tft.fillRoundRect(kX - 22, kY - 17, 45, 35, 4, colorBtn);
+    tft.drawRoundRect(kX - 22, kY - 17, 45, 35, 4, TFT_LIGHTGREY);
+    tft.setTextColor(TFT_WHITE);
+    if (i < 9) tft.drawNumber(i + 1, kX, kY, 4);
+    else if (i == 9) tft.drawNumber(0, kX, kY, 4);
+    else tft.drawString("C", kX, kY, 4);
+  }
+  dibujarBotonVolver();
+  if (edadInput.length() > 0) dibujarBotonSiguiente();
+}
+
+void actualizarDisplayAltura() {
+  tft.fillRect(190, 60, 100, 35, tft.color565(20, 20, 20));
+  tft.drawRoundRect(190, 60, 100, 35, 4, TFT_WHITE);
+  tft.setTextColor(TFT_ORANGE); tft.drawString(alturaInput, 240, 77, 4);
+}
+
+void dibujarTecladoAltura() {
+  pantallaActual = PANTALLA_ALTURA;
+  tft.fillScreen(TFT_BLACK);
+  tft.setTextDatum(MC_DATUM); tft.setTextColor(TFT_WHITE);
+  tft.drawString("ALTURA (cm)", 240, 30, 4);
+  actualizarDisplayAltura();
+  // Mismo loop para dibujar teclado...
+  for (int i = 0; i < 11; i++) {
+    int row = i / 3; int col = i % 3;
+    if (i == 9) { col = 1; row = 3; } if (i == 10) { col = 2; row = 3; }
+    int kX = tstartX + (col * tgapX); int kY = tstartY + (row * tgapY);
+    uint16_t colorBtn = (i == 10) ? tft.color565(180, 0, 0) : tft.color565(40, 40, 40);
+    tft.fillRoundRect(kX - 22, kY - 17, 45, 35, 4, colorBtn);
+    tft.drawRoundRect(kX - 22, kY - 17, 45, 35, 4, TFT_LIGHTGREY);
+    tft.setTextColor(TFT_WHITE);
+    if (i < 9) tft.drawNumber(i + 1, kX, kY, 4);
+    else if (i == 9) tft.drawNumber(0, kX, kY, 4);
+    else tft.drawString("C", kX, kY, 4);
+  }
+  dibujarBotonVolver();
+  if (alturaInput.length() > 0) dibujarBotonSiguiente();
+}
+
+void mostrarAlerta(String titulo, String mensaje) {
+  tft.fillRoundRect(110, 100, 260, 120, 10, tft.color565(180, 0, 0));
+  tft.drawRoundRect(110, 100, 260, 120, 10, TFT_WHITE);
+  tft.setTextDatum(MC_DATUM); tft.setTextColor(TFT_WHITE); 
+  tft.drawString(titulo, 240, 140, 4);
+  tft.drawString(mensaje, 240, 180, 2);
+  sonarPitido(); delay(1500); 
+  if (pantallaActual == PANTALLA_EDAD) dibujarTecladoEdad();
+  else if (pantallaActual == PANTALLA_ALTURA) dibujarTecladoAltura();
 }
 
 void dibujarMenuPrincipal() {
-  tft.fillScreen(TFT_BLACK); // Menú se queda negro
-  
-  // Header / Logo simulado
+  pantallaActual = MENU;
+  tft.fillScreen(TFT_BLACK); 
   tft.setTextDatum(MC_DATUM);
   tft.setTextColor(TFT_WHITE);
   tft.drawString("STIFFIO", 240, 40, 4);
-
-  // Botón 1: TEST RAPIDO (Verde según tu estilo o Rojo estandar)
-  dibujarBoton(btnX, btnY1, btnW, btnH, "TEST RAPIDO", TFT_RED);
-
-  // Botón 2: ESTUDIO COMPLETO (Gris o Azul - Inactivo por ahora)
-  dibujarBoton(btnX, btnY2, btnW, btnH, "ESTUDIO COMPLETO", tft.color565(50,50,50));
+  
+  tft.fillRoundRect(btnX, btnY1, btnW, btnH, 12, TFT_RED);
+  tft.drawRoundRect(btnX, btnY1, btnW, btnH, 12, TFT_WHITE);
+  tft.drawString("TEST RAPIDO", 240, btnY1 + 35, 4);
+  
+  tft.fillRoundRect(btnX, btnY2, btnW, btnH, 12, tft.color565(50,50,50));
+  tft.drawRoundRect(btnX, btnY2, btnW, btnH, 12, TFT_WHITE);
+  tft.drawString("ESTUDIO COMPLETO", 240, btnY2 + 35, 4);
 }
 
 void prepararPantallaMedicion() {
   tft.fillScreen(COLOR_FONDO_MEDICION);
-  
-  // Header
   tft.fillRect(0, 0, 480, 40, TFT_BLACK);
-  tft.setTextDatum(ML_DATUM);
-  tft.setTextColor(TFT_WHITE);
-  tft.drawString("Monitor en Tiempo Real", 10, 20, 4);
-
-  // Botón Volver
+  tft.setTextDatum(ML_DATUM); tft.setTextColor(TFT_WHITE);
+  tft.drawString("Monitor PWV", 10, 20, 4);
+  
   tft.fillRoundRect(380, 270, 90, 45, 8, TFT_RED);
-  tft.setTextDatum(MC_DATUM);
-  tft.setTextColor(TFT_WHITE);
+  tft.setTextDatum(MC_DATUM); tft.setTextColor(TFT_WHITE);
   tft.drawString("VOLVER", 425, 292, 2);
-
-  // Leyendas
+  
   tft.setTextDatum(TL_DATUM);
   tft.setTextColor(COLOR_S1); tft.drawString("S1: Cuello", 40, 270, 2);
-  tft.setTextColor(COLOR_S2); tft.drawString("S2: Muneca", 40, 290, 2); // Sin ñ por seguridad de fuente
-
-  // Marco del gráfico
+  tft.setTextColor(COLOR_S2); tft.drawString("S2: Muneca", 40, 290, 2); 
   tft.drawRect(GRAPH_X - 1, GRAPH_Y - 1, GRAPH_W + 2, GRAPH_H + 2, TFT_BLACK);
-
-  // --- EJE Y (AMPLITUD) ---
-  // El "0" lo dejamos fijo a la izquierda como referencia
-  tft.setTextDatum(MR_DATUM);
-  tft.setTextColor(TFT_BLACK); 
-  tft.drawString("0", GRAPH_X - 5, GRAPH_Y + GRAPH_H/2, 2); 
 }
 
 // ======================================================================
@@ -354,6 +474,7 @@ void actualizarGrafico() {
   int localFase = faseMedicion;
   int localPorcentaje = porcentajeEstabilizacion;
   int localBPM = bpmMostrado;
+  float localPWV = pwvMostrado;
 
   portENTER_CRITICAL(&bufferMux);
   if (localFase == 2) {
@@ -367,12 +488,10 @@ void actualizarGrafico() {
   // --- UI LÓGICA ---
   if (localFase == 0) {
     graphSprite.setTextDatum(MC_DATUM);
-    if (!localS1 && !localS2) {
+    if (!s1ok && !s2ok) {
        graphSprite.setTextColor(TFT_BLACK); graphSprite.drawString("COLOCAR AMBOS SENSORES", GRAPH_W/2, GRAPH_H/2, 4);
-    } else if (!localS1) {
-       graphSprite.setTextColor(COLOR_S1); graphSprite.drawString("FALTA SENSOR CUELLO", GRAPH_W/2, GRAPH_H/2, 4);
-    } else if (!localS2) {
-       graphSprite.setTextColor(COLOR_S2); graphSprite.drawString("FALTA SENSOR MUNECA", GRAPH_W/2, GRAPH_H/2, 4);
+    } else {
+       graphSprite.setTextColor(TFT_BLACK); graphSprite.drawString("DETECTANDO...", GRAPH_W/2, GRAPH_H/2, 4);
     }
     graphSprite.pushSprite(GRAPH_X, GRAPH_Y);
     return;
@@ -381,8 +500,8 @@ void actualizarGrafico() {
   if (localFase == 1) {
     graphSprite.setTextDatum(MC_DATUM);
     graphSprite.setTextColor(TFT_BLUE);
-    graphSprite.drawString("ESTABILIZANDO...", GRAPH_W/2, GRAPH_H/2 - 20, 4);
-    int barW = 200; int barH = 20; int barX = (GRAPH_W - barW) / 2; int barY = GRAPH_H/2 + 10;
+    graphSprite.drawString("CALIBRANDO (10s)...", GRAPH_W/2, GRAPH_H/2 - 20, 4);
+    int barW = 200; int barH = 20; int barX = (GRAPH_W - barW)/2; int barY = GRAPH_H/2 + 10;
     graphSprite.drawRect(barX, barY, barW, barH, TFT_BLACK);
     int fillW = (barW * localPorcentaje) / 100;
     graphSprite.fillRect(barX+1, barY+1, fillW-2, barH-2, TFT_GREEN);
@@ -390,18 +509,29 @@ void actualizarGrafico() {
     return;
   }
 
-  // Mostrar BPM en la esquina superior derecha
+  // --- RESULTADOS EN PANTALLA ---
+  graphSprite.setTextDatum(TR_DATUM);
+
+  // BPM
   if (localBPM > 0) {
-    graphSprite.setTextDatum(TR_DATUM);
     graphSprite.setTextColor(TFT_BLACK);
-    graphSprite.drawString("HR: " + String(localBPM) + " BPM", GRAPH_W - 10, 10, 4);
+    graphSprite.drawString("HR: " + String(localBPM), GRAPH_W - 10, 10, 4);
   } else {
-    graphSprite.setTextDatum(TR_DATUM);
     graphSprite.setTextColor(TFT_LIGHTGREY);
-    graphSprite.drawString("HR: -- BPM", GRAPH_W - 10, 10, 4);
+    graphSprite.drawString("HR: --", GRAPH_W - 10, 10, 4);
   }
 
-  // FASE 2: GRÁFICO
+  // PWV
+  if (localPWV > 0) {
+    graphSprite.setTextColor(TFT_BLUE);
+    // Mostramos 1 decimal
+    graphSprite.drawString("PWV: " + String(localPWV, 1) + " m/s", GRAPH_W - 10, 40, 4);
+  } else {
+    graphSprite.setTextColor(TFT_LIGHTGREY);
+    graphSprite.drawString("PWV: --", GRAPH_W - 10, 40, 4);
+  }
+
+  // GRÁFICO
   graphSprite.drawFastHLine(0, GRAPH_H/2, GRAPH_W, TFT_LIGHTGREY); 
 
   float minV = -50, maxV = 50;
@@ -448,7 +578,7 @@ void actualizarGrafico() {
 }
 
 // ======================================================================
-// SETUP
+// MAIN SETUP
 // ======================================================================
 void setup() {
   Serial.begin(115200);
@@ -456,38 +586,25 @@ void setup() {
   pinMode(LCD_LED_PIN, OUTPUT);
   digitalWrite(LCD_LED_PIN, HIGH);
 
-  // Inicializar Pantalla
-  tft.init();
-  tft.setRotation(1);
-  tft.setSwapBytes(true);
+  tft.init(); tft.setRotation(1); tft.setSwapBytes(true);
+  tft.fillScreen(TFT_BLACK);
+  
+  // LOGO (OPCIONAL - SOLO TEXTO POR AHORA)
+  tft.setTextDatum(MC_DATUM); tft.setTextColor(TFT_WHITE);
+  tft.drawString("STIFFIO SYSTEM", 240, 160, 4);
+  delay(2000);
+
   graphSprite.setColorDepth(8); 
   graphSprite.createSprite(GRAPH_W, GRAPH_H);
 
-  // Inicializar Touch
-  touch.begin();
-  touch.setRotation(1);
+  touch.begin(); touch.setRotation(1);
 
-  // Inicializar Sensores (Se hace una vez antes de arrancar la tarea)
-  // No iniciamos la medición todavía
   if (!iniciarSensores()) {
-     tft.fillScreen(TFT_RED);
-     tft.drawString("ERROR I2C", 240, 160, 4);
-     while(1); // Bloquear si falla hardware
+     tft.fillScreen(TFT_RED); tft.drawString("ERROR I2C", 240, 160, 4);
+     while(1); 
   }
 
-  // --- LANZAR EL SEGUNDO NÚCLEO ---
-  // Esto crea la tarea paralela que se encargará del sensor siempre
-  xTaskCreatePinnedToCore(
-    TaskSensores,   // Función
-    "SensorTask",   // Nombre
-    10000,          // Stack size
-    NULL,           // Parametros
-    1,              // Prioridad
-    NULL,           // Handle
-    0               // NÚCLEO 0
-  );
-
-  // Dibujar tu Menú Original
+  xTaskCreatePinnedToCore(TaskSensores,"SensorTask",10000,NULL,1,NULL,0);
   dibujarMenuPrincipal();
 }
 
@@ -504,26 +621,98 @@ void loop() {
     
     // --- ESTADO: MENU ---
     if (pantallaActual == MENU) {
-      // Botón TEST RAPIDO
       if (x > btnX && x < btnX + btnW && y > btnY1 && y < btnY1 + btnH) {
-        tft.fillScreen(TFT_BLACK);
-        tft.drawString("Iniciando...", 240, 160, 4);
-        delay(500); 
-
-        pantallaActual = MEDICION;
-        prepararPantallaMedicion();
-
-        // Reiniciamos buffer antes de empezar
-        portENTER_CRITICAL(&bufferMux);
-        faseMedicion = 0; 
-        s1ok = false; s2ok = false;
-        writeHead = 0;
-        portEXIT_CRITICAL(&bufferMux);
-        
-        // ¡ESTO ACTIVA AL OTRO NÚCLEO!
-        medicionActiva = true; 
+         sonarPitido(); 
+         edadInput = ""; 
+         dibujarTecladoEdad(); // IR A EDAD
+         delay(300);
       }
     }
+    
+    // --- EDAD ---
+    else if (pantallaActual == PANTALLA_EDAD) {
+       // Teclado Numérico
+       for (int i = 0; i < 11; i++) {
+         int row = i / 3; int col = i % 3;
+         if (i == 9) { col = 1; row = 3; } if (i == 10) { col = 2; row = 3; }
+         int kX = tstartX + (col * tgapX); int kY = tstartY + (row * tgapY);
+         if (x > kX - 22 && x < kX + 22 && y > kY - 17 && y < kY + 17) {
+            sonarPitido();
+            if (i < 9) edadInput += String(i + 1);
+            else if (i == 9) edadInput += "0";
+            else if (i == 10) edadInput = "";
+            if (edadInput.length() > 3) edadInput = edadInput.substring(0, 3);
+            actualizarDisplayEdad();
+            if (edadInput.length() > 0) dibujarBotonSiguiente();
+            delay(250);
+         }
+       }
+       // Volver
+       if ((x-50)*(x-50)+(y-275)*(y-275) <= 900) { 
+          sonarPitido(); dibujarMenuPrincipal(); delay(300); 
+       }
+       // Siguiente
+       if (edadInput.length() > 0 && (x-430)*(x-430)+(y-275)*(y-275) <= 900) {
+          int val = edadInput.toInt();
+          if (val >= 15 && val <= 99) {
+             sonarPitido(); 
+             pacienteEdad = val; // GUARDAR EDAD
+             alturaInput = ""; 
+             dibujarTecladoAltura(); // IR A ALTURA
+             delay(300);
+          } else {
+             mostrarAlerta("EDAD INVALIDA", "15 - 99 anos");
+          }
+       }
+    }
+    
+    // --- ALTURA ---
+    else if (pantallaActual == PANTALLA_ALTURA) {
+       // Teclado
+       for (int i = 0; i < 11; i++) {
+         int row = i / 3; int col = i % 3;
+         if (i == 9) { col = 1; row = 3; } if (i == 10) { col = 2; row = 3; }
+         int kX = tstartX + (col * tgapX); int kY = tstartY + (row * tgapY);
+         if (x > kX - 22 && x < kX + 22 && y > kY - 17 && y < kY + 17) {
+            sonarPitido();
+            if (i < 9) alturaInput += String(i + 1);
+            else if (i == 9) alturaInput += "0";
+            else if (i == 10) alturaInput = "";
+            if (alturaInput.length() > 3) alturaInput = alturaInput.substring(0, 3);
+            actualizarDisplayAltura();
+            if (alturaInput.length() > 0) dibujarBotonSiguiente();
+            delay(250);
+         }
+       }
+       // Volver a Edad
+       if ((x-50)*(x-50)+(y-275)*(y-275) <= 900) { 
+          sonarPitido(); dibujarTecladoEdad(); delay(300); 
+       }
+       // SIGUIENTE -> IR A MEDICIÓN
+       if (alturaInput.length() > 0 && (x-430)*(x-430)+(y-275)*(y-275) <= 900) {
+          int val = alturaInput.toInt();
+          if (val >= 50 && val <= 250) { // Rango amplio
+             sonarPitido(); 
+             pacienteAltura = val; // GUARDAR ALTURA
+             
+             // INICIAR MEDICIÓN
+             pantallaActual = MEDICION;
+             prepararPantallaMedicion();
+             medicionActiva = true;
+             
+             portENTER_CRITICAL(&bufferMux);
+             faseMedicion = 0; // REINICIAR MAQUINA DE ESTADOS
+             s1ok = false; s2ok = false;
+             portEXIT_CRITICAL(&bufferMux);
+             
+             delay(300);
+          } else {
+             mostrarAlerta("ALTURA INVALIDA", "50 - 250 cm");
+          }
+       }
+    }
+
+    // --- MEDICIÓN ---
     else if (pantallaActual == MEDICION) {
       // Botón VOLVER (Esquina inferior derecha)
       if (x > 380 && y > 260) {
