@@ -38,17 +38,21 @@ volatile float buffer_s1[BUFFER_SIZE];
 volatile float buffer_s2[BUFFER_SIZE];
 volatile int writeHead = 0; // Índice de escritura del sensor
 
-// Variables de estado compartidas
 volatile bool medicionActiva = false;
+
+// Estados: 0=Esperando, 1=Estabilizando, 2=Midiendo
+volatile int faseMedicion = 0; 
+volatile int porcentajeEstabilizacion = 0;
+
+// Variables de estado compartidas
 volatile bool s1ok = false;
 volatile bool s2ok = false;
-volatile unsigned long totalMuestras = 0;
 
 // Semáforo para proteger la memoria (evita que se lea mientras se escribe)
 portMUX_TYPE bufferMux = portMUX_INITIALIZER_UNLOCKED;
 
 // ======================================================================
-// VARIABLES GLOBALES
+// VARIABLES GLOBALES / OBJETOS
 // ======================================================================
 TFT_eSPI tft = TFT_eSPI();
 TFT_eSprite graphSprite = TFT_eSprite(&tft); // Sprite para gráficos sin parpadeo
@@ -81,62 +85,125 @@ const unsigned long DRAW_INTERVAL = 40; // ~25fps visuales
 // TAREA NÚCLEO 0: SENSOR Y MATEMÁTICA (NO TOCAR UI AQUÍ)
 // ======================================================================
 void TaskSensores(void *pvParameters) {
-  // Variables locales del filtro (Fórmula Mágica)
-  const int NUM_READINGS = 4;
-  long readings1[NUM_READINGS] = {0};
-  long readings2[NUM_READINGS] = {0};
-  int readIndex = 0;
-  long total1 = 0, total2 = 0;
-  float dc1 = 0, dc2 = 0;
-  const float alpha = 0.95;
-  const long FINGER_THRESHOLD = 50000;
+
+  // VARIABLES DE FILTRADO (Persistentes)
+  float s1_lowPass = 0;
+  float s1_dc = 0;
+  float s2_lowPass = 0;
+  float s2_dc = 0;
+
+  // Factor de suavizado (0.7 mantiene la forma pero quita ruido fino)
+  const float ALPHA_LP = 0.7; 
+  // Factor de filtro DC (Centrado en 0)
+  const float ALPHA_DC = 0.95;
+
+  const long SENSOR_THRESHOLD = 50000;
+
+  unsigned long startContactTime = 0; 
+  unsigned long baseTime = 0;         
+  const unsigned long TIEMPO_ESTABILIZACION = 3000; 
+
+  unsigned long lastDebugTime = 0;
+  int fpsCount = 0;
 
   // Loop infinito de alta velocidad
   for (;;) {
     if (medicionActiva) {
       
-      long ir1 = sensorProx.getIR();
-      long ir2 = sensorDist.getIR();
+      sensorProx.check();
+      sensorDist.check(); 
+      
+      if (sensorProx.available()) {
+        long ir1 = sensorProx.getIR();
+        long ir2 = sensorDist.getIR(); 
+        
+        // Debug FPS
+        fpsCount++;
+        if (millis() - lastDebugTime >= 1000) {
+           Serial.print("FPS: "); Serial.println(fpsCount);
+           fpsCount = 0;
+           lastDebugTime = millis();
+        }
 
-      // Actualizar estado global de sensores
-      s1ok = (ir1 > FINGER_THRESHOLD);
-      s2ok = (ir2 > FINGER_THRESHOLD);
+        bool currentS1 = (ir1 > SENSOR_THRESHOLD);
+        bool currentS2 = (ir2 > SENSOR_THRESHOLD);
+        s1ok = currentS1;
+        s2ok = currentS2;
 
-      if (s1ok && s2ok) {
-        // --- PROCESAMIENTO MATEMÁTICO (TU CÓDIGO) ---
-        total1 -= readings1[readIndex]; readings1[readIndex] = ir1; total1 += readings1[readIndex];
-        long smooth1 = total1 / NUM_READINGS;
-        dc1 = (alpha * dc1) + (1.0 - alpha) * smooth1;
-        float val1 = smooth1 - dc1;
+        if (currentS1 && currentS2) {
+          
+          // --- FILTRADO (SIN INVERSIÓN) ---
+          
+          // 1. Inicializar si es el primer dato
+          if (s1_lowPass == 0) s1_lowPass = ir1; 
+          if (s2_lowPass == 0) s2_lowPass = ir2;
 
-        total2 -= readings2[readIndex]; readings2[readIndex] = ir2; total2 += readings2[readIndex];
-        long smooth2 = total2 / NUM_READINGS;
-        dc2 = (alpha * dc2) + (1.0 - alpha) * smooth2;
-        float val2 = smooth2 - dc2;
+          // 2. Filtro Paso Bajo (Low Pass) - Suaviza "dientes"
+          s1_lowPass = (s1_lowPass * ALPHA_LP) + (ir1 * (1.0 - ALPHA_LP));
+          s2_lowPass = (s2_lowPass * ALPHA_LP) + (ir2 * (1.0 - ALPHA_LP));
 
-        readIndex = (readIndex + 1) % NUM_READINGS;
+          // 3. Filtro DC (High Pass) - Centra en 0
+          if (s1_dc == 0) s1_dc = ir1;
+          if (s2_dc == 0) s2_dc = ir2;
 
-        // --- GUARDADO SEGURO EN BUFFER COMPARTIDO ---
-        portENTER_CRITICAL(&bufferMux); 
-        buffer_s1[writeHead] = val1;
-        buffer_s2[writeHead] = val2;
-        writeHead++;
-        if (writeHead >= BUFFER_SIZE) writeHead = 0;
-        totalMuestras++;
-        portEXIT_CRITICAL(&bufferMux);
+          s1_dc = (s1_dc * ALPHA_DC) + (s1_lowPass * (1.0 - ALPHA_DC));
+          s2_dc = (s2_dc * ALPHA_DC) + (s2_lowPass * (1.0 - ALPHA_DC));
 
-      } else {
-         // Reset filtros si no hay sensor
-         dc1 = ir1; total1 = ir1 * NUM_READINGS;
-         dc2 = ir2; total2 = ir2 * NUM_READINGS;
-         for(int i=0; i<NUM_READINGS; i++) { readings1[i]=ir1; readings2[i]=ir2; }
+          // 4. Resultado FINAL (ORIENTACIÓN ORIGINAL)
+          //    Formula: Val = SeñalSuavizada - DC.
+          //    Cuando haya un latido, la señal bajará, así que el valor será negativo.
+          float val1 = s1_lowPass - s1_dc;
+          float val2 = s2_lowPass - s2_dc;
+
+          // --- MAQUINA DE ESTADOS ---
+
+          if (faseMedicion == 0) {
+             faseMedicion = 1; 
+             startContactTime = millis();
+          }
+          else if (faseMedicion == 1) {
+             unsigned long transcurrido = millis() - startContactTime;
+             porcentajeEstabilizacion = (transcurrido * 100) / TIEMPO_ESTABILIZACION;
+             
+             if (transcurrido >= TIEMPO_ESTABILIZACION) {
+                faseMedicion = 2;
+                baseTime = millis(); 
+                portENTER_CRITICAL(&bufferMux);
+                writeHead = 0;
+                for(int i=0; i<BUFFER_SIZE; i++) { 
+                  buffer_s1[i]=0; buffer_s2[i]=0; buffer_time[i]=0; 
+                }
+                portEXIT_CRITICAL(&bufferMux);
+             }
+          }
+          else if (faseMedicion == 2) {
+             unsigned long tiempoRelativo = millis() - baseTime;
+
+             portENTER_CRITICAL(&bufferMux); 
+             buffer_s1[writeHead] = val1;
+             buffer_s2[writeHead] = val2;
+             buffer_time[writeHead] = tiempoRelativo;
+             writeHead++;
+             if (writeHead >= BUFFER_SIZE) writeHead = 0;
+             portEXIT_CRITICAL(&bufferMux);
+          }
+
+        } else {
+          // Se levantó el dedo
+          if (faseMedicion != 0) {
+             faseMedicion = 0;
+             porcentajeEstabilizacion = 0;
+             s1_lowPass = 0; s1_dc = 0;
+             s2_lowPass = 0; s2_dc = 0;
+             sensorProx.nextSample(); sensorDist.nextSample();
+          }
+        }
       }
+    } else {
+      vTaskDelay(10); 
     }
-    
-    // CONTROL DE TIEMPO EXACTO: 10ms = 100Hz
-    // Esto garantiza que el tiempo fluya real, sin dilatarse
-    vTaskDelay(pdMS_TO_TICKS(10)); 
-  }
+    vTaskDelay(1); 
+  }  
 }
 
 // ======================================================================
@@ -145,20 +212,15 @@ void TaskSensores(void *pvParameters) {
 bool iniciarSensores() {
   Wire.begin(SDA1, SCL1, 400000);
   Wire1.begin(SDA2, SCL2, 400000);
+  Wire.setClock(400000); Wire1.setClock(400000);
 
   if (!sensorProx.begin(Wire, I2C_SPEED_FAST)) return false;
   if (!sensorDist.begin(Wire1, I2C_SPEED_FAST)) return false;
 
-  // Configuración Rápida y Suave
-  sensorProx.setup(31, 4, 2, 100, 411, 4096);
-  sensorDist.setup(31, 4, 2, 100, 411, 4096);
-  
-  // Limpiar Buffers Globales
-  portENTER_CRITICAL(&bufferMux);
-  for(int i=0; i<BUFFER_SIZE; i++) { buffer_s1[i]=0; buffer_s2[i]=0; }
-  writeHead = 0;
-  totalMuestras = 0;
-  portEXIT_CRITICAL(&bufferMux);
+  // CONFIGURACIÓN SUAVIZADA (SampleAvg 8)
+  // Al promediar 8 muestras hardware, la señal sale mucho más limpia.
+  sensorProx.setup(60, 8, 2, 400, 411, 4096);
+  sensorDist.setup(60, 8, 2, 400, 411, 4096);
   
   return true;
 }
@@ -223,112 +285,97 @@ void prepararPantallaMedicion() {
 // ACTUALIZAR GRÁFICO (ADAPTADO A MULTICORE)
 // ======================================================================
 void actualizarGrafico() {
-  // 1. COPIA SEGURA DE DATOS (SNAPSHOT)
+
+  graphSprite.fillSprite(COLOR_FONDO_MEDICION);
+  // COPIA SEGURA DE DATOS (SNAPSHOT)
   // Copiamos los datos del núcleo 0 a variables locales para dibujar tranquilos
   float localBuf1[BUFFER_SIZE];
   float localBuf2[BUFFER_SIZE];
+  unsigned long localTime[BUFFER_SIZE];
   int localHead;
-  unsigned long localTotalMuestras;
+  int localFase = faseMedicion;
+  int localPorcentaje = porcentajeEstabilizacion;
+  bool localS1 = s1ok;
+  bool localS2 = s2ok;
 
   portENTER_CRITICAL(&bufferMux);
-  memcpy(localBuf1, (const void*)buffer_s1, sizeof(buffer_s1));
-  memcpy(localBuf2, (const void*)buffer_s2, sizeof(buffer_s2));
-  localHead = writeHead;
-  localTotalMuestras = totalMuestras;
+  if (localFase == 2) {
+    memcpy(localBuf1, (const void*)buffer_s1, sizeof(buffer_s1));
+    memcpy(localBuf2, (const void*)buffer_s2, sizeof(buffer_s2));
+    memcpy(localTime, (const void*)buffer_time, sizeof(buffer_time));
+    localHead = writeHead;
+  }
   portEXIT_CRITICAL(&bufferMux);
 
-  // 1. Limpiar Sprite (Fondo Blanco)
-  graphSprite.fillSprite(COLOR_FONDO_MEDICION);
-
-  // 2. VERIFICAR SENSORES Y MOSTRAR MENSAJES ESPECÍFICOS
-  // Si falta ALGUNO de los dos, detenemos el graficado y mostramos alerta
-  if (!s1ok || !s2ok) {
+  // --- UI LÓGICA ---
+  if (localFase == 0) {
     graphSprite.setTextDatum(MC_DATUM);
-    
-    if (!s1ok && !s2ok) {
-       // Faltan ambos
-       graphSprite.setTextColor(TFT_BLACK);
-       graphSprite.drawString("ESPERANDO AMBOS SENSORES...", GRAPH_W/2, GRAPH_H/2, 4);
-    } 
-    else if (!s1ok) {
-       // Falta solo S1
-       graphSprite.setTextColor(COLOR_S1); // Mensaje en ROJO
-       graphSprite.drawString("COLOCAR SENSOR PROXIMAL (S1)", GRAPH_W/2, GRAPH_H/2, 4);
-    } 
-    else if (!s2ok) {
-       // Falta solo S2
-       graphSprite.setTextColor(COLOR_S2); // Mensaje en AZUL
-       graphSprite.drawString("COLOCAR SENSOR DISTAL (S2)", GRAPH_W/2, GRAPH_H/2, 4);
+    if (!localS1 && !localS2) {
+       graphSprite.setTextColor(TFT_BLACK); graphSprite.drawString("COLOCAR AMBOS SENSORES", GRAPH_W/2, GRAPH_H/2, 4);
+    } else if (!localS1) {
+       graphSprite.setTextColor(COLOR_S1); graphSprite.drawString("FALTA SENSOR CUELLO", GRAPH_W/2, GRAPH_H/2, 4);
+    } else if (!localS2) {
+       graphSprite.setTextColor(COLOR_S2); graphSprite.drawString("FALTA SENSOR MUNECA", GRAPH_W/2, GRAPH_H/2, 4);
     }
-
     graphSprite.pushSprite(GRAPH_X, GRAPH_Y);
-    return; // Salir sin dibujar ondas
+    return;
   }
-  // --- AMBOS sensores están puestos ---
   
-  // 3. Línea Central Fija (Referencia Nivel 0)
+  if (localFase == 1) {
+    graphSprite.setTextDatum(MC_DATUM);
+    graphSprite.setTextColor(TFT_BLUE);
+    graphSprite.drawString("ESTABILIZANDO...", GRAPH_W/2, GRAPH_H/2 - 20, 4);
+    int barW = 200; int barH = 20; int barX = (GRAPH_W - barW) / 2; int barY = GRAPH_H/2 + 10;
+    graphSprite.drawRect(barX, barY, barW, barH, TFT_BLACK);
+    int fillW = (barW * localPorcentaje) / 100;
+    graphSprite.fillRect(barX+1, barY+1, fillW-2, barH-2, TFT_GREEN);
+    graphSprite.pushSprite(GRAPH_X, GRAPH_Y);
+    return;
+  }
+
+  // FASE 2: GRÁFICO
   graphSprite.drawFastHLine(0, GRAPH_H/2, GRAPH_W, TFT_LIGHTGREY); 
 
-  // 4. Autoescala
   float minV = -50, maxV = 50;
-  for(int i=0; i<BUFFER_SIZE; i++) {
-    if(localBuf1[i] < minV) minV = localBuf1[i];
-    if(localBuf1[i] > maxV) maxV = localBuf1[i];
+  for(int i=0; i<BUFFER_SIZE; i+=5) { 
+    if(localBuf1[i] < minV) minV = localBuf1[i]; if(localBuf1[i] > maxV) maxV = localBuf1[i];
   }
-
-  // Clamp anti-ruido (Para que no haga zoom en estática)
-  if((maxV - minV) < 100) {
-    float mid = (maxV + minV) / 2;
-    maxV = mid + 50; minV = mid - 50;
-  }
+  if((maxV - minV) < 100) { float mid = (maxV + minV) / 2; maxV = mid + 50; minV = mid - 50; }
   
-  // 5. Dibujar Onda + Rejilla Móvil
-  float xStep = (float)GRAPH_W / (float)BUFFER_SIZE; // Recorremos el buffer de izquierda (antiguo) a derecha (nuevo)
-  
-  // Configuración texto para los segundos
+  float xStep = (float)GRAPH_W / (float)BUFFER_SIZE; 
   graphSprite.setTextDatum(TC_DATUM); 
   graphSprite.setTextColor(COLOR_EJE);
 
   for (int i = 0; i < BUFFER_SIZE - 1; i++) {
-    // Truco: Usamos 'localHead' para alinear el gráfico siempre igual
-    // Esto hace que la onda vieja salga por la izq y la nueva entre por la derecha
     int idx = (localHead + i) % BUFFER_SIZE;
     int nextIdx = (localHead + i + 1) % BUFFER_SIZE;
 
-    // Coordenadas X en pantalla
+    if (localTime[idx] == 0 && localTime[nextIdx] == 0) continue;
+
     int x1 = (int)(i * xStep);
     int x2 = (int)((i + 1) * xStep);
 
-    // EJE X MÓVIL
-    // Calculamos el tiempo basado en el contador total del Núcleo 0
-    long absoluteSample = localTotalMuestras - (BUFFER_SIZE - 1) + i; // totalMuestras = final del buffer (borde derecho), restamos para saber la antiguedad hacia la izquierda
-
-    if (absoluteSample > 0 && absoluteSample % 100 == 0) { // Cada 100 muestras = 1 segundo
-      graphSprite.drawFastVLine(x1, 0, GRAPH_H, COLOR_GRILLA); // Línea vertical tenue
-      // Texto "Xs" que viaja con la línea
-      String label = String(absoluteSample / 100) + "s";
-      graphSprite.drawString(label, x1, GRAPH_H - 20, 2); 
+    unsigned long tCurrent = localTime[idx];
+    unsigned long tNext = localTime[nextIdx];
+    
+    if (tNext > tCurrent) {
+        unsigned long secCurrent = tCurrent / 1000;
+        unsigned long secNext = tNext / 1000;
+        if (secNext > secCurrent) { 
+            graphSprite.drawFastVLine(x2, 0, GRAPH_H, COLOR_GRILLA); 
+            graphSprite.drawString(String(secNext)+"s", x2, GRAPH_H - 20, 2); 
+        }
     }
 
-    // Ignorar si no hay datos
-    if(localBuf1[idx] == 0 && localBuf1[nextIdx] == 0) continue;
-
-    // Mapeo Y
     int y1A = map((long)localBuf1[idx], (long)minV, (long)maxV, GRAPH_H, 0);
     int y1B = map((long)localBuf1[nextIdx], (long)minV, (long)maxV, GRAPH_H, 0);
     int y2A = map((long)localBuf2[idx], (long)minV, (long)maxV, GRAPH_H, 0);
     int y2B = map((long)localBuf2[nextIdx], (long)minV, (long)maxV, GRAPH_H, 0);
 
-    // Clipping (Seguridad visual)
-    y1A = constrain(y1A, 0, GRAPH_H-1); y1B = constrain(y1B, 0, GRAPH_H-1);
-    y2A = constrain(y2A, 0, GRAPH_H-1); y2B = constrain(y2B, 0, GRAPH_H-1);
-
-    // Dibujar líneas de señal
-    graphSprite.drawLine(x1, y1A, x2, y1B, COLOR_S1);
-    graphSprite.drawLine(x1, y2A, x2, y2B, COLOR_S2);
+    graphSprite.drawLine(x1, constrain(y1A,0,GRAPH_H), x2, constrain(y1B,0,GRAPH_H), COLOR_S1);
+    graphSprite.drawLine(x1, constrain(y2A,0,GRAPH_H), x2, constrain(y2B,0,GRAPH_H), COLOR_S2); 
   }
 
-  // 5. Estampar Sprite
   graphSprite.pushSprite(GRAPH_X, GRAPH_Y);
 }
 
@@ -392,24 +439,21 @@ void loop() {
       // Botón TEST RAPIDO
       if (x > btnX && x < btnX + btnW && y > btnY1 && y < btnY1 + btnH) {
         tft.fillScreen(TFT_BLACK);
-        tft.setTextDatum(MC_DATUM);
-        tft.setTextColor(TFT_WHITE);
-        tft.drawString("Inicializando...", 240, 160, 4);
-        
-        // Reiniciamos buffer antes de empezar
-        portENTER_CRITICAL(&bufferMux);
-        totalMuestras = 0;
-        writeHead = 0;
-        for(int i=0; i<BUFFER_SIZE; i++) { buffer_s1[i]=0; buffer_s2[i]=0; }
-        portEXIT_CRITICAL(&bufferMux);
+        tft.drawString("Iniciando...", 240, 160, 4);
+        delay(500); 
 
         pantallaActual = MEDICION;
         prepararPantallaMedicion();
+
+        // Reiniciamos buffer antes de empezar
+        portENTER_CRITICAL(&bufferMux);
+        faseMedicion = 0; 
+        s1ok = false; s2ok = false;
+        writeHead = 0;
+        portEXIT_CRITICAL(&bufferMux);
         
         // ¡ESTO ACTIVA AL OTRO NÚCLEO!
         medicionActiva = true; 
-        
-        delay(500); 
       }
     }
     else if (pantallaActual == MEDICION) {
