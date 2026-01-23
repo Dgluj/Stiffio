@@ -1397,11 +1397,28 @@ class MainScreen(QMainWindow):
         # Cerrar la ventana actual después de mostrar la nueva
         QTimer.singleShot(50, self.close)
 
-
     # Iniciar medición
     def toggle_measurement(self):
         if not self.measuring:
-            # --- Iniciar medición ---
+            # =======================================================
+            # BLOQUE NUEVO: ENVIAR DATOS AL ESP32
+            # =======================================================
+            try:
+                # Recuperamos los datos que vienen del diccionario
+                h_val = int(self.patient_data.get('altura', 170))
+                a_val = int(self.patient_data.get('edad', 30))
+                
+                # Enviamos al ESP32
+                if ComunicacionMax.connected:
+                    ComunicacionMax.enviar_datos_paciente(h_val, a_val)
+                    print(f"[FrontEnd] Datos enviados a ESP32: Altura {h_val}, Edad {a_val}")
+                else:
+                    print("[FrontEnd] ESP32 no conectado (Modo Offline o Error)")
+            except Exception as e:
+                print(f"[FrontEnd] Error enviando datos: {e}")
+            # =======================================================
+
+            # --- Iniciar medición (Código original tuyo) ---
             self.measuring = True
             self.start_time = time.time()
             self.start_graph_button.setText("Detener Medición")
@@ -1418,9 +1435,9 @@ class MainScreen(QMainWindow):
                     background-color: #D32F2F;
                 }
             """)
-            self.start_graph_update()
+            self.start_graph_update() # <--- Esto inicia el Timer
         else:
-            # --- Detener medición ---
+            # --- Detener medición (Código original tuyo) ---
             self.measuring = False
             self.start_graph_button.setText("Iniciar Medición")
             self.start_graph_button.setStyleSheet("""
@@ -1437,7 +1454,6 @@ class MainScreen(QMainWindow):
                 }
             """)
             self.stop_graph_update()
-
 
     # Arranca el gráfico
     def start_graph_update(self):
