@@ -92,6 +92,9 @@ void TaskSensores(void *pvParameters) {
   // VARIABLES DE FILTRADO (Persistentes)
   float s1_lp = 0, s1_dc = 0;
   float s2_lp = 0, s2_dc = 0;
+  const float ALPHA_LP = 0.7; // Factor de suavizado (0.7 mantiene la forma pero quita ruido fino)
+  const float ALPHA_DC = 0.95; // Factor de filtro DC (Centrado en 0)
+  const long SENSOR_THRESHOLD = 50000;
 
   // Buffers Media Móvil
   const int MA_SIZE = 5; 
@@ -99,15 +102,9 @@ void TaskSensores(void *pvParameters) {
   float bufMA2[MA_SIZE] = {0};
   int idxMA = 0;
 
-  // Factor de suavizado (0.7 mantiene la forma pero quita ruido fino)
-  const float ALPHA_LP = 0.7; 
-  // Factor de filtro DC (Centrado en 0)
-  const float ALPHA_DC = 0.95;
-  const long SENSOR_THRESHOLD = 50000;
-
   unsigned long startContactTime = 0; 
   unsigned long baseTime = 0;         
-  const unsigned long TIEMPO_ESTABILIZACION = 3000; 
+  const unsigned long TIEMPO_ESTABILIZACION = 10000; // 10 Segundos de calibración
 
   // --- ALGORITMO HR (RITMO CARDÍACO) ---
   float lastValS2 = 0;
@@ -191,16 +188,18 @@ void TaskSensores(void *pvParameters) {
                 if (instantBPM > 40 && instantBPM < 200) {
                    bpmBuffer[bpmIdx] = instantBPM;
                    bpmIdx = (bpmIdx + 1) % BPM_AVG_SIZE;
+                   
+                   // Contamos muestras válidas
                    if (validSamples < BPM_AVG_SIZE) validSamples++;
 
-                   // Calcular promedio si tenemos suficientes datos
-                   if (validSamples >= 4) { 
+                   // CONDICIÓN ESTRICTA:
+                   // Solo actualizamos la variable global si el buffer está LLENO (10 muestras)
+                   if (validSamples >= BPM_AVG_SIZE) { 
                       long totalBPM = 0;
-                      // Sumamos buffer completo si está lleno, o parcial si no
-                      int limit = (validSamples == BPM_AVG_SIZE) ? BPM_AVG_SIZE : validSamples;
-                      for(int i=0; i<limit; i++) totalBPM += bpmBuffer[i];
+                      for(int i=0; i<BPM_AVG_SIZE; i++) totalBPM += bpmBuffer[i];
                       
-                      bpmMostrado = totalBPM / limit;
+                      // Promedio perfecto de 10 latidos
+                      bpmMostrado = totalBPM / BPM_AVG_SIZE;
                    }
                 }
              }
@@ -219,12 +218,15 @@ void TaskSensores(void *pvParameters) {
              if (transcurrido >= TIEMPO_ESTABILIZACION) {
                 faseMedicion = 2;
                 baseTime = millis(); 
+
                 portENTER_CRITICAL(&bufferMux);
                 writeHead = 0;
-                for(int i=0; i<BUFFER_SIZE; i++) { 
-                  buffer_s1[i]=0; buffer_s2[i]=0; buffer_time[i]=0; 
-                }
+                for(int i=0; i<BUFFER_SIZE; i++) { buffer_s1[i]=0; buffer_s2[i]=0; buffer_time[i]=0; }
                 for(int i=0; i<MA_SIZE; i++) { bufMA1[i]=0; bufMA2[i]=0; }
+                
+                bpmMostrado = 0;   // Reset BPM display
+                validSamples = 0;  // Reset contador de latidos válidos
+                
                 portEXIT_CRITICAL(&bufferMux);
              }
           }
@@ -398,7 +400,7 @@ void actualizarGrafico() {
     graphSprite.setTextColor(TFT_LIGHTGREY);
     graphSprite.drawString("HR: -- BPM", GRAPH_W - 10, 10, 4);
   }
-  
+
   // FASE 2: GRÁFICO
   graphSprite.drawFastHLine(0, GRAPH_H/2, GRAPH_W, TFT_LIGHTGREY); 
 
