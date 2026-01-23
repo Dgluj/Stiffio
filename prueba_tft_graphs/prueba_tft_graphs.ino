@@ -25,8 +25,9 @@
 #define COLOR_TEXTO_MEDICION TFT_BLACK
 #define COLOR_EJE            TFT_DARKGREY
 #define COLOR_GRILLA         0xE71C // Gris muy claro
-#define COLOR_S1             TFT_RED
-#define COLOR_S2             TFT_BLUE // Azul oscuro para contraste en blanco
+#define COLOR_S1             TFT_RED      // Proximal (Cuello)
+#define COLOR_PINK           0xFC9F       // Rosado personalizado (RGB565)
+#define COLOR_S2             COLOR_PINK   // Distal (Muñeca)
 
 // ======================================================================
 // VARIABLES COMPARTIDAS (MULTICORE)
@@ -39,8 +40,8 @@ volatile int writeHead = 0; // Índice de escritura del sensor
 
 // Variables de estado compartidas
 volatile bool medicionActiva = false;
-volatile bool dedo1ok = false;
-volatile bool dedo2ok = false;
+volatile bool s1ok = false;
+volatile bool s2ok = false;
 volatile unsigned long totalMuestras = 0;
 
 // Semáforo para proteger la memoria (evita que se lea mientras se escribe)
@@ -97,11 +98,11 @@ void TaskSensores(void *pvParameters) {
       long ir1 = sensorProx.getIR();
       long ir2 = sensorDist.getIR();
 
-      // Actualizar estado global de dedos
-      dedo1ok = (ir1 > FINGER_THRESHOLD);
-      dedo2ok = (ir2 > FINGER_THRESHOLD);
+      // Actualizar estado global de sensores
+      s1ok = (ir1 > FINGER_THRESHOLD);
+      s2ok = (ir2 > FINGER_THRESHOLD);
 
-      if (dedo1ok && dedo2ok) {
+      if (s1ok && s2ok) {
         // --- PROCESAMIENTO MATEMÁTICO (TU CÓDIGO) ---
         total1 -= readings1[readIndex]; readings1[readIndex] = ir1; total1 += readings1[readIndex];
         long smooth1 = total1 / NUM_READINGS;
@@ -125,7 +126,7 @@ void TaskSensores(void *pvParameters) {
         portEXIT_CRITICAL(&bufferMux);
 
       } else {
-         // Reset filtros si no hay dedo
+         // Reset filtros si no hay sensor
          dc1 = ir1; total1 = ir1 * NUM_READINGS;
          dc2 = ir2; total2 = ir2 * NUM_READINGS;
          for(int i=0; i<NUM_READINGS; i++) { readings1[i]=ir1; readings2[i]=ir2; }
@@ -205,8 +206,8 @@ void prepararPantallaMedicion() {
 
   // Leyendas
   tft.setTextDatum(TL_DATUM);
-  tft.setTextColor(COLOR_S1); tft.drawString("S1: Proximal", 40, 270, 2);
-  tft.setTextColor(COLOR_S2); tft.drawString("S2: Distal", 40, 290, 2);
+  tft.setTextColor(COLOR_S1); tft.drawString("S1: Cuello", 40, 270, 2);
+  tft.setTextColor(COLOR_S2); tft.drawString("S2: Muneca", 40, 290, 2); // Sin ñ por seguridad de fuente
 
   // Marco del gráfico
   tft.drawRect(GRAPH_X - 1, GRAPH_Y - 1, GRAPH_W + 2, GRAPH_H + 2, TFT_BLACK);
@@ -239,22 +240,22 @@ void actualizarGrafico() {
   // 1. Limpiar Sprite (Fondo Blanco)
   graphSprite.fillSprite(COLOR_FONDO_MEDICION);
 
-  // 2. VERIFICAR DEDOS Y MOSTRAR MENSAJES ESPECÍFICOS
+  // 2. VERIFICAR SENSORES Y MOSTRAR MENSAJES ESPECÍFICOS
   // Si falta ALGUNO de los dos, detenemos el graficado y mostramos alerta
-  if (!dedo1ok || !dedo2ok) {
+  if (!s1ok || !s2ok) {
     graphSprite.setTextDatum(MC_DATUM);
     
-    if (!dedo1ok && !dedo2ok) {
+    if (!s1ok && !s2ok) {
        // Faltan ambos
        graphSprite.setTextColor(TFT_BLACK);
-       graphSprite.drawString("ESPERANDO AMBOS DEDOS...", GRAPH_W/2, GRAPH_H/2, 4);
+       graphSprite.drawString("ESPERANDO AMBOS SENSORES...", GRAPH_W/2, GRAPH_H/2, 4);
     } 
-    else if (!dedo1ok) {
+    else if (!s1ok) {
        // Falta solo S1
        graphSprite.setTextColor(COLOR_S1); // Mensaje en ROJO
        graphSprite.drawString("COLOCAR SENSOR PROXIMAL (S1)", GRAPH_W/2, GRAPH_H/2, 4);
     } 
-    else if (!dedo2ok) {
+    else if (!s2ok) {
        // Falta solo S2
        graphSprite.setTextColor(COLOR_S2); // Mensaje en AZUL
        graphSprite.drawString("COLOCAR SENSOR DISTAL (S2)", GRAPH_W/2, GRAPH_H/2, 4);
@@ -263,7 +264,7 @@ void actualizarGrafico() {
     graphSprite.pushSprite(GRAPH_X, GRAPH_Y);
     return; // Salir sin dibujar ondas
   }
-  // --- AMBOS dedos están puestos ---
+  // --- AMBOS sensores están puestos ---
   
   // 3. Línea Central Fija (Referencia Nivel 0)
   graphSprite.drawFastHLine(0, GRAPH_H/2, GRAPH_W, TFT_LIGHTGREY); 
