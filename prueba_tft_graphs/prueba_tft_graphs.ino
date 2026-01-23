@@ -87,24 +87,24 @@ const unsigned long DRAW_INTERVAL = 40; // ~25fps visuales
 void TaskSensores(void *pvParameters) {
 
   // VARIABLES DE FILTRADO (Persistentes)
-  float s1_lowPass = 0;
-  float s1_dc = 0;
-  float s2_lowPass = 0;
-  float s2_dc = 0;
+  float s1_lp = 0, s1_dc = 0;
+  float s2_lp = 0, s2_dc = 0;
+
+  // Buffers Media Móvil
+  const int MA_SIZE = 5; 
+  float bufMA1[MA_SIZE] = {0};
+  float bufMA2[MA_SIZE] = {0};
+  int idxMA = 0;
 
   // Factor de suavizado (0.7 mantiene la forma pero quita ruido fino)
   const float ALPHA_LP = 0.7; 
   // Factor de filtro DC (Centrado en 0)
   const float ALPHA_DC = 0.95;
-
   const long SENSOR_THRESHOLD = 50000;
 
   unsigned long startContactTime = 0; 
   unsigned long baseTime = 0;         
   const unsigned long TIEMPO_ESTABILIZACION = 3000; 
-
-  unsigned long lastDebugTime = 0;
-  int fpsCount = 0;
 
   // Loop infinito de alta velocidad
   for (;;) {
@@ -116,14 +116,6 @@ void TaskSensores(void *pvParameters) {
       if (sensorProx.available()) {
         long ir1 = sensorProx.getIR();
         long ir2 = sensorDist.getIR(); 
-        
-        // Debug FPS
-        fpsCount++;
-        if (millis() - lastDebugTime >= 1000) {
-           Serial.print("FPS: "); Serial.println(fpsCount);
-           fpsCount = 0;
-           lastDebugTime = millis();
-        }
 
         bool currentS1 = (ir1 > SENSOR_THRESHOLD);
         bool currentS2 = (ir2 > SENSOR_THRESHOLD);
@@ -131,29 +123,39 @@ void TaskSensores(void *pvParameters) {
         s2ok = currentS2;
 
         if (currentS1 && currentS2) {
-          
           // --- FILTRADO (SIN INVERSIÓN) ---
           
-          // 1. Inicializar si es el primer dato
-          if (s1_lowPass == 0) s1_lowPass = ir1; 
-          if (s2_lowPass == 0) s2_lowPass = ir2;
+          // Inicializar si es el primer dato
+          if (s1_lp == 0) s1_lp = ir1; 
+          if (s2_lp == 0) s2_lp = ir2;
 
-          // 2. Filtro Paso Bajo (Low Pass) - Suaviza "dientes"
-          s1_lowPass = (s1_lowPass * ALPHA_LP) + (ir1 * (1.0 - ALPHA_LP));
-          s2_lowPass = (s2_lowPass * ALPHA_LP) + (ir2 * (1.0 - ALPHA_LP));
+          // Filtro Paso Bajo (Low Pass) - Suaviza "dientes"
+          s1_lp = (s1_lp * ALPHA_LP) + (ir1 * (1.0 - ALPHA_LP));
+          s2_lp = (s2_lp * ALPHA_LP) + (ir2 * (1.0 - ALPHA_LP));
 
-          // 3. Filtro DC (High Pass) - Centra en 0
+          // Filtro DC (High Pass) - Centra en 0
           if (s1_dc == 0) s1_dc = ir1;
           if (s2_dc == 0) s2_dc = ir2;
 
-          s1_dc = (s1_dc * ALPHA_DC) + (s1_lowPass * (1.0 - ALPHA_DC));
-          s2_dc = (s2_dc * ALPHA_DC) + (s2_lowPass * (1.0 - ALPHA_DC));
+          s1_dc = (s1_dc * ALPHA_DC) + (s1_lp * (1.0 - ALPHA_DC));
+          s2_dc = (s2_dc * ALPHA_DC) + (s2_lp * (1.0 - ALPHA_DC));
 
-          // 4. Resultado FINAL (ORIENTACIÓN ORIGINAL)
+          // Resultado FINAL (ORIENTACIÓN ORIGINAL)
           //    Formula: Val = SeñalSuavizada - DC.
           //    Cuando haya un latido, la señal bajará, así que el valor será negativo.
-          float val1 = s1_lowPass - s1_dc;
-          float val2 = s2_lowPass - s2_dc;
+          float rawVal1 = s1_lp - s1_dc;
+          float rawVal2 = s2_lp - s2_dc;
+
+          // Media Móvil
+          bufMA1[idxMA] = rawVal1;
+          bufMA2[idxMA] = rawVal2;
+          idxMA = (idxMA + 1) % MA_SIZE;
+
+          float sum1 = 0, sum2 = 0;
+          for(int i=0; i<MA_SIZE; i++) { sum1 += bufMA1[i]; sum2 += bufMA2[i]; }
+          
+          float valFinal1 = sum1 / MA_SIZE;
+          float valFinal2 = sum2 / MA_SIZE;
 
           // --- MAQUINA DE ESTADOS ---
 
@@ -173,6 +175,7 @@ void TaskSensores(void *pvParameters) {
                 for(int i=0; i<BUFFER_SIZE; i++) { 
                   buffer_s1[i]=0; buffer_s2[i]=0; buffer_time[i]=0; 
                 }
+                for(int i=0; i<MA_SIZE; i++) { bufMA1[i]=0; bufMA2[i]=0; }
                 portEXIT_CRITICAL(&bufferMux);
              }
           }
@@ -180,8 +183,8 @@ void TaskSensores(void *pvParameters) {
              unsigned long tiempoRelativo = millis() - baseTime;
 
              portENTER_CRITICAL(&bufferMux); 
-             buffer_s1[writeHead] = val1;
-             buffer_s2[writeHead] = val2;
+             buffer_s1[writeHead] = valFinal1;
+             buffer_s2[writeHead] = valFinal2;
              buffer_time[writeHead] = tiempoRelativo;
              writeHead++;
              if (writeHead >= BUFFER_SIZE) writeHead = 0;
@@ -189,12 +192,12 @@ void TaskSensores(void *pvParameters) {
           }
 
         } else {
-          // Se levantó el dedo
+          // Se levantó el dedo, reset
           if (faseMedicion != 0) {
              faseMedicion = 0;
              porcentajeEstabilizacion = 0;
-             s1_lowPass = 0; s1_dc = 0;
-             s2_lowPass = 0; s2_dc = 0;
+             s1_lp = 0; s1_dc = 0;
+             s2_lp = 0; s2_dc = 0;
              sensorProx.nextSample(); sensorDist.nextSample();
           }
         }
@@ -219,8 +222,10 @@ bool iniciarSensores() {
 
   // CONFIGURACIÓN SUAVIZADA (SampleAvg 8)
   // Al promediar 8 muestras hardware, la señal sale mucho más limpia.
-  sensorProx.setup(60, 8, 2, 400, 411, 4096);
-  sensorDist.setup(60, 8, 2, 400, 411, 4096);
+  // para que no sature y tenga buena definición.
+  
+  sensorProx.setup(20, 8, 2, 400, 411, 4096); // Antes 60, luego 40, luego 30 (Igual al otro)
+  sensorDist.setup(30, 8, 2, 400, 411, 4096); // Se queda en 30 (El "Golden Standard")
   
   return true;
 }
@@ -403,7 +408,7 @@ void setup() {
   // No iniciamos la medición todavía
   if (!iniciarSensores()) {
      tft.fillScreen(TFT_RED);
-     tft.drawString("ERROR SENSOR", 240, 160, 4);
+     tft.drawString("ERROR I2C", 240, 160, 4);
      while(1); // Bloquear si falla hardware
   }
 
