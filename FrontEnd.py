@@ -10,6 +10,8 @@ import pyqtgraph as pg
 import numpy as np
 import time
 import csv
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
 
 
 from datetime import datetime
@@ -426,8 +428,7 @@ class PatientDataScreen(QWidget):
 
 
 class HistoryScreen(QWidget):
-    def save_pdf(self, text):
-        # Diálogo para elegir dónde guardar
+    def save_pdf(self, report_text):
         file_path, _ = QFileDialog.getSaveFileName(
             self,
             "Guardar reporte como PDF",
@@ -436,25 +437,49 @@ class HistoryScreen(QWidget):
         )
 
         if not file_path:
-            return  # usuario canceló
+            return
 
         if not file_path.lower().endswith(".pdf"):
             file_path += ".pdf"
 
-        printer = QPrinter(QPrinter.PrinterMode.HighResolution)
-        printer.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
-        printer.setOutputFileName(file_path)
+        c = canvas.Canvas(file_path, pagesize=A4)
+        width, height = A4
 
-        document = QTextDocument()
-        document.setDefaultFont(QFont("Courier New", 10))
-        document.setPlainText(text)
-        document.print(printer)
+        # ================= LOGO =================
+        logo_path = "Logo.jpg"
+        if os.path.exists(logo_path):
+            c.drawImage(
+                logo_path,
+                x=50,
+                y=height - 100,
+                width=140,
+                height=60,
+                preserveAspectRatio=True,
+                mask='auto'
+            )
+
+        # ================= TÍTULO =================
+        c.setFont("Helvetica-Bold", 16)
+        c.drawCentredString(width / 2, height - 130, "REPORTE DE MEDICIÓN - STIFFIO")
+
+        # ================= TEXTO =================
+        text = c.beginText(50, height - 170)
+        text.setFont("Helvetica", 10)
+
+        for line in report_text.strip().split("\n"):
+            text.textLine(line)
+
+        c.drawText(text)
+
+        c.showPage()
+        c.save()
 
         QMessageBox.information(
             self,
             "PDF guardado",
             f"El reporte fue guardado correctamente en:\n{file_path}"
         )
+
 
     def __init__(self):
         super().__init__()
@@ -864,10 +889,13 @@ class HistoryScreen(QWidget):
                 pwv_status = " (Elevado)"
         except ValueError:
             pass
-
+    
         report_text = f"""
+
 REPORTE DE MEDICIÓN - STIFFIO
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Fecha y Hora: {fecha_hora}
 
 DATOS DEL PACIENTE:
   • Nombre: {nombre}
@@ -876,12 +904,12 @@ DATOS DEL PACIENTE:
   • Sexo: {sexo}
 
 RESULTADOS DE LA MEDICIÓN:
-  • Fecha y Hora: {fecha_hora}
   • Frecuencia Cardíaca: {hr} bpm
   • PWV (Velocidad de Onda de Pulso): {pwv} m/s{pwv_status}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         """
+
 
         msg.setText(report_text)
         msg.setInformativeText("Este reporte se puede exportar como archivo pdf.")
