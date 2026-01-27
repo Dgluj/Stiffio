@@ -18,7 +18,7 @@ from datetime import datetime
 
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
-    QLabel, QLineEdit, QPushButton, QComboBox, QStatusBar, QMessageBox, QDialog, QDateEdit, QDialogButtonBox, QFileDialog)
+    QLabel, QLineEdit, QPushButton, QComboBox, QStatusBar, QMessageBox, QDialog, QDateEdit, QDialogButtonBox, QFileDialog, QTextEdit)
 from PyQt6.QtCore import QTimer, Qt, QRegularExpression, QDate, QSize
 from PyQt6.QtGui import QPixmap, QRegularExpressionValidator, QFont, QIcon, QTextDocument
 
@@ -158,18 +158,18 @@ class PatientDataScreen(QWidget):
         if os.path.exists(logo_path):
             logo_label = QLabel()
             pixmap = QPixmap(logo_path)
-            pixmap = pixmap.scaled(200, 100, Qt.AspectRatioMode.KeepAspectRatio,
+            pixmap = pixmap.scaled(100,50, Qt.AspectRatioMode.KeepAspectRatio,
                                    Qt.TransformationMode.SmoothTransformation)  # Tamaño
             logo_label.setPixmap(pixmap)
             logo_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
             self.layout.addWidget(logo_label)
-            self.layout.addSpacing(50)
+            self.layout.addSpacing(20)
 
 
         # Título ----------------------------------------------------------
         title_label = QLabel("Datos del paciente")
         title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title_label.setStyleSheet("color: white; font-size: 30pt; font-weight: bold;")
+        title_label.setStyleSheet("color: white; font-size: 20pt; font-weight: bold;")
         self.layout.addWidget(title_label)
         self.layout.addSpacing(40)
 
@@ -242,7 +242,22 @@ class PatientDataScreen(QWidget):
 
         self.sex_combo.setFixedWidth(750)  # Limitar ancho
         self.layout.addWidget(self.sex_combo, alignment=Qt.AlignmentFlag.AlignCenter)
-        self.layout.addSpacing(50)
+        self.layout.addSpacing(20)
+
+       # Observaciones (opcional)
+        self.observations_label = QLabel("Observaciones del médico")
+        self.observations_label.setStyleSheet("color: white; font-size: 12pt;")
+        self.layout.addWidget(self.observations_label, alignment=Qt.AlignmentFlag.AlignCenter)
+
+        self.observations_input = QTextEdit()
+        self.observations_input.setStyleSheet("background-color: white; color: black; font-size: 10pt; padding: 5px;")
+        self.observations_input.setFixedWidth(750)
+        self.observations_input.setFixedHeight(50)
+        self.observations_input.setPlaceholderText("Ingrese síntomas, antecedentes u otras observaciones relevantes...")
+        # AGREGAR ESTA LÍNEA para evitar que el texto expanda el widget:
+        self.observations_input.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
+        self.layout.addWidget(self.observations_input, alignment=Qt.AlignmentFlag.AlignCenter)
+        self.layout.addSpacing(10)
 
 
         # Botones --------------------------------------------------------
@@ -404,27 +419,36 @@ class PatientDataScreen(QWidget):
             msg.exec()
             return
 
-        # Si todas las validaciones pasan, guardar datos y continuar a la ventana principal
+                # Si todas las validaciones pasan, guardar datos y continuar a la ventana principal
         patient_data = {
             "nombre": self.name_input.text(),
             "edad": self.age_input.text(),
             "altura": self.height_input.text(),
-            "sexo": self.sex_combo.currentText()
+            "sexo": self.sex_combo.currentText(),
+            "observaciones": self.observations_input.toPlainText().strip()
         }
 
-        from __main__ import MainScreen
-        self.main_window = MainScreen(patient_data)
+        try:
+            from __main__ import MainScreen
+            self.main_window = MainScreen(patient_data)
 
-        # Mantener tamaño y posición de la ventana actual
-        self.main_window.resize(self.size())
-        self.main_window.move(self.pos())
-        if self.isMaximized():
-            self.main_window.showMaximized()
-        else:
-            self.main_window.show()
+            # Mantener tamaño y posición de la ventana actual
+            self.main_window.resize(self.size())
+            self.main_window.move(self.pos())
+            if self.isMaximized():
+                self.main_window.showMaximized()
+            else:
+                self.main_window.show()
 
-        # Cerrar la ventana actual después de mostrar la nueva
-        QTimer.singleShot(50, self.close)
+            # Cerrar la ventana actual después de mostrar la nueva
+            QTimer.singleShot(50, self.close)
+            
+        except Exception as e:
+            msg = QMessageBox(self)
+            msg.setIcon(QMessageBox.Icon.Critical)
+            msg.setWindowTitle("Error")
+            msg.setText(f"Error al continuar:\n{str(e)}")
+            msg.exec()
 
 
 class HistoryScreen(QWidget):
@@ -878,6 +902,7 @@ class HistoryScreen(QWidget):
         sexo = row_data[4] if len(row_data) > 4 else "N/A"
         hr = row_data[5] if len(row_data) > 5 else "N/A"
         pwv = row_data[6] if len(row_data) > 6 else "N/A"
+        observaciones = row_data[7] if len(row_data) > 7 else ""
 
         # Determine PWV status color
         pwv_status = ""
@@ -890,6 +915,7 @@ class HistoryScreen(QWidget):
         except ValueError:
             pass
     
+        # Construir el texto del reporte
         report_text = f"""
 
 REPORTE DE MEDICIÓN - STIFFIO
@@ -906,7 +932,16 @@ DATOS DEL PACIENTE:
 RESULTADOS DE LA MEDICIÓN:
   • Frecuencia Cardíaca: {hr} bpm
   • PWV (Velocidad de Onda de Pulso): {pwv} m/s{pwv_status}
-
+"""
+        
+        # Agregar observaciones solo si existen
+        if observaciones and observaciones.strip():
+            report_text += f"""
+OBSERVACIONES DEL MÉDICO:
+  {observaciones}
+"""
+        
+        report_text += """
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         """
 
@@ -1030,7 +1065,7 @@ RESULTADOS DE LA MEDICIÓN:
 
         # Mostrar datos filtrados
         self.show_table(
-            ["Fecha y Hora", "Nombre", "Edad", "Altura (cm)", "Sexo", "HR (bpm)", "PWV (m/s)"],
+            ["Fecha y Hora", "Nombre", "Edad", "Altura (cm)", "Sexo", "HR (bpm)", "PWV (m/s)", "Observaciones"],
             filtered_data
         )
 
@@ -1044,7 +1079,14 @@ class MainScreen(QMainWindow):
     # Layout --------------------------------------------------------------------------------------
     def __init__(self, patient_data):
         super().__init__() # Inicializar la ventana
-        ComunicacionMax.start() # Inicializar comunicación
+        
+        # Inicializar comunicación (verificar si el método existe)
+        if hasattr(ComunicacionMax, 'start'):
+            ComunicacionMax.start()
+        elif hasattr(ComunicacionMax, 'init'):
+            ComunicacionMax.init()
+        elif hasattr(ComunicacionMax, 'initialize'):
+            ComunicacionMax.initialize()
 
         # Variables
         self.patient_data = patient_data
@@ -1057,9 +1099,14 @@ class MainScreen(QMainWindow):
 
         try:
             altura_m = float(self.patient_data['altura']) / 100.0
-            processor.set_height_from_frontend(altura_m )
-            print("[Frontend] Enviando altura:", altura_m)
-        except (ValueError, KeyError):
+            # Verificar si el método existe antes de llamarlo
+            if hasattr(processor, 'set_height_from_frontend'):
+                processor.set_height_from_frontend(altura_m)
+                print("[Frontend] Enviando altura:", altura_m)
+            elif hasattr(processor, 'set_height'):
+                processor.set_height(altura_m)
+                print("[Frontend] Enviando altura:", altura_m)
+        except (ValueError, KeyError, AttributeError):
             pass
 
         self.setWindowTitle("Stiffio") # Título
@@ -1590,6 +1637,7 @@ class MainScreen(QMainWindow):
         edad = self.patient_data.get('edad', 'N/A')
         altura = self.patient_data.get('altura', 'N/A')
         sexo = self.patient_data.get('sexo', 'N/A')
+        observaciones = self.patient_data.get('observaciones', '')
 
         # Obtener métricas del backend (los valores ya promediados)
         pwv_val = processor.get_metrics().get('pwv')
@@ -1607,9 +1655,9 @@ class MainScreen(QMainWindow):
         hr_str = f"{hr_val:.0f}"
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        # 4. Preparar la fila y el encabezado
-        header = ["Fecha y Hora", "Nombre", "Edad", "Altura (cm)", "Sexo", "HR (bpm)", "PWV (m/s)"]
-        data_row = [timestamp, nombre, edad, altura, sexo, hr_str, pwv_str]
+        # 4. Preparar la fila y el encabezado (observaciones al final)
+        header = ["Fecha y Hora", "Nombre", "Edad", "Altura (cm)", "Sexo", "HR (bpm)", "PWV (m/s)", "Observaciones"]
+        data_row = [timestamp, nombre, edad, altura, sexo, hr_str, pwv_str, observaciones]
 
         # 5. Escribir en el archivo CSV
         try:
