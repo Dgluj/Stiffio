@@ -1,3 +1,6 @@
+// ==============================================================================================
+// LIBRERÍAS
+// ==============================================================================================
 #include <SPI.h>
 #include <TFT_eSPI.h>
 #include <XPT2046_Touchscreen.h>
@@ -7,34 +10,71 @@
 #include "MAX30105.h"
 #include "LogoStiffio.h" // Asegurate de tener este archivo en la pestaña de al lado
 
-// ======================================================================
-// CONFIGURACIÓN WIFI (ESTUDIO COMPLETO)
-// ======================================================================
-const char* ssid = "Gavilan Extender";
-const char* password = "a1b1c1d1e1";
+
+
+// ==============================================================================================
+// CONFIGURACIÓN
+// ==============================================================================================
+
+// Wi-Fi  ===============================================================
+const char* ssid = "casatito";
+const char* password = "victoria2002";
 WebSocketsServer webSocket(81);
 bool wifiConectado = false;
 
-// ======================================================================
-// CONFIGURACIÓN HARDWARE
-// ======================================================================
+
+// HARDWARE  =============================================================
+
+// Pantalla Touch
 #define TOUCH_CS   32
 #define TOUCH_IRQ  14
 #define BUZZER_PIN 33
-#define LCD_LED_PIN 13
+//#define LCD_LED_PIN 13
 
+// Sensores MAX30102
 #define SDA1 21
 #define SCL1 22
 #define SDA2 16
 #define SCL2 17
 
-// Colores
+
+
+
+// INTERFAZ  ============================================================
+
+// Paleta de colores
+#define COLOR_FONDO                TFT_WHITE     // Blanco
+#define COLOR_TEXTO                TFT_BLACK     // Negro
+
+#define COLOR_BOTON                TFT_BLACK  
+#define COLOR_TEXTO_BOTON          TFT_WHITE
+
+#define COLOR_BOTON_ACCION         TFT_RED       // Rojo
+#define COLOR_BOTON_ACCION2        0xD3F0        // Rosa 
+#define COLOR_TEXTO_BOTON_ACCION   TFT_WHITE 
+
+#define COLOR_BOTON_VOLVER         TFT_RED       // Rojo
+#define COLOR_BOTON_SIGUIENTE      TFT_GREEN     // Verde
+#define COLOR_BOTON_DESACTIVADO    0xD69A        // Gris claro
+#define COLOR_FLECHA               TFT_WHITE  
+
+#define COLOR_ALERTA               0xFFE0        // Amarillo 
+#define COLOR_BORDE_ALERTA         TFT_BLACK
+#define COLOR_SOMBRA               TFT_DARKGREY  
+
+
+
+
 #define COLOR_FONDO_MEDICION TFT_WHITE
 #define COLOR_TEXTO_MEDICION TFT_BLACK
 #define COLOR_EJE            TFT_DARKGREY
 #define COLOR_GRILLA         0xE71C 
 #define COLOR_S1             TFT_RED      
 #define COLOR_S2             0xFC9F       
+
+// Tipografia
+
+
 
 // ======================================================================
 // VARIABLES COMPARTIDAS
@@ -101,9 +141,6 @@ const unsigned long DRAW_INTERVAL = 40;
 // ======================================================================
 // FUNCIONES AUXILIARES
 // ======================================================================
-void sonarPitido() {
-  digitalWrite(BUZZER_PIN, HIGH); delay(60); digitalWrite(BUZZER_PIN, LOW);
-}
 
 // ======================================================================
 // WEBSOCKET EVENTS (RECEPCIÓN DE DATOS DESDE PC)
@@ -394,102 +431,189 @@ void iniciarWiFi() {
 // ======================================================================
 // INTERFAZ GRÁFICA
 // ======================================================================
+
+void sonarPitido() {
+  digitalWrite(BUZZER_PIN, HIGH); 
+  delay(60); 
+  digitalWrite(BUZZER_PIN, LOW);
+}
+
+void sonarAlerta() {   // Doble pitido
+  digitalWrite(BUZZER_PIN, HIGH);
+  delay(100);
+  digitalWrite(BUZZER_PIN, LOW);
+  delay(100);
+  digitalWrite(BUZZER_PIN, HIGH);
+  delay(200);
+  digitalWrite(BUZZER_PIN, LOW);
+}
+
+
+
+void dibujarMenuPrincipal() {
+  pantallaActual = MENU;
+  tft.fillScreen(COLOR_FONDO); 
+  tft.setTextDatum(MC_DATUM);
+  tft.setTextColor(COLOR_TEXTO);
+  tft.drawString("Seleccione modo de uso", 240, 40, 4);
+  
+  // Botón TEST RÁPIDO
+  tft.fillRoundRect(btnX, btnY1, btnW, btnH, 35, COLOR_BOTON_ACCION2);
+  tft.setTextColor(COLOR_TEXTO_BOTON_ACCION);
+  tft.drawString("TEST RAPIDO", 240, btnY1 + 36, 4);
+  
+  // Botón ESTUDIO CLÍNICO
+  tft.fillRoundRect(btnX, btnY2, btnW, btnH, 35,  COLOR_BOTON_ACCION); 
+  tft.setTextColor(COLOR_TEXTO_BOTON_ACCION);
+  tft.drawString("ESTUDIO CLINICO", 240, btnY2 + 36, 4);
+}
+
+
 void dibujarBotonVolver() {
   int circX = 50, circY = 275, r = 22;
-  tft.fillCircle(circX, circY, r, TFT_WHITE);
-  tft.fillTriangle(circX-11, circY, circX+2, circY-7, circX+2, circY+7, TFT_BLACK);
-  tft.fillRect(circX+1, circY-2, 9, 5, TFT_BLACK); 
+  tft.fillCircle(circX, circY, r, COLOR_BOTON_VOLVER);
+  tft.fillTriangle(circX-11, circY, circX+2, circY-7, circX+2, circY+7, COLOR_FLECHA);
+  tft.fillRect(circX+1, circY-2, 9, 5, COLOR_FLECHA); 
 }
 
-void dibujarBotonSiguiente() {
+void dibujarBotonSiguiente(bool activo) {
   int circX = 430, circY = 275, r = 22;
-  tft.fillCircle(circX, circY, r, tft.color565(0, 180, 0));
-  tft.fillTriangle(circX+11, circY, circX-2, circY-7, circX-2, circY+7, TFT_WHITE);
-  tft.fillRect(circX-10, circY-2, 9, 5, TFT_WHITE);
+  
+  // Decidir el color según el estado: "true" (verde) o "false" (gris)
+  uint16_t colorFondo = activo ? COLOR_BOTON_SIGUIENTE : COLOR_BOTON_DESACTIVADO;
+  tft.fillCircle(circX, circY, r, colorFondo);
+  tft.fillTriangle(circX+11, circY, circX-2, circY-7, circX-2, circY+7, COLOR_FLECHA);
+  tft.fillRect(circX-10, circY-2, 9, 5, COLOR_FLECHA);
 }
+
+
+void mostrarAlertaValorInvalido(String titulo, String mensaje) {
+
+  tft.fillRoundRect(70, 90, 340, 140, 10, COLOR_SOMBRA);        // Sombra
+  tft.fillRoundRect(60, 80, 340, 140, 10, COLOR_ALERTA);        // Fondo
+  tft.drawRoundRect(60, 80, 340, 140, 10, COLOR_BORDE_ALERTA);  // Borde
+
+  // Título
+  tft.setTextDatum(MC_DATUM);
+  tft.setTextColor(COLOR_TEXTO);
+  tft.drawString(titulo, 230, 105, 4);      
+  tft.drawString(titulo, 230 + 1, 105, 4);  // Sombra solida (Negrita)
+
+  // Mensaje del error
+  tft.setTextColor(COLOR_TEXTO);
+  tft.drawString("Por favor ingrese un valor", 230, 135, 2); // Renglón 1: Frase fija
+  tft.drawString(mensaje, 230, 155, 2); // Renglón 2: Rango válido
+
+
+  // Botón OK
+  int okX = 180, okY = 180, okW = 100, okH = 30;
+  tft.fillRoundRect(okX, okY, okW, okH, 5, TFT_BLACK);
+  tft.setTextColor(TFT_WHITE);
+  tft.drawString("OK", 230, okY + 15, 2);
+
+  // El código se queda atrapado aquí hasta que el usuario toque el botón de OK
+  bool esperando = true;
+  while (esperando) {
+    if (touch.touched()) {
+      TS_Point p = touch.getPoint();
+      int x = map(p.x, 200, 3700, 0, 480);
+      int y = map(p.y, 200, 3800, 0, 320);
+
+      if (x > okX && x < okX + okW && y > okY && y < okY + okH) {
+        sonarPitido();
+        esperando = false;
+        delay(200); 
+      }
+    }
+
+    yield(); // Evita que el ESP32 crea que se colgó
+  }
+}
+
+
 
 void actualizarDisplayEdad() {
-  tft.fillRect(190, 60, 100, 35, tft.color565(20, 20, 20));
-  tft.drawRoundRect(190, 60, 100, 35, 4, TFT_WHITE);
-  tft.setTextColor(TFT_CYAN); tft.drawString(edadInput, 240, 77, 4);
+  tft.fillRoundRect(170, 60, 140, 45, 22,  COLOR_BOTON); 
+  tft.setTextColor(COLOR_TEXTO_BOTON); 
+  tft.drawString(edadInput, 240, 80, 4);
 }
 
 void dibujarTecladoEdad() {
   pantallaActual = PANTALLA_EDAD;
-  tft.fillScreen(TFT_BLACK);
-  tft.setTextDatum(MC_DATUM); tft.setTextColor(TFT_WHITE);
-  tft.drawString("INGRESE EDAD", 240, 30, 4);
-  actualizarDisplayEdad();
+  tft.fillScreen(COLOR_FONDO);
+  tft.setTextDatum(MC_DATUM); 
+  tft.setTextColor(COLOR_TEXTO); 
+  tft.drawString("EDAD", 240, 30, 4);
+
+  // Actualizar valor en pantalla
+  actualizarDisplayEdad(); 
   
+  // Teclado Numérico
   int tstartX = 180; int tstartY = 140; int tgapX = 55; int tgapY = 45; 
   for (int i = 0; i < 11; i++) {
     int row = i / 3; int col = i % 3;
     if (i == 9) { col = 1; row = 3; } if (i == 10) { col = 2; row = 3; }
     int kX = tstartX + (col * tgapX); int kY = tstartY + (row * tgapY);
-    uint16_t colorBtn = (i == 10) ? tft.color565(180, 0, 0) : tft.color565(40, 40, 40);
-    tft.fillRoundRect(kX - 22, kY - 17, 45, 35, 4, colorBtn);
-    tft.drawRoundRect(kX - 22, kY - 17, 45, 35, 4, TFT_LIGHTGREY);
-    tft.setTextColor(TFT_WHITE);
-    if (i < 9) tft.drawNumber(i + 1, kX, kY, 4);
-    else if (i == 9) tft.drawNumber(0, kX, kY, 4);
-    else tft.drawString("C", kX, kY, 4);
+
+    uint16_t colorBtn = (i == 10) ? COLOR_BOTON_ACCION : COLOR_BOTON;            // Relleno
+    uint16_t colorTxt = (i == 10) ? COLOR_TEXTO_BOTON_ACCION : COLOR_TEXTO_BOTON;      // Texto
+    tft.fillRoundRect(kX - 22, kY - 18, 45, 35, 4, colorBtn); 
+    tft.setTextColor(colorTxt);
+
+    if (i < 9) tft.drawNumber(i + 1, kX, kY + 2, 4);
+    else if (i == 9) tft.drawNumber(0, kX, kY + 2, 4);
+    else tft.drawString("C", kX, kY + 2, 4);
   }
+
+  // Botones
   dibujarBotonVolver();
-  if (edadInput.length() > 0) dibujarBotonSiguiente();
+  dibujarBotonSiguiente(edadInput.length() > 0);
 }
 
 void actualizarDisplayAltura() {
-  tft.fillRect(190, 60, 100, 35, tft.color565(20, 20, 20));
-  tft.drawRoundRect(190, 60, 100, 35, 4, TFT_WHITE);
-  tft.setTextColor(TFT_ORANGE); tft.drawString(alturaInput, 240, 77, 4);
+  tft.fillRoundRect(170, 60, 140, 45, 22,  COLOR_BOTON); 
+  tft.setTextColor(COLOR_TEXTO_BOTON); 
+  tft.drawString(alturaInput, 240, 80, 4);
 }
 
 void dibujarTecladoAltura() {
   pantallaActual = PANTALLA_ALTURA;
-  tft.fillScreen(TFT_BLACK);
-  tft.setTextDatum(MC_DATUM); tft.setTextColor(TFT_WHITE);
+  tft.fillScreen(COLOR_FONDO);
+  tft.setTextDatum(MC_DATUM); 
+  tft.setTextColor(COLOR_TEXTO); 
   tft.drawString("ALTURA (cm)", 240, 30, 4);
+
+  // Actualizar valor en pantalla
   actualizarDisplayAltura();
   
+  // Teclado Numérico
   int tstartX = 180; int tstartY = 140; int tgapX = 55; int tgapY = 45; 
   for (int i = 0; i < 11; i++) {
     int row = i / 3; int col = i % 3;
     if (i == 9) { col = 1; row = 3; } if (i == 10) { col = 2; row = 3; }
     int kX = tstartX + (col * tgapX); int kY = tstartY + (row * tgapY);
-    uint16_t colorBtn = (i == 10) ? tft.color565(180, 0, 0) : tft.color565(40, 40, 40);
-    tft.fillRoundRect(kX - 22, kY - 17, 45, 35, 4, colorBtn);
-    tft.drawRoundRect(kX - 22, kY - 17, 45, 35, 4, TFT_LIGHTGREY);
-    tft.setTextColor(TFT_WHITE);
+    uint16_t colorBtn    = (i == 10) ? COLOR_BOTON_ACCION : COLOR_BOTON;               // Relleno 
+    uint16_t colorTxt    = (i == 10) ? COLOR_TEXTO_BOTON_ACCION : COLOR_TEXTO_BOTON;   // Texto
+    tft.fillRoundRect(kX - 22, kY - 18, 45, 35, 4, colorBtn); 
+    tft.setTextColor(colorTxt);
+
     if (i < 9) tft.drawNumber(i + 1, kX, kY, 4);
     else if (i == 9) tft.drawNumber(0, kX, kY, 4);
     else tft.drawString("C", kX, kY, 4);
   }
+
+  // Botones
   dibujarBotonVolver();
-  if (alturaInput.length() > 0) dibujarBotonSiguiente();
+  dibujarBotonSiguiente(alturaInput.length() > 0);
 }
 
-void dibujarMenuPrincipal() {
-  pantallaActual = MENU;
-  tft.fillScreen(TFT_BLACK); 
-  tft.setTextDatum(MC_DATUM);
-  tft.setTextColor(TFT_WHITE);
-  tft.drawString("STIFFIO", 240, 40, 4);
-  
-  tft.fillRoundRect(btnX, btnY1, btnW, btnH, 12, TFT_RED);
-  tft.drawRoundRect(btnX, btnY1, btnW, btnH, 12, TFT_WHITE);
-  tft.drawString("TEST RAPIDO", 240, btnY1 + 35, 4);
-  
-  tft.fillRoundRect(btnX, btnY2, btnW, btnH, 12, tft.color565(0, 100, 200)); 
-  tft.drawRoundRect(btnX, btnY2, btnW, btnH, 12, TFT_WHITE);
-  tft.drawString("ESTUDIO COMPLETO", 240, btnY2 + 35, 4);
-}
 
 void prepararPantallaPC() {
   tft.fillScreen(tft.color565(0, 50, 100)); // Fondo azulado
   tft.setTextDatum(MC_DATUM);
   tft.setTextColor(TFT_WHITE);
   
-  tft.drawString("MODO ESTUDIO COMPLETO", 240, 40, 4);
+  tft.drawString("MODO ESTUDIO CLÍNICO", 240, 40, 4);
   tft.drawString("Conectado a WiFi:", 240, 100, 2);
   tft.setTextColor(TFT_GREEN);
   tft.drawString(WiFi.localIP().toString(), 240, 130, 4);
@@ -599,6 +723,9 @@ void actualizarGrafico() {
   graphSprite.pushSprite(GRAPH_X, GRAPH_Y);
 }
 
+
+
+
 // ======================================================================
 // MAIN SETUP & LOOP
 // ======================================================================
@@ -615,45 +742,68 @@ bool iniciarSensores() {
 void setup() {
   Serial.begin(115200);
 
-  pinMode(BUZZER_PIN, OUTPUT); pinMode(LCD_LED_PIN, OUTPUT); digitalWrite(LCD_LED_PIN, HIGH);
-  tft.init(); tft.setRotation(1); tft.setSwapBytes(true);
+  // Inicializar buzzer
+  pinMode(BUZZER_PIN, OUTPUT); 
+
+  // Inicializar pantalla
+  //pinMode(LCD_LED_PIN, OUTPUT); 
+  //digitalWrite(LCD_LED_PIN, HIGH);
+  tft.init(); 
+  tft.setRotation(3); 
+  tft.setSwapBytes(true);
+  graphSprite.setColorDepth(8); 
+  graphSprite.createSprite(GRAPH_W, GRAPH_H);
+  touch.begin(); 
+  touch.setRotation(1);
+
   
-  // --- MOSTRAR LOGO AL INICIO ---
-  tft.fillScreen(TFT_BLACK);
-  // Asumiendo que el logo es 190x159 (ajusta si es otro tamaño)
-  int imgW = 190, imgH = 159;
-  if(epd_bitmap_Logo_invertido) { 
-      tft.pushImage((480-imgW)/2, (320-imgH)/2 - 20, imgW, imgH, epd_bitmap_Logo_invertido);
-  } else {
-      tft.drawString("STIFFIO", 240, 160, 4);
-  }
-  delay(3000); // Esperar 3 segundos viendo el logo
+  // PANTALLA DE INICIO ----------------------------------------------------------------
+  tft.fillScreen(COLOR_FONDO);
+  int imgW = 190, imgH = 160;
+  tft.pushImage((480-imgW)/2, (320-imgH)/2 - 20, imgW, imgH, epd_bitmap_Logo); // Logo
+  
+  // Sonido de encendido
+  digitalWrite(BUZZER_PIN, HIGH); 
+  delay(500); 
+  digitalWrite(BUZZER_PIN, LOW); // Beep corto
+  delay(2000);
 
-  graphSprite.setColorDepth(8); graphSprite.createSprite(GRAPH_W, GRAPH_H);
-  touch.begin(); touch.setRotation(1);
+  tft.setTextDatum(MC_DATUM); 
+  tft.setTextColor(COLOR_TEXTO);
+  tft.drawString("iniciando sistema...", 240, 230, 2); // Texto
+  delay(3000); 
+  // -----------------------------------------------------------------------------------
 
+  // Inicializar sensores
   if (!iniciarSensores()) {
      tft.fillScreen(TFT_RED); tft.drawString("ERROR I2C", 240, 160, 4); while(1); 
   }
-
   xTaskCreatePinnedToCore(TaskSensores,"SensorTask",10000,NULL,1,NULL,0);
+
+  // PANTALLA PRINCIPAL ----------------------------------------------------------------
   dibujarMenuPrincipal();
 }
+
+
 
 void loop() {
   if (touch.touched()) {
     TS_Point p = touch.getPoint();
-    int x = map(p.x, 200, 3700, 480, 0); int y = map(p.y, 200, 3800, 320, 0);
+    int x = map(p.x, 200, 3700, 0, 480);
+    int y = map(p.y, 200, 3800, 0, 320);
 
+    // PANTALLA PRINCIPAL
     if (pantallaActual == MENU) {
-      // 1. MODO TEST RÁPIDO
+
+      // MODO TEST RÁPIDO
       if (x > btnX && x < btnX + btnW && y > btnY1 && y < btnY1 + btnH) {
          sonarPitido(); 
          modoActual = MODO_TEST_RAPIDO;
          edadInput = ""; 
+         alturaInput = "";
          dibujarTecladoEdad();
       }
-      // 2. MODO ESTUDIO COMPLETO
+      // MODO ESTUDIO COMPLETO
       else if (x > btnX && x < btnX + btnW && y > btnY2 && y < btnY2 + btnH) {
          sonarPitido();
          modoActual = MODO_ESTUDIO_COMPLETO;
@@ -675,7 +825,8 @@ void loop() {
          }
       }
     }
-    // ... Lógica Teclados Test Rápido ...
+
+    // Ingresar Edad
     else if (pantallaActual == PANTALLA_EDAD) {
        int tstartX = 180; int tstartY = 140; int tgapX = 55; int tgapY = 45; 
        for (int i = 0; i < 11; i++) {
@@ -688,21 +839,44 @@ void loop() {
             else if (i == 9) edadInput += "0";
             else if (i == 10) edadInput = "";
             if (edadInput.length() > 3) edadInput = edadInput.substring(0, 3);
+
+            // Actualizar valor ingresado
             actualizarDisplayEdad();
-            if (edadInput.length() > 0) dibujarBotonSiguiente();
+            dibujarBotonSiguiente(edadInput.length() > 0);
             delay(250);
          }
        }
+
+       // Boton volver
        if ((x-50)*(x-50)+(y-275)*(y-275) <= 900) { 
-          sonarPitido(); dibujarMenuPrincipal(); delay(300); 
+          sonarPitido(); 
+          dibujarMenuPrincipal(); 
+          delay(300); 
        }
+
+       // Boton Siguiente
        if (edadInput.length() > 0 && (x-430)*(x-430)+(y-275)*(y-275) <= 900) {
           int val = edadInput.toInt();
-          if (val >= 15 && val <= 99) {
-             sonarPitido(); pacienteEdad = val; alturaInput = ""; dibujarTecladoAltura(); delay(300);
+          
+          // RANGO VÁLIDO
+          if (val >= 10 && val <= 100) {  
+             sonarPitido(); 
+             pacienteEdad = val; 
+             dibujarTecladoAltura();
+             delay(300);
+          } 
+          
+          // RANGO INVÁLIDO
+          else {   
+             sonarAlerta();
+             mostrarAlertaValorInvalido("EDAD INVALIDA", "entre 10 y 100 anos");;
+             dibujarTecladoEdad();  // Redibujar la pantalla para limpiar el popup
           }
        }
     }
+
+
+    // Ingresar altura
     else if (pantallaActual == PANTALLA_ALTURA) {
        int tstartX = 180; int tstartY = 140; int tgapX = 55; int tgapY = 45; 
        for (int i = 0; i < 11; i++) {
@@ -716,19 +890,37 @@ void loop() {
             else if (i == 10) alturaInput = "";
             if (alturaInput.length() > 3) alturaInput = alturaInput.substring(0, 3);
             actualizarDisplayAltura();
-            if (alturaInput.length() > 0) dibujarBotonSiguiente();
+            dibujarBotonSiguiente(alturaInput.length() > 0);
             delay(250);
          }
        }
        if ((x-50)*(x-50)+(y-275)*(y-275) <= 900) { 
-          sonarPitido(); dibujarTecladoEdad(); delay(300); 
+          sonarPitido(); 
+          dibujarTecladoEdad(); 
+          delay(300); 
        }
+
+
+       // Boton Siguiente
        if (alturaInput.length() > 0 && (x-430)*(x-430)+(y-275)*(y-275) <= 900) {
           int val = alturaInput.toInt();
-          if (val >= 50 && val <= 250) {
-             sonarPitido(); pacienteAltura = val; 
-             pantallaActual = PANTALLA_MEDICION_RAPIDA; prepararPantallaMedicion();
-             medicionActiva = true; portENTER_CRITICAL(&bufferMux); faseMedicion = 0; s1ok = false; s2ok = false; portEXIT_CRITICAL(&bufferMux); delay(300);
+          
+          if (val >= 120 && val <= 220) {
+             // RANGO VÁLIDO
+             sonarPitido(); 
+             pacienteAltura = val; 
+             pantallaActual = PANTALLA_MEDICION_RAPIDA; 
+             prepararPantallaMedicion();
+             medicionActiva = true; 
+             portENTER_CRITICAL(&bufferMux); faseMedicion = 0; s1ok = false; s2ok = false; portEXIT_CRITICAL(&bufferMux); 
+             delay(300);
+          } 
+          
+          else {
+             // RANGO INVÁLIDO
+             sonarAlerta();
+             mostrarAlertaValorInvalido("ALTURA INVALIDA", "entre 120 y 220 cm");
+             dibujarTecladoAltura(); // Redibujar la pantalla para limpiar el popup
           }
        }
     }
