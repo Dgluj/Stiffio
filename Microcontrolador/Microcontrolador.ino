@@ -44,6 +44,7 @@ bool wifiConectado = false;
 #define COLOR_TEXTO                TFT_BLACK     // Negro
 
 #define COLOR_BOTON                TFT_BLACK  
+#define COLOR_BORDE                TFT_BLACK
 #define COLOR_TEXTO_BOTON          TFT_WHITE
 
 #define COLOR_BOTON_ACCION         TFT_RED       // Rojo
@@ -437,6 +438,7 @@ void iniciarWiFi() {
   }
 }
 
+
 // ======================================================================
 // INTERFAZ GRÁFICA
 // ======================================================================
@@ -487,7 +489,7 @@ void dibujarBotonVolver() {
 void dibujarBotonSiguiente(bool activo) {
   int circX = 430, circY = 275, r = 22;
   
-  // Decidir el color según el estado: "true" (verde) o "false" (gris)
+  // Decidir el color del boton según el estado: "true" (verde) o "false" (gris)
   uint16_t colorFondo = activo ? COLOR_BOTON_SIGUIENTE : COLOR_BOTON_DESACTIVADO;
   tft.fillCircle(circX, circY, r, colorFondo);
   tft.fillTriangle(circX+11, circY, circX-2, circY-7, circX-2, circY+7, COLOR_FLECHA);
@@ -496,27 +498,31 @@ void dibujarBotonSiguiente(bool activo) {
 
 
 void mostrarAlertaValorInvalido(String titulo, String mensaje) {
+  int px = 60, py = 40, pw = 340, ph = 210;
+  tft.fillRoundRect(px + 8, py + 8, pw, ph, 10, COLOR_SOMBRA); 
+  tft.fillRoundRect(px, py, pw, ph, 10, COLOR_FONDO);
+  tft.drawRoundRect(px, py, pw, ph, 10, COLOR_BORDE);
+  tft.drawRoundRect(px + 1, py + 1, pw - 2, ph - 2, 10, COLOR_BORDE); // Borde grueso
 
-  tft.fillRoundRect(70, 90, 340, 140, 10, COLOR_SOMBRA);        // Sombra
-  tft.fillRoundRect(60, 80, 340, 140, 10, COLOR_ALERTA);        // Fondo
-  tft.drawRoundRect(60, 80, 340, 140, 10, COLOR_BORDE_ALERTA);  // Borde
-
+  // Icono advertencia
+  int iconoX = px + (pw - 60) / 2; int iconoY = py + 15;
+  tft.setSwapBytes(true);
+  tft.pushImage(iconoX, iconoY, 60, 60, (const uint16_t*)epd_bitmap_IconoAdvertencia);
+  tft.setSwapBytes(false);
   // Título
   tft.setTextDatum(MC_DATUM);
   tft.setTextColor(COLOR_TEXTO);
-  tft.drawString(titulo, 230, 105, 4);      
-  tft.drawString(titulo, 230 + 1, 105, 4);  // Sombra solida (Negrita)
-
+  tft.drawString(titulo, 230, py + 95, 4);      
+  tft.drawString(titulo, 230 + 1, py + 95, 4);  // Negrita
   // Mensaje del error
   tft.setTextColor(COLOR_TEXTO);
-  tft.drawString("Por favor ingrese un valor", 230, 135, 2); // Renglón 1: Frase fija
-  tft.drawString(mensaje, 230, 155, 2); // Renglón 2: Rango válido
-
+  tft.drawString("Por favor ingrese un valor", 230, py + 125, 2); // Renglón 1: Frase fija
+  tft.drawString(mensaje, 230, py + 145, 2);                      // Renglón 2: Rango válido
 
   // Botón OK
-  int okX = 180, okY = 180, okW = 100, okH = 30;
-  tft.fillRoundRect(okX, okY, okW, okH, 5, TFT_BLACK);
-  tft.setTextColor(TFT_WHITE);
+  int okW = 120, okH = 35; int okX = 230 - (okW / 2); int okY = py + 165;
+  tft.fillRoundRect(okX, okY, okW, okH, 5, TFT_LIGHTGREY);
+  tft.setTextColor(COLOR_TEXTO);
   tft.drawString("OK", 230, okY + 15, 2);
 
   // El código se queda atrapado aquí hasta que el usuario toque el botón de OK
@@ -537,8 +543,6 @@ void mostrarAlertaValorInvalido(String titulo, String mensaje) {
     yield(); // Evita que el ESP32 crea que se colgó
   }
 }
-
-
 
 void actualizarDisplayEdad() {
   tft.fillRoundRect(170, 60, 140, 45, 22,  COLOR_BOTON); 
@@ -872,6 +876,55 @@ void actualizarMedicion() {
 }
 
 
+bool confirmarSalir() {
+  int px = 60, py = 60, pw = 340, ph = 180; 
+  tft.fillRoundRect(px + 8, py + 8, pw, ph, 10, COLOR_SOMBRA); 
+  tft.fillRoundRect(px, py, pw, ph, 10, COLOR_FONDO); 
+  tft.drawRoundRect(px, py, pw, ph, 10, COLOR_BORDE);
+  tft.drawRoundRect(px + 1, py + 1, pw - 2, ph - 2, 10, COLOR_BORDE); // Borde grueso
+  // Texto
+  tft.setTextDatum(MC_DATUM);
+  tft.setTextColor(COLOR_TEXTO);
+  tft.drawString("¿Desea realizar", 230, 110, 4);
+  tft.drawString("una nueva medicion?", 230, 140, 4);
+
+  // Botones
+  int btnW = 120, btnH = 40;
+  int cancelX = 85,  btnY = 175;
+  int salirX = 255;
+  // Botón CANCELAR
+  tft.fillRoundRect(cancelX, btnY, btnW, btnH, 8, TFT_LIGHTGREY);
+  tft.setTextColor(COLOR_TEXTO);
+  tft.drawString("CANCELAR", cancelX + btnW/2, btnY + btnH/2, 2);
+  // Botón SALIR
+  tft.fillRoundRect(salirX, btnY, btnW, btnH, 8, COLOR_BOTON_ACCION);
+  tft.setTextColor(TFT_WHITE);
+  tft.drawString("SALIR", salirX + btnW/2, btnY + btnH/2, 2);
+
+  // El código se queda atrapado aquí hasta que el usuario toque un botón
+  delay(300); 
+  while (true) {
+    if (touch.touched()) {
+      TS_Point p = touch.getPoint();
+      int x = map(p.x, 200, 3700, 0, 480);
+      int y = map(p.y, 200, 3800, 0, 320);
+
+      // Si toca CANCELAR
+      if (x > cancelX && x < cancelX + btnW && y > btnY && y < btnY + btnH) {
+        sonarPitido();
+        return false; // El usuario se queda
+      }
+      // Si toca SALIR
+      if (x > salirX && x < salirX + btnW && y > btnY && y < btnY + btnH) {
+        sonarPitido();
+        return true; // El usuario sale
+      }
+    }
+    yield();
+  }
+}
+
+
 
 // ==============================================================================================
 // MAIN SETUP & LOOP
@@ -1109,16 +1162,22 @@ void loop() {
               }
           }
 
-
           // Botón salir
           else if (x > 360 && y > 260) {
-            sonarPitido();
-            medicionActiva = false; 
-            pantallaActual = MENU;
-            dibujarMenuPrincipal();
-            delay(300);
+              sonarPitido();
+              
+              // Cartel de confirmar salida
+              if (confirmarSalir()) { // Sair
+                  medicionActiva = false; 
+                  pantallaActual = MENU;
+                  dibujarMenuPrincipal();
+                  delay(300);
+              } else {                            // Cancelar
+                  dibujarPantallaMedicion(); 
+                  actualizarMedicion(); // Vuelven a aparecer los datos/curvas
+              }
           }
-          
+
           // Botón volver
           else if (x < 100 && y > 250) {
             sonarPitido();
