@@ -8,14 +8,7 @@
 #include <WiFi.h>
 #include <WebSocketsServer.h>
 #include "MAX30105.h"
-
-// ==============================================================================================
-// IMÁGENES
-// ==============================================================================================
-#include "LogoStiffio.h" 
-#include "ImgCorazon.h"
-#include "IconoCurvas.h"
-#include "IconoMetricas.h"
+#include "bitmaps.h" // Imagenes
 
 
 // ==============================================================================================
@@ -44,8 +37,6 @@ bool wifiConectado = false;
 #define SCL2 17
 
 
-
-
 // INTERFAZ  ============================================================
 
 // Paleta de colores
@@ -56,7 +47,7 @@ bool wifiConectado = false;
 #define COLOR_TEXTO_BOTON          TFT_WHITE
 
 #define COLOR_BOTON_ACCION         TFT_RED       // Rojo
-#define COLOR_BOTON_ACCION2        0xD3F0        // Rosa 
+#define COLOR_BOTON_ACCION2        tft.color565(181, 101, 118)       // Rosa 0xD3F0 
 #define COLOR_TEXTO_BOTON_ACCION   TFT_WHITE 
 
 #define COLOR_BOTON_VOLVER         TFT_RED       // Rojo
@@ -68,12 +59,12 @@ bool wifiConectado = false;
 #define COLOR_BORDE_ALERTA         TFT_BLACK
 #define COLOR_SOMBRA               TFT_DARKGREY  
 
-#define COLOR_FONDO_MEDICION TFT_WHITE
-#define COLOR_TEXTO_MEDICION TFT_BLACK
-#define COLOR_EJE            TFT_DARKGREY
-#define COLOR_GRILLA         0xE71C 
+#define COLOR_FONDO_MEDICION       TFT_WHITE
+#define COLOR_TEXTO_MEDICION       TFT_BLACK
+#define COLOR_EJE                  TFT_DARKGREY
+#define COLOR_GRILLA               0xE71C 
 #define COLOR_S1                   TFT_RED      
-#define COLOR_S2                   0xD3F0       
+#define COLOR_S2                   tft.color565(181, 101, 118) // 0xD3F0       
 
 // Tipografia
 
@@ -130,6 +121,7 @@ MAX30105 sensorDist;
 // Pantallas UI
 enum EstadoPantalla { MENU, PANTALLA_EDAD, PANTALLA_ALTURA, PANTALLA_MEDICION_RAPIDA, PANTALLA_PC_ESPERA };
 EstadoPantalla pantallaActual = MENU;
+int faseAnterior = -1;
 
 // UI Variables
 String edadInput = ""; 
@@ -151,10 +143,6 @@ int btnY1 = 85; int btnY2 = 185;
 #define GRAPH_Y 51   // 50 (del marco) + 1 de margen
 unsigned long lastDrawTime = 0;
 const unsigned long DRAW_INTERVAL = 40; 
-
-// ======================================================================
-// FUNCIONES AUXILIARES
-// ======================================================================
 
 // ======================================================================
 // WEBSOCKET EVENTS (RECEPCIÓN DE DATOS DESDE PC)
@@ -239,12 +227,14 @@ void TaskSensores(void *pvParameters) {
       sensorDist.check(); 
       
       if (sensorProx.available()) {
+        // Leer sensores
         long ir1 = sensorProx.getIR();
         long ir2 = sensorDist.getIR(); 
 
+        // Chequeo sensores colocados
         bool currentS1 = (ir1 > SENSOR_THRESHOLD);
         bool currentS2 = (ir2 > SENSOR_THRESHOLD);
-        s1ok = currentS1;
+        s1ok = currentS1; 
         s2ok = currentS2;
 
         if (currentS1 && currentS2) {
@@ -341,10 +331,13 @@ void TaskSensores(void *pvParameters) {
                 webSocket.broadcastTXT(json);
             }
 
-            // Máquina de estados
+            // Estados de medición
             if (faseMedicion == 0) {
-               faseMedicion = 1; startContactTime = millis();
-            } else if (faseMedicion == 1) {
+               faseMedicion = 1; 
+               startContactTime = millis();
+            } 
+            
+            else if (faseMedicion == 1) {
                unsigned long transcurrido = millis() - startContactTime;
                porcentajeEstabilizacion = (transcurrido * 100) / TIEMPO_ESTABILIZACION;
                if (transcurrido >= TIEMPO_ESTABILIZACION) {
@@ -355,8 +348,10 @@ void TaskSensores(void *pvParameters) {
                       for(int i=0; i<BUFFER_SIZE; i++) {buffer_s1[i]=0; buffer_s2[i]=0; buffer_time[i]=0;}
                       portEXIT_CRITICAL(&bufferMux);
                   }
-                  bpmMostrado = 0; pwvMostrado = 0.0;
-                  validSamplesBPM = 0; validSamplesPWV = 0;
+                  bpmMostrado = 0; 
+                  pwvMostrado = 0.0;
+                  validSamplesBPM = 0; 
+                  validSamplesPWV = 0;
                }
             }
 
@@ -648,14 +643,6 @@ void dibujarPantallaMedicion() {
   tft.pushImage(390, 5, 30, 30, (const uint16_t*)epd_bitmap_IconoMetricas);  // Icono Métricas
   tft.pushImage(435, 5, 30, 30, (const uint16_t*)epd_bitmap_IconoCurvas);    // Icono Curvas
   
-  if (modoVisualizacion == 0) {
-      // Si estamos en MODO SEÑALES, dibujamos el marco del gráfico y las referencias
-      tft.drawRect(10, 50, 460, 180, TFT_BLACK);
-      tft.setTextDatum(ML_DATUM); 
-      tft.setTextColor(COLOR_S1, TFT_WHITE); tft.drawString("Sensor Proximal (1)  ", 15, 25, 2);
-      tft.setTextColor(COLOR_S2, TFT_WHITE); tft.drawString("Sensor Distal (2)    ", 165, 25, 2);
-  }
-
 
   // Indicador de selección
   if (modoVisualizacion == 1) {
@@ -676,73 +663,122 @@ void dibujarPantallaMedicion() {
   tft.setTextDatum(MC_DATUM); 
   tft.setTextColor(COLOR_TEXTO_BOTON_ACCION, COLOR_BOTON_ACCION);
   tft.drawString("SALIR", 420, 275, 2);
-
-
 }
 
 
-void actualizarGrafico() {
-  float localBuf1[BUFFER_SIZE]; float localBuf2[BUFFER_SIZE];
-  unsigned long localTime[BUFFER_SIZE]; int localHead;
-  int localFase = faseMedicion; int localPorcentaje = porcentajeEstabilizacion;
-  int localBPM = bpmMostrado; float localPWV = pwvMostrado;
+void actualizarMedicion() {
+  float localBuf1[BUFFER_SIZE];                          // Buffer proximal
+  float localBuf2[BUFFER_SIZE];                          // Buffer distal
+  unsigned long localTime[BUFFER_SIZE];                  // Timestamp
+  int localFase = faseMedicion;                          // Estado del sistema (0= Esperando, 1=Calculando, 2=Mostrar medición)
+  static int faseAnterior = -1; 
+  static unsigned long ultimoSonido = 0;                 // Memoria del cronómetro de alarma
+  int localHead;                                         // Indica donde empezar a leer el buffer                          
+  int localPorcentaje = porcentajeEstabilizacion;        // Porcentaje barra de progreso
+  int localBPM = bpmMostrado;                            // BPM
+  float localPWV = pwvMostrado;                          // PWV
 
-  portENTER_CRITICAL(&bufferMux);
+  // Copiar los buffers para graficar sin que se escriban nuevos datos
+  portENTER_CRITICAL(&bufferMux); 
   if (localFase == 2) {
     memcpy(localBuf1, (const void*)buffer_s1, sizeof(buffer_s1));
     memcpy(localBuf2, (const void*)buffer_s2, sizeof(buffer_s2));
     memcpy(localTime, (const void*)buffer_time, sizeof(buffer_time));
-    localHead = writeHead;
-  }
+    localHead = writeHead;   // Indica cuál es la muestra más reciente
+    }
+  // Liberar acceso a los buffers para cargar datos nuevos
   portEXIT_CRITICAL(&bufferMux);
 
-  // FASES DE CALIBRACIÓN
-  if (localFase == 0) {
-    graphSprite.fillSprite(TFT_WHITE);
-    graphSprite.setTextDatum(MC_DATUM); 
-    if (!s1ok && !s2ok) {
-       graphSprite.setTextColor(TFT_BLACK); graphSprite.drawString("COLOCAR AMBOS SENSORES", GRAPH_W/2, GRAPH_H/2, 4);
-    } else {
-       graphSprite.setTextColor(TFT_BLACK); graphSprite.drawString("DETECTANDO...", GRAPH_W/2, GRAPH_H/2, 4);
-    }
-    // Centramos el sprite en la pantalla para mensajes
-    graphSprite.pushSprite(11, 51); 
-    return;
+  // Limpiar pantalla
+  if (localFase != faseAnterior) {
+      tft.fillRect(0, 0, 380, 50, COLOR_FONDO);   // Borra las leyendas
+      tft.fillRect(0, 48, 480, 185, COLOR_FONDO);  //  Borra el marco negro y el contenido del gráfico  
+      tft.fillRect(80, 260, 280, 40, COLOR_FONDO);  // Borra resultados numéricos
+      faseAnterior = localFase;    
   }
+
+
+  // ERROR SENSORES  --------------------------------------------------------------------------------
+  if (localFase == 0) {
+    graphSprite.fillSprite(COLOR_FONDO); // Limpiar sprite
+    graphSprite.setTextDatum(MC_DATUM); int yCentro = GRAPH_H / 2; 
+    int yIcono = yCentro - 75; // Icono de advertencia
+    graphSprite.setSwapBytes(true);
+    graphSprite.pushImage((GRAPH_W - 60) / 2, yIcono, 60, 60, (const uint16_t*)epd_bitmap_IconoAdvertencia); 
+    graphSprite.setSwapBytes(false);
+    int yMsg1 = yCentro + 10 ; // Línea de texto 1
+    int yMsg2 = yCentro + 50;  // Línea de texto 2
+
+    // Sonar alarma
+    if (millis() - ultimoSonido > 4000) { 
+        sonarAlerta();
+        ultimoSonido = millis();
+    }
+
+    // CASO 1: Ambos sensores no colocados
+    if (!s1ok && !s2ok) {
+        int inicioX = (GRAPH_W - 320) / 2; 
+        graphSprite.setTextDatum(ML_DATUM); // Escribimos de izquierda a derecha
+        graphSprite.setTextColor(COLOR_S1); 
+        graphSprite.drawString("Sensor Proximal (1)", inicioX, yMsg1, 4);
+        graphSprite.setTextColor(COLOR_TEXTO); 
+        graphSprite.drawString(" y", inicioX + 230, yMsg1, 4); 
+        int inicioX2 = (GRAPH_W - 350) / 2;
+        graphSprite.setTextColor(COLOR_S2); 
+        graphSprite.drawString("Sensor Distal (2)", inicioX2, yMsg2, 4);
+        graphSprite.setTextColor(COLOR_TEXTO); 
+        graphSprite.drawString(" no colocados", inicioX2 + 190, yMsg2, 4);
+    }
+
+    // CASO 2: Sensor 1 no colocado
+        else if (!s1ok) {
+            graphSprite.setTextDatum(MC_DATUM);
+            graphSprite.setTextColor(COLOR_S1); 
+            graphSprite.drawString("Sensor Proximal (1)", GRAPH_W/2, yMsg1, 4);
+            graphSprite.setTextColor(COLOR_TEXTO); 
+            graphSprite.drawString("no colocado", GRAPH_W/2, yMsg2, 4);
+        }
+        // CASO 3: Sensor 2 no colocado
+        else if (!s2ok) {
+            graphSprite.setTextDatum(MC_DATUM);
+            graphSprite.setTextColor(COLOR_S2); 
+            graphSprite.drawString("Sensor Distal (2)", GRAPH_W/2, yMsg1, 4);
+            graphSprite.setTextColor(COLOR_TEXTO); 
+            graphSprite.drawString("no colocado", GRAPH_W/2, yMsg2, 4);
+        }
+
+        graphSprite.pushSprite(11, 51); // Mostrar sprite
+        return;
+      }
+
   
+  // CALCULANDO -----------------------------------------------------------------------------------
   if (localFase == 1) {
-    graphSprite.fillSprite(TFT_WHITE);
+    graphSprite.fillSprite(COLOR_FONDO); // Limpiar sprite
     graphSprite.setTextDatum(MC_DATUM); 
-    graphSprite.setTextColor(TFT_BLUE);
-    graphSprite.drawString("CALCULANDO (10s)...", GRAPH_W/2, GRAPH_H/2 - 20, 4);
-    
-    int barW = 200; int barH = 20; 
-    int barX = (GRAPH_W - barW)/2; int barY = GRAPH_H/2 + 10;
-    
-    graphSprite.drawRect(barX, barY, barW, barH, TFT_BLACK);
+    graphSprite.setTextColor(COLOR_TEXTO);
+    graphSprite.drawString("CALCULANDO ...", GRAPH_W/2, GRAPH_H/2 - 20, 4);
+    int barW = 200; int barH = 20; int barX = (GRAPH_W - barW)/2;  int barY = GRAPH_H/2 + 10;
+    graphSprite.drawRect(barX, barY, barW, barH, TFT_BLACK);   // Barra de progreso
     int fillW = (barW * localPorcentaje) / 100;
     graphSprite.fillRect(barX+1, barY+1, fillW-2, barH-2, TFT_GREEN);
-    
-    graphSprite.pushSprite(11, 51); 
+    graphSprite.pushSprite(11, 51); // Mostrar sprite
     return;
   }
 
 
-  // MODOS DE VISUALIZACIÓN
-  // MODO 1: MÉTRICAS (Números Grandes)
+  // VISUALIZACIÓN MODO MÉTRICAS -----------------------------------------------------------------
   if (modoVisualizacion == 1) {
-      // Limpiamos zona central (blanco)
-      tft.fillRect(0, 41, 480, 213, TFT_WHITE);
-
       int centroX = 240;
-      
-      // PWV
       tft.setTextDatum(MC_DATUM);
-      tft.setTextColor(TFT_BLACK, TFT_WHITE);
+
+      // PWV
+      tft.setTextColor(COLOR_TEXTO, COLOR_FONDO);
       tft.drawString("PWV", centroX, 80, 4);
-      tft.setTextColor(TFT_GREEN, TFT_WHITE);
+      tft.setTextColor(TFT_GREEN, COLOR_FONDO);
       if (localPWV > 0) {
         tft.drawString(String(localPWV, 1), centroX - 30, 150, 7);
+        tft.setTextColor(COLOR_TEXTO, COLOR_FONDO);
         tft.drawString("m/s", centroX + 70, 160, 4); 
       } else {
         tft.drawString("---", centroX, 150, 7);
@@ -751,16 +787,21 @@ void actualizarGrafico() {
       // HR
       int yHR = 220;
       tft.pushImage(centroX - 80, yHR - 12, 24, 24, (const uint16_t*)epd_bitmap_ImgCorazon);
-      
-      tft.setTextColor(TFT_BLACK, TFT_WHITE);
+      tft.setTextColor(COLOR_TEXTO, COLOR_FONDO);
       if (localBPM > 0) tft.drawString(String(localBPM) + "  BPM", centroX + 10, yHR, 4);
       else tft.drawString("---", centroX + 10, yHR, 4);
   }
 
-  // MODO 0: CURVAS (Gráfico + Info Abajo)
+  // VISUALIZACIÓN MODO CURVAS ---------------------------------------------------------------------
   else {
-      // 1. Dibujar Gráfico en el Sprite (Tu código de siempre)
-      graphSprite.fillSprite(TFT_WHITE); 
+      graphSprite.fillSprite(COLOR_FONDO);  // Limpiar sprite
+
+      // Recuadro para gráfico
+      tft.drawRect(10, 50, 460, 180, TFT_BLACK); 
+      // Referencias sensores
+      tft.setTextDatum(ML_DATUM); 
+      tft.setTextColor(COLOR_S1, COLOR_FONDO); tft.drawString("Sensor Proximal (1)  ", 15, 25, 2);  
+      tft.setTextColor(COLOR_S2, COLOR_FONDO); tft.drawString("Sensor Distal (2)    ", 165, 25, 2);
       
       // 1. Calcular Escala (Min/Max)
       float minV = -50, maxV = 50;
@@ -772,9 +813,9 @@ void actualizarGrafico() {
       if((maxV - minV) < 100) { float mid = (maxV + minV) / 2; maxV = mid + 50; minV = mid - 50; }
       
       // 2. Dibujar Grilla y Ejes
-      graphSprite.drawFastHLine(0, GRAPH_H/2, GRAPH_W, TFT_LIGHTGREY); 
+      graphSprite.drawFastHLine(0, GRAPH_H/2, GRAPH_W, TFT_DARKGREY); 
       float xStep = (float)GRAPH_W / (float)BUFFER_SIZE; 
-      graphSprite.setTextDatum(TC_DATUM); graphSprite.setTextColor(TFT_LIGHTGREY); // Color eje gris suave
+      graphSprite.setTextDatum(TC_DATUM); graphSprite.setTextColor(TFT_DARKGREY);
 
       // 3. Bucle de Dibujado de Líneas
       for (int i = 0; i < BUFFER_SIZE - 1; i++) {
@@ -811,19 +852,14 @@ void actualizarGrafico() {
         graphSprite.drawLine(x1, constrain(y2A,0,GRAPH_H), x2, constrain(y2B,0,GRAPH_H), COLOR_S2); 
       }
       
+      graphSprite.pushSprite(11, 51); // Mostrar sprite
 
-      // Dibujamos el sprite dentro del marco
-      graphSprite.pushSprite(11, 51); 
-
-      // 2. Datos numéricos abajo
+      // Datos numéricos 
       int yInfo = 280; // Altura alineada con botones
       
-      // Limpiamos esa franja pequeña
-      tft.fillRect(100, 265, 250, 30, TFT_WHITE);
-
       // PWV
       tft.setTextDatum(ML_DATUM); 
-      tft.setTextColor(TFT_BLACK, TFT_WHITE);
+      tft.setTextColor(COLOR_TEXTO, COLOR_FONDO);
       tft.drawString("PWV = ", 100, yInfo, 4);
       if(localPWV > 0) tft.drawString(String(localPWV, 1) + " m/s", 180, yInfo, 4);
       else tft.drawString("--- m/s", 180, yInfo, 4);
@@ -837,9 +873,9 @@ void actualizarGrafico() {
 
 
 
-// ======================================================================
+// ==============================================================================================
 // MAIN SETUP & LOOP
-// ======================================================================
+// ==============================================================================================
 bool iniciarSensores() {
   Wire.begin(SDA1, SCL1, 400000); Wire1.begin(SDA2, SCL2, 400000);
   Wire.setClock(400000); Wire1.setClock(400000);
@@ -1057,7 +1093,7 @@ void loop() {
                     sonarPitido();
                     modoVisualizacion = 1;
                     dibujarPantallaMedicion(); // Redibujar estructura
-                    actualizarGrafico();        // Actualizar datos
+                    actualizarMedicion();        // Actualizar datos
                     delay(200);
                 }
               }
@@ -1067,7 +1103,7 @@ void loop() {
                     sonarPitido();
                     modoVisualizacion = 0;
                     dibujarPantallaMedicion();
-                    actualizarGrafico();
+                    actualizarMedicion();
                     delay(200);
                 }
               }
@@ -1102,7 +1138,7 @@ void loop() {
   if (modoActual == MODO_TEST_RAPIDO && medicionActiva && pantallaActual == PANTALLA_MEDICION_RAPIDA) {
     if (millis() - lastDrawTime >= DRAW_INTERVAL) {
       lastDrawTime = millis();
-      actualizarGrafico();
+      actualizarMedicion();
     }
   }
 
