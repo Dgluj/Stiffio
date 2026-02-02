@@ -16,7 +16,7 @@
 // ==============================================================================================
 
 // Wi-Fi  ===============================================================
-const char* ssid = "StiffioNet";     // WiFi Windows
+const char* ssid = "StiffioNet";     // WiFi 
 const char* password = "12345678";   // Contraseña
 WebSocketsServer webSocket(81);
 bool wifiConectado = false;
@@ -34,30 +34,6 @@ bool wifiConectado = false;
 #define SCL1 22
 #define SDA2 16
 #define SCL2 17
-
-
-// INTERFAZ  ============================================================
-
-// Paleta de colores 
-#define COLOR_FONDO                TFT_WHITE
-#define COLOR_BORDE                TFT_BLACK    
-#define COLOR_SOMBRA               TFT_DARKGREY 
-#define COLOR_TEXTO                TFT_BLACK   
-
-#define COLOR_BOTON                TFT_LIGHTGREY 
-#define COLOR_BOTON_ACCION         TFT_RED       
-#define COLOR_BOTON_ACCION2        tft.color565(255, 0, 255)  // Rosa
-#define COLOR_TEXTO_BOTON_ACCION   TFT_WHITE 
-#define COLOR_BOTON_VOLVER         TFT_RED       
-#define COLOR_BOTON_SIGUIENTE      TFT_GREEN     
-#define COLOR_FLECHA               TFT_WHITE  
-#define COLOR_TECLADO              TFT_BLACK  
-#define COLOR_TEXTO_TECLADO        TFT_WHITE
-
-#define COLOR_S1                   TFT_RED      
-#define COLOR_S2                   tft.color565(255, 0, 255)  // Rosa     
-
-// Tipografía 
 
 
 // ======================================================================
@@ -85,10 +61,10 @@ volatile float pwvMostrado = 0.0;
 
 // Paciente (Datos que vienen de UI local o de PC)
 volatile int pacienteEdad = 0;
-volatile int pacienteAltura = 0; // Se llenará desde la PC en modo estudio completo
+volatile int pacienteAltura = 0; // Se llenará desde la PC en modo estudio clínico
 
 // MODO DE OPERACIÓN
-enum ModoOperacion { MODO_TEST_RAPIDO, MODO_ESTUDIO_COMPLETO };
+enum ModoOperacion { MODO_TEST_RAPIDO, MODO_ESTUDIO_CLINICO };
 ModoOperacion modoActual = MODO_TEST_RAPIDO;
 // MODO DE VISUALIZACIÓN:  1 = Métricas , 0 = Curvas 
 int modoVisualizacion = 1;
@@ -106,7 +82,7 @@ MAX30105 sensorProx;
 MAX30105 sensorDist;
 
 // Pantallas UI
-enum EstadoPantalla { MENU, PANTALLA_EDAD, PANTALLA_ALTURA, PANTALLA_MEDICION_RAPIDA, PANTALLA_PC_ESPERA };
+enum EstadoPantalla { MENU, PANTALLA_EDAD, PANTALLA_ALTURA, PANTALLA_MEDICION_RAPIDA, PANTALLA_PC_ESPERA, PANTALLA_ERROR_WIFI };
 EstadoPantalla pantallaActual = MENU;
 int faseAnterior = -1;
 
@@ -118,18 +94,13 @@ int btnX = (480 - btnW) / 2;
 int btnY1 = 85; int btnY2 = 185; 
 
 // Gráfico
-/*
-#define GRAPH_X 40
-#define GRAPH_Y 50
-#define GRAPH_W 400 
-#define GRAPH_H 180
-*/
 #define GRAPH_W 458  // 460 - 2 píxeles de bordes
 #define GRAPH_H 178  // 180 - 2 píxeles de bordes
 #define GRAPH_X 11   // 10 (del marco) + 1 de margen
 #define GRAPH_Y 51   // 50 (del marco) + 1 de margen
 unsigned long lastDrawTime = 0;
 const unsigned long DRAW_INTERVAL = 40; 
+
 
 // ======================================================================
 // WEBSOCKET EVENTS (RECEPCIÓN DE DATOS DESDE PC)
@@ -206,7 +177,7 @@ void TaskSensores(void *pvParameters) {
   for (;;) {
     if (medicionActiva) {
       
-      if (modoActual == MODO_ESTUDIO_COMPLETO) {
+      if (modoActual == MODO_ESTUDIO_CLINICO) {
         webSocket.loop();
       }
 
@@ -308,7 +279,7 @@ void TaskSensores(void *pvParameters) {
                     portEXIT_CRITICAL(&bufferMux);
                 }
             } 
-            else if (modoActual == MODO_ESTUDIO_COMPLETO) {
+            else if (modoActual == MODO_ESTUDIO_CLINICO) {
                 char json[128];
                 // Enviamos señales y resultados calculados
                 // 'p'=proximal, 'd'=distal, 'hr'=ritmo, 'pwv'=velocidad
@@ -344,7 +315,7 @@ void TaskSensores(void *pvParameters) {
 
         } else {
              // Sin dedos
-             if(modoActual == MODO_ESTUDIO_COMPLETO) {
+             if(modoActual == MODO_ESTUDIO_CLINICO) {
                 webSocket.broadcastTXT("{\"s1\":false,\"s2\":false}");
              }
              if (faseMedicion != 0) {
@@ -357,7 +328,7 @@ void TaskSensores(void *pvParameters) {
       }
     } else {
       vTaskDelay(10);
-      if (modoActual == MODO_ESTUDIO_COMPLETO) webSocket.loop(); // Mantener vivo el socket aunque no mida
+      if (modoActual == MODO_ESTUDIO_CLINICO) webSocket.loop(); // Mantener vivo el socket aunque no mida
     }
     vTaskDelay(1);
   }
@@ -367,66 +338,85 @@ void TaskSensores(void *pvParameters) {
 // WIFI
 // ======================================================================
 void iniciarWiFi() {
-  WiFi.persistent(false); // Evita que use configuraciones viejas
+  // BUSCANDO WIFI ---------------------------------------------------------------------
+  tft.fillScreen(TFT_WHITE);
+  tft.setTextColor(TFT_BLACK);
+  tft.setTextDatum(MC_DATUM);
+  tft.drawString("CONECTANDO WIFI...", 230, 120, 4);
+
+  // Barra de carga
+  int barW = 240; int barH = 20; int barX = (480 - barW) / 2; int barY = 160;
+  tft.drawRoundRect(barX, barY, barW, barH, 5, TFT_BLACK);
+
+  // Inicializar WiFi
+  WiFi.persistent(false);
   WiFi.mode(WIFI_STA);
   WiFi.setSleep(false);
   WiFi.disconnect(true); 
   delay(1000); 
-
-  Serial.println("Conectando a Red Stiffio...");
   WiFi.begin(ssid, password);
 
+  // Bucle de conexión
   int intentos = 0;
-  while (WiFi.status() != WL_CONNECTED && intentos < 60) {
+  int maxIntentos = 20;
+  while (WiFi.status() != WL_CONNECTED && intentos < maxIntentos) {
     delay(500);
-    // Imprimimos el estado real del WiFi para saber QUÉ pasa
-    int status = WiFi.status();
-    if(status == WL_IDLE_STATUS) Serial.print("I");      // Inactivo
-    else if(status == WL_NO_SSID_AVAIL) Serial.print("N"); // No encuentra la red
-    else if(status == WL_CONNECT_FAILED) Serial.print("F"); // Falló (clave?)
-    else Serial.print(".");
-
-    tft.drawString(".", 240 + ((intentos % 20) * 10), 220, 4);
+    // Animación de la barra
+    int progreso = map(intentos, 0, maxIntentos, 0, barW - 4);
+    tft.fillRect(barX + 2, barY + 2, progreso, barH - 4, TFT_GREEN);
     intentos++;
   }
 
+  // WIFI CONECTADO
   if (WiFi.status() == WL_CONNECTED) {
     wifiConectado = true;
     IPAddress ip = WiFi.localIP();
-
-    // Mostramos la IP en pantalla (Será 192.168.137.X)
-    tft.fillScreen(COLOR_FONDO);
-    tft.setTextColor(TFT_GREEN);
-    tft.drawString("CONECTADO", 240, 120, 4);
-    tft.setTextColor(COLOR_TEXTO);
-    tft.drawString("IP: " + ip.toString(), 240, 160, 4);
-    
-    Serial.println("\nWiFi Conectado!");
-    Serial.print("IP: "); 
-    Serial.println(ip);
-     
+    Serial.println("\nWiFi Conectado! IP: " + ip.toString());
     webSocket.begin();
     webSocket.onEvent(webSocketEvent);
-    delay(5000); // Te da 5 segs para leer la IP antes de cambiar de pantalla
-
-  } else {
-     tft.fillScreen(TFT_RED);
-     tft.setTextColor(TFT_WHITE);
-     tft.drawString("ERROR WIFI", 240, 140, 4);
-     Serial.println("\nFallo conexion WiFi");
-     delay(2000);
+  } 
+  
+  // ERROR DE CONEXIÓN
+  else {
+    wifiConectado = false;
   }
 }
 
-// ======================================================================
-// INTERFAZ GRÁFICA
-// ======================================================================
 
+// ==================================================================================================================================================================
+// INTERFAZ GRÁFICA
+// ==================================================================================================================================================================
+// ------------------------------------------------------------------------------------
+// PALETA DE COLORES
+// ------------------------------------------------------------------------------------
+#define COLOR_FONDO                TFT_WHITE
+#define COLOR_BORDE                TFT_BLACK    
+#define COLOR_SOMBRA               TFT_DARKGREY 
+#define COLOR_TEXTO                TFT_BLACK   
+
+#define COLOR_BOTON                TFT_LIGHTGREY 
+#define COLOR_BOTON_ACCION         TFT_RED       
+#define COLOR_BOTON_ACCION2        tft.color565(255, 0, 255)  // Rosa
+#define COLOR_TEXTO_BOTON_ACCION   TFT_WHITE 
+#define COLOR_BOTON_VOLVER         TFT_RED       
+#define COLOR_BOTON_SIGUIENTE      TFT_GREEN     
+#define COLOR_FLECHA               TFT_WHITE  
+#define COLOR_TECLADO              TFT_BLACK  
+#define COLOR_TEXTO_TECLADO        TFT_WHITE
+
+#define COLOR_S1                   TFT_RED      
+#define COLOR_S2                   tft.color565(255, 0, 255)  // Rosa   
+
+
+// ------------------------------------------------------------------------------------
+// SONIDOS
+// ------------------------------------------------------------------------------------
 void sonarPitido() {
   digitalWrite(BUZZER_PIN, HIGH); 
   delay(60); 
   digitalWrite(BUZZER_PIN, LOW);
 }
+
 
 void sonarAlerta() {   // Doble pitido
   digitalWrite(BUZZER_PIN, HIGH);
@@ -439,31 +429,16 @@ void sonarAlerta() {   // Doble pitido
 }
 
 
-void dibujarMenuPrincipal() {
-  pantallaActual = MENU;
-  tft.fillScreen(COLOR_FONDO); 
-  tft.setTextDatum(MC_DATUM);
-  tft.setTextColor(COLOR_TEXTO);
-  tft.drawString("Seleccione modo de uso", 240, 40, 4);
-  
-  // Botón TEST RÁPIDO
-  tft.fillRoundRect(btnX, btnY1, btnW, btnH, 35, COLOR_BOTON_ACCION2);
-  tft.setTextColor(COLOR_TEXTO_BOTON_ACCION);
-  tft.drawString("TEST RAPIDO", 240, btnY1 + 36, 4);
-  
-  // Botón ESTUDIO CLÍNICO
-  tft.fillRoundRect(btnX, btnY2, btnW, btnH, 35,  COLOR_BOTON_ACCION); 
-  tft.setTextColor(COLOR_TEXTO_BOTON_ACCION);
-  tft.drawString("ESTUDIO CLINICO", 240, btnY2 + 36, 4);
-}
-
-
+// ------------------------------------------------------------------------------------
+// BOTONES
+// ------------------------------------------------------------------------------------
 void dibujarBotonVolver() {
   int circX = 50, circY = 275, r = 22;
   tft.fillCircle(circX, circY, r, COLOR_BOTON_VOLVER);
   tft.fillTriangle(circX-11, circY, circX+2, circY-7, circX+2, circY+7, COLOR_FLECHA);
   tft.fillRect(circX+1, circY-2, 9, 5, COLOR_FLECHA); 
 }
+
 
 void dibujarBotonSiguiente(bool activo) {
   int circX = 430, circY = 275, r = 22;
@@ -476,13 +451,15 @@ void dibujarBotonSiguiente(bool activo) {
 }
 
 
+// ------------------------------------------------------------------------------------
+// ALERTAS
+// ------------------------------------------------------------------------------------
 void mostrarAlertaValorInvalido(String titulo, String mensaje) {
   int px = 60, py = 40, pw = 340, ph = 210;
   tft.fillRoundRect(px + 8, py + 8, pw, ph, 10, COLOR_SOMBRA); 
   tft.fillRoundRect(px, py, pw, ph, 10, COLOR_FONDO);
   tft.drawRoundRect(px, py, pw, ph, 10, COLOR_BORDE);
   tft.drawRoundRect(px + 1, py + 1, pw - 2, ph - 2, 10, COLOR_BORDE); // Borde grueso
-
   // Icono advertencia
   int iconoX = px + (pw - 60) / 2; int iconoY = py + 15;
   tft.setSwapBytes(true);
@@ -523,6 +500,128 @@ void mostrarAlertaValorInvalido(String titulo, String mensaje) {
   }
 }
 
+
+bool confirmarSalir() {
+  int px = 60, py = 60, pw = 340, ph = 180; 
+  tft.fillRoundRect(px + 8, py + 8, pw, ph, 10, COLOR_SOMBRA); 
+  tft.fillRoundRect(px, py, pw, ph, 10, COLOR_FONDO); 
+  tft.drawRoundRect(px, py, pw, ph, 10, COLOR_BORDE);
+  tft.drawRoundRect(px + 1, py + 1, pw - 2, ph - 2, 10, COLOR_BORDE); // Borde grueso
+  // Texto
+  tft.setTextDatum(MC_DATUM);
+  tft.setTextColor(COLOR_TEXTO);
+  tft.drawString("Desea realizar", 230, 110, 4);
+  tft.drawString("una nueva medicion?", 230, 140, 4);
+
+  // Botones
+  int btnW = 120, btnH = 40;
+  int cancelX = 85,  btnY = 175;
+  int salirX = 255;
+  // Botón CANCELAR
+  tft.fillRoundRect(cancelX, btnY, btnW, btnH, 8, TFT_LIGHTGREY);
+  tft.setTextColor(COLOR_TEXTO);
+  tft.drawString("CANCELAR", cancelX + btnW/2, btnY + btnH/2, 2);
+  // Botón SALIR
+  tft.fillRoundRect(salirX, btnY, btnW, btnH, 8, COLOR_BOTON_ACCION);
+  tft.setTextColor(TFT_WHITE);
+  tft.drawString("SALIR", salirX + btnW/2, btnY + btnH/2, 2);
+
+  // El código se queda atrapado aquí hasta que el usuario toque un botón
+  delay(300); 
+  while (true) {
+    if (touch.touched()) {
+      TS_Point p = touch.getPoint();
+      int x = map(p.x, 200, 3700, 0, 480);
+      int y = map(p.y, 200, 3800, 0, 320);
+
+      // Si toca CANCELAR
+      if (x > cancelX && x < cancelX + btnW && y > btnY && y < btnY + btnH) {
+        sonarPitido();
+        return false; // El usuario se queda
+      }
+      // Si toca SALIR
+      if (x > salirX && x < salirX + btnW && y > btnY && y < btnY + btnH) {
+        sonarPitido();
+        return true; // El usuario sale
+      }
+    }
+    yield();
+  }
+}
+
+
+// ------------------------------------------------------------------------------------
+// PANTALLAS
+// ------------------------------------------------------------------------------------
+void dibujarMenuPrincipal() {
+  pantallaActual = MENU;
+  tft.fillScreen(COLOR_FONDO); 
+  tft.setTextDatum(MC_DATUM);
+  tft.setTextColor(COLOR_TEXTO);
+  tft.drawString("Seleccione modo de uso", 240, 40, 4);
+  
+  // Botón TEST RÁPIDO
+  tft.fillRoundRect(btnX, btnY1, btnW, btnH, 35, COLOR_BOTON_ACCION2);
+  tft.setTextColor(COLOR_TEXTO_BOTON_ACCION);
+  tft.drawString("TEST RAPIDO", 240, btnY1 + 36, 4);
+  
+  // Botón ESTUDIO CLÍNICO
+  tft.fillRoundRect(btnX, btnY2, btnW, btnH, 35,  COLOR_BOTON_ACCION); 
+  tft.setTextColor(COLOR_TEXTO_BOTON_ACCION);
+  tft.drawString("ESTUDIO CLINICO", 240, btnY2 + 36, 4);
+}
+
+
+
+void dibujarPantallaPC() {
+  tft.fillScreen(COLOR_FONDO);
+  tft.setTextDatum(MC_DATUM);
+  tft.setTextColor(COLOR_TEXTO);
+
+  // Texto
+  tft.setTextColor(COLOR_TEXTO);
+  tft.drawString("Abra StiffioApp", 240, 70, 4);
+  // Icono de la Computadora
+  tft.setSwapBytes(true);
+  tft.pushImage(180, 100, 120, 120, (const uint16_t*)epd_bitmap_IconoCompu);
+  tft.setSwapBytes(false);
+  // Botón Salir
+  tft.fillRoundRect(380, 255, 80, 40, 20, COLOR_BOTON_ACCION);
+  tft.setTextDatum(MC_DATUM); 
+  tft.setTextColor(COLOR_TEXTO_BOTON_ACCION, COLOR_BOTON_ACCION);
+  tft.drawString("SALIR", 420, 275, 2);
+}
+
+
+
+void dibujarPantallaFalloWiFi() {
+  tft.fillScreen(COLOR_FONDO);
+  tft.setTextColor(COLOR_TEXTO);
+
+  // Icono advertencia
+  int iconoW = 60; int iconoX = (480 - iconoW) / 2; int iconoY = 45; 
+  // Sonido de alerta
+  sonarAlerta();
+
+  // Mensaje
+  tft.setSwapBytes(true);
+  tft.pushImage(iconoX, iconoY, 60, 60, (const uint16_t*)epd_bitmap_IconoAdvertencia);
+  tft.setSwapBytes(false);
+  tft.setTextDatum(MC_DATUM);
+  tft.drawString("ERROR DE CONEXION", 240, 135, 4);
+  tft.setTextSize(1); 
+  tft.drawString("Por favor, revise su conexion a la red.", 240, 170, 2); // Texto más pequeño
+
+  // Botón reintentar
+  tft.fillRoundRect(170, 200, 140, 45, 22, COLOR_BOTON); 
+  tft.setTextColor(COLOR_TEXTO);
+  tft.drawString("REINTENTAR", 240, 222, 2);
+  // Botón volver
+  dibujarBotonVolver(); 
+}
+
+
+
 void actualizarDisplayEdad() {
   tft.fillRoundRect(170, 60, 140, 45, 22,  COLOR_TECLADO); 
   tft.setTextColor(COLOR_TEXTO_TECLADO); 
@@ -561,6 +660,8 @@ void dibujarTecladoEdad() {
   dibujarBotonSiguiente(edadInput.length() > 0);
 }
 
+
+
 void actualizarDisplayAltura() {
   tft.fillRoundRect(170, 60, 140, 45, 22,  COLOR_TECLADO); 
   tft.setTextColor(COLOR_TEXTO_TECLADO); 
@@ -596,25 +697,6 @@ void dibujarTecladoAltura() {
   // Botones
   dibujarBotonVolver();
   dibujarBotonSiguiente(alturaInput.length() > 0);
-}
-
-
-
-void prepararPantallaPC() {
-  tft.fillScreen(tft.color565(0, 50, 100)); // Fondo azulado
-  tft.setTextDatum(MC_DATUM);
-  tft.setTextColor(TFT_WHITE);
-  
-  tft.drawString("MODO ESTUDIO CLÍNICO", 240, 40, 4);
-  tft.drawString("Conectado a WiFi:", 240, 100, 2);
-  tft.setTextColor(TFT_GREEN);
-  tft.drawString(WiFi.localIP().toString(), 240, 130, 4);
-  
-  tft.setTextColor(TFT_WHITE);
-  tft.drawString("Esperando datos desde PC...", 240, 200, 4);
-  
-  tft.fillRoundRect(380, 270, 90, 45, 8, TFT_RED);
-  tft.drawString("SALIR", 425, 293, 2);
 }
 
 
@@ -680,7 +762,6 @@ void actualizarMedicion() {
       faseAnterior = localFase;    
   }
 
-
   // ERROR SENSORES  --------------------------------------------------------------------------------
   if (localFase == 0) {
     graphSprite.fillSprite(COLOR_FONDO); // Limpiar sprite
@@ -734,10 +815,7 @@ void actualizarMedicion() {
 
     return;
   }
-
-    
-
-  
+ 
   // CALCULANDO -----------------------------------------------------------------------------------
   if (localFase == 1) {
     graphSprite.fillSprite(COLOR_FONDO); // Limpiar sprite
@@ -751,7 +829,6 @@ void actualizarMedicion() {
     graphSprite.pushSprite(11, 51); // Mostrar sprite
     return;
   }
-
 
   // VISUALIZACIÓN MODO MÉTRICAS -----------------------------------------------------------------
   if (modoVisualizacion == 1) {
@@ -862,59 +939,9 @@ void actualizarMedicion() {
 }
 
 
-bool confirmarSalir() {
-  int px = 60, py = 60, pw = 340, ph = 180; 
-  tft.fillRoundRect(px + 8, py + 8, pw, ph, 10, COLOR_SOMBRA); 
-  tft.fillRoundRect(px, py, pw, ph, 10, COLOR_FONDO); 
-  tft.drawRoundRect(px, py, pw, ph, 10, COLOR_BORDE);
-  tft.drawRoundRect(px + 1, py + 1, pw - 2, ph - 2, 10, COLOR_BORDE); // Borde grueso
-  // Texto
-  tft.setTextDatum(MC_DATUM);
-  tft.setTextColor(COLOR_TEXTO);
-  tft.drawString("Desea realizar", 230, 110, 4);
-  tft.drawString("una nueva medicion?", 230, 140, 4);
-
-  // Botones
-  int btnW = 120, btnH = 40;
-  int cancelX = 85,  btnY = 175;
-  int salirX = 255;
-  // Botón CANCELAR
-  tft.fillRoundRect(cancelX, btnY, btnW, btnH, 8, TFT_LIGHTGREY);
-  tft.setTextColor(COLOR_TEXTO);
-  tft.drawString("CANCELAR", cancelX + btnW/2, btnY + btnH/2, 2);
-  // Botón SALIR
-  tft.fillRoundRect(salirX, btnY, btnW, btnH, 8, COLOR_BOTON_ACCION);
-  tft.setTextColor(TFT_WHITE);
-  tft.drawString("SALIR", salirX + btnW/2, btnY + btnH/2, 2);
-
-  // El código se queda atrapado aquí hasta que el usuario toque un botón
-  delay(300); 
-  while (true) {
-    if (touch.touched()) {
-      TS_Point p = touch.getPoint();
-      int x = map(p.x, 200, 3700, 0, 480);
-      int y = map(p.y, 200, 3800, 0, 320);
-
-      // Si toca CANCELAR
-      if (x > cancelX && x < cancelX + btnW && y > btnY && y < btnY + btnH) {
-        sonarPitido();
-        return false; // El usuario se queda
-      }
-      // Si toca SALIR
-      if (x > salirX && x < salirX + btnW && y > btnY && y < btnY + btnH) {
-        sonarPitido();
-        return true; // El usuario sale
-      }
-    }
-    yield();
-  }
-}
-
-
-
-// ==============================================================================================
+// ==================================================================================================================================================================
 // MAIN SETUP & LOOP
-// ==============================================================================================
+// ==================================================================================================================================================================
 bool iniciarSensores() {
   Wire.begin(SDA1, SCL1, 400000); Wire1.begin(SDA2, SCL2, 400000);
   Wire.setClock(400000); Wire1.setClock(400000);
@@ -924,6 +951,7 @@ bool iniciarSensores() {
   sensorDist.setup(30, 8, 2, 400, 411, 4096);
   return true;
 }
+
 
 void setup() {
   Serial.begin(115200);
@@ -989,29 +1017,87 @@ void loop() {
          alturaInput = "";
          dibujarTecladoEdad();
       }
-      // MODO ESTUDIO COMPLETO
+      // MODO ESTUDIO CLÍNICO
       else if (x > btnX && x < btnX + btnW && y > btnY2 && y < btnY2 + btnH) {
-         sonarPitido();
-         modoActual = MODO_ESTUDIO_COMPLETO;
-         if (!wifiConectado) iniciarWiFi(); 
+        sonarPitido();
+        modoActual = MODO_ESTUDIO_CLINICO;
+
+        if (!wifiConectado) {
+            iniciarWiFi(); // Muestra barra de carga
+            delay(500);
+        }
+        
+        // Wifi conectado
+        if (wifiConectado) {
+            pantallaActual = PANTALLA_PC_ESPERA;
+            dibujarPantallaPC();
+             
+            // Reiniciar lógica y buffers para esperar a la PC
+            portENTER_CRITICAL(&bufferMux);
+            faseMedicion = 0; s1ok=false; s2ok=false;
+            pacienteAltura = 0; // Reset altura, la PC debe mandarla
+            portEXIT_CRITICAL(&bufferMux);
+             
+            medicionActiva = true; 
+         } 
          
-         if (wifiConectado) {
-             pantallaActual = PANTALLA_PC_ESPERA;
-             prepararPantallaPC();
-             
-             // Reiniciar lógica y buffers para esperar a la PC
-             portENTER_CRITICAL(&bufferMux);
-             faseMedicion = 0; s1ok=false; s2ok=false;
-             pacienteAltura = 0; // Reset altura, la PC debe mandarla
-             portEXIT_CRITICAL(&bufferMux);
-             
-             medicionActiva = true; 
-         } else {
-             dibujarMenuPrincipal(); // Volver si falla wifi
+        // Wifi no conectado
+        else {
+            pantallaActual = PANTALLA_ERROR_WIFI;
+            dibujarPantallaFalloWiFi();
          }
       }
     }
 
+
+    // PANTALLA CONEXIÓN PC -------------------------------------------------------------
+    else if (pantallaActual == PANTALLA_PC_ESPERA) {
+      // Boton salir
+      if (x > 380 && x < 460 && y > 255 && y < 295) {
+        sonarPitido();
+
+        // Confirmar salida
+        // SALIR
+        if (confirmarSalir()) {  
+            medicionActiva = false;  // Detiene el envío de datos
+            pantallaActual = MENU;
+            dibujarMenuPrincipal();
+            delay(300);
+        } 
+        // CANCELAR
+        else {  
+            dibujarPantallaPC(); // Redibujamos la pantalla azul para limpiar el popup
+        }
+      }
+    }
+
+    // PANTALLA ERROR WIFI ---------------------------------------------------------------
+    else if (pantallaActual == PANTALLA_ERROR_WIFI) {
+      // Boton reintentar
+      if (x > 170 && x < 310 && y > 190 && y < 235) {
+          sonarPitido();
+          iniciarWiFi(); // Intenta conectar de nuevo
+          
+          if (wifiConectado) {
+              pantallaActual = PANTALLA_PC_ESPERA;
+              dibujarPantallaPC();
+              medicionActiva = true;
+          } else {
+              dibujarPantallaFalloWiFi(); // Si vuelve a fallar, redibuja el error
+          }
+      }
+      
+      // Botón VOLVER
+      else if (x > 28 && x < 72 && y > 253 && y < 297) {
+          sonarPitido();
+          pantallaActual = MENU;
+          dibujarMenuPrincipal();
+          delay(300);
+      }
+    }
+
+
+    // PANTALLA DATOS --------------------------------------------------------------
     // Ingresar Edad
     else if (pantallaActual == PANTALLA_EDAD) {
        int tstartX = 180; int tstartY = 140; int tgapX = 55; int tgapY = 45; 
@@ -1111,14 +1197,6 @@ void loop() {
        }
     }
     
-    // PANTALLA CONEXIÓN PC -------------------------------------------------------------
-    else if (pantallaActual == PANTALLA_PC_ESPERA) {
-       if (x > 380 && y > 260) {
-           medicionActiva = false;
-           dibujarMenuPrincipal();
-           delay(300);
-       }
-    }
 
 
     // PANTALLA MEDICIÓN ----------------------------------------------------------------
@@ -1152,13 +1230,16 @@ void loop() {
           else if (x > 360 && y > 260) {
               sonarPitido();
               
-              // Cartel de confirmar salida
-              if (confirmarSalir()) { // Sair
+              // Confirmar salida
+              // SALIR
+              if (confirmarSalir()) {   
                   medicionActiva = false; 
                   pantallaActual = MENU;
                   dibujarMenuPrincipal();
                   delay(300);
-              } else {                            // Cancelar
+              } 
+              // CANCELAR
+              else {                  
                   dibujarPantallaMedicion(); 
                   actualizarMedicion(); // Vuelven a aparecer los datos/curvas
               }
@@ -1175,9 +1256,8 @@ void loop() {
             dibujarTecladoAltura();
             delay(300);
           }
-        }
-      }
-      
+    }
+  }
 
   // Actualización contínua del gráfico (si estamos midiendo)
   if (modoActual == MODO_TEST_RAPIDO && medicionActiva && pantallaActual == PANTALLA_MEDICION_RAPIDA) {
