@@ -16,11 +16,10 @@
 // ==============================================================================================
 
 // Wi-Fi  ===============================================================
-const char* ssid = "casatito";
-const char* password = "victoria2002";
+const char* ssid = "StiffioNet";     // WiFi Windows
+const char* password = "12345678";   // Contraseña
 WebSocketsServer webSocket(81);
 bool wifiConectado = false;
-
 
 // HARDWARE  =============================================================
 
@@ -39,36 +38,26 @@ bool wifiConectado = false;
 
 // INTERFAZ  ============================================================
 
-// Paleta de colores
-#define COLOR_FONDO                TFT_WHITE     // Blanco
-#define COLOR_TEXTO                TFT_BLACK     // Negro
+// Paleta de colores 
+#define COLOR_FONDO                TFT_WHITE
+#define COLOR_BORDE                TFT_BLACK    
+#define COLOR_SOMBRA               TFT_DARKGREY 
+#define COLOR_TEXTO                TFT_BLACK   
 
-#define COLOR_BOTON                TFT_BLACK  
-#define COLOR_BORDE                TFT_BLACK
-#define COLOR_TEXTO_BOTON          TFT_WHITE
-
-#define COLOR_BOTON_ACCION         TFT_RED       // Rojo
-#define COLOR_BOTON_ACCION2        tft.color565(181, 101, 118)       // Rosa 0xD3F0 
+#define COLOR_BOTON                TFT_LIGHTGREY 
+#define COLOR_BOTON_ACCION         TFT_RED       
+#define COLOR_BOTON_ACCION2        tft.color565(255, 0, 255)  // Rosa
 #define COLOR_TEXTO_BOTON_ACCION   TFT_WHITE 
-
-#define COLOR_BOTON_VOLVER         TFT_RED       // Rojo
-#define COLOR_BOTON_SIGUIENTE      TFT_GREEN     // Verde
-#define COLOR_BOTON_DESACTIVADO    0xD69A        // Gris claro
+#define COLOR_BOTON_VOLVER         TFT_RED       
+#define COLOR_BOTON_SIGUIENTE      TFT_GREEN     
 #define COLOR_FLECHA               TFT_WHITE  
+#define COLOR_TECLADO              TFT_BLACK  
+#define COLOR_TEXTO_TECLADO        TFT_WHITE
 
-#define COLOR_ALERTA               0xFFE0        // Amarillo 
-#define COLOR_BORDE_ALERTA         TFT_BLACK
-#define COLOR_SOMBRA               TFT_DARKGREY  
-
-#define COLOR_FONDO_MEDICION       TFT_WHITE
-#define COLOR_TEXTO_MEDICION       TFT_BLACK
-#define COLOR_EJE                  TFT_DARKGREY
-#define COLOR_GRILLA               0xE71C 
 #define COLOR_S1                   TFT_RED      
-#define COLOR_S2                   tft.color565(181, 101, 118) // 0xD3F0       
+#define COLOR_S2                   tft.color565(255, 0, 255)  // Rosa     
 
-// Tipografia
-
+// Tipografía 
 
 
 // ======================================================================
@@ -101,11 +90,8 @@ volatile int pacienteAltura = 0; // Se llenará desde la PC en modo estudio comp
 // MODO DE OPERACIÓN
 enum ModoOperacion { MODO_TEST_RAPIDO, MODO_ESTUDIO_COMPLETO };
 ModoOperacion modoActual = MODO_TEST_RAPIDO;
-
 // MODO DE VISUALIZACIÓN:  1 = Métricas , 0 = Curvas 
 int modoVisualizacion = 1;
-
-
 
 portMUX_TYPE bufferMux = portMUX_INITIALIZER_UNLOCKED;
 
@@ -381,63 +367,56 @@ void TaskSensores(void *pvParameters) {
 // WIFI
 // ======================================================================
 void iniciarWiFi() {
-  // --- PASO 1: LIMPIEZA AGRESIVA ---
-  // Esto desconecta cualquier intento anterior y borra la config guardada
-  WiFi.disconnect(true);  
-  WiFi.mode(WIFI_OFF);    
-  delay(500); // Dale un respiro
-  WiFi.mode(WIFI_STA);    
-  
-  // --- PASO 2: INTERFAZ ---
-  tft.fillScreen(TFT_BLACK);
-  tft.setTextDatum(MC_DATUM); tft.setTextColor(TFT_WHITE);
-  tft.drawString("Conectando WiFi...", 240, 140, 4);
-  tft.drawString(ssid, 240, 180, 2);
+  WiFi.persistent(false); // Evita que use configuraciones viejas
+  WiFi.mode(WIFI_STA);
+  WiFi.setSleep(false);
+  WiFi.disconnect(true); 
+  delay(1000); 
 
-  // --- PASO 3: CONEXIÓN ---
+  Serial.println("Conectando a Red Stiffio...");
   WiFi.begin(ssid, password);
-  
+
   int intentos = 0;
-  // Aumentamos a 60 intentos (30 segundos) como hablamos
-  while (WiFi.status() != WL_CONNECTED && intentos < 60) { 
+  while (WiFi.status() != WL_CONNECTED && intentos < 60) {
     delay(500);
-    tft.drawString(".", 240 + ((intentos%20)*10), 220, 4); // Efecto visual para que no se salga de pantalla
-    
-    // Debug por puerto serie para que veas qué pasa
-    Serial.print(".");
-    if (intentos % 10 == 0) Serial.println(""); 
-    
+    // Imprimimos el estado real del WiFi para saber QUÉ pasa
+    int status = WiFi.status();
+    if(status == WL_IDLE_STATUS) Serial.print("I");      // Inactivo
+    else if(status == WL_NO_SSID_AVAIL) Serial.print("N"); // No encuentra la red
+    else if(status == WL_CONNECT_FAILED) Serial.print("F"); // Falló (clave?)
+    else Serial.print(".");
+
+    tft.drawString(".", 240 + ((intentos % 20) * 10), 220, 4);
     intentos++;
   }
 
   if (WiFi.status() == WL_CONNECTED) {
-     wifiConectado = true;
+    wifiConectado = true;
+    IPAddress ip = WiFi.localIP();
+
+    // Mostramos la IP en pantalla (Será 192.168.137.X)
+    tft.fillScreen(COLOR_FONDO);
+    tft.setTextColor(TFT_GREEN);
+    tft.drawString("CONECTADO", 240, 120, 4);
+    tft.setTextColor(COLOR_TEXTO);
+    tft.drawString("IP: " + ip.toString(), 240, 160, 4);
+    
+    Serial.println("\nWiFi Conectado!");
+    Serial.print("IP: "); 
+    Serial.println(ip);
      
-     // Mostrar IP en pantalla grande para que la veas bien
-     tft.fillScreen(TFT_BLACK);
-     tft.setTextColor(TFT_GREEN);
-     tft.drawString("CONECTADO!", 240, 120, 4);
-     tft.setTextColor(TFT_WHITE);
-     tft.drawString("IP: " + WiFi.localIP().toString(), 240, 160, 4);
-     Serial.println("");
-     Serial.println("WiFi conectado.");
-     Serial.println("IP address: ");
-     Serial.println(WiFi.localIP());
-     
-     webSocket.begin();
-     webSocket.onEvent(webSocketEvent);
-     delay(3000); // Te da 3 segs para leer la IP antes de cambiar de pantalla
+    webSocket.begin();
+    webSocket.onEvent(webSocketEvent);
+    delay(5000); // Te da 5 segs para leer la IP antes de cambiar de pantalla
+
   } else {
      tft.fillScreen(TFT_RED);
      tft.setTextColor(TFT_WHITE);
      tft.drawString("ERROR WIFI", 240, 140, 4);
-     tft.drawString("Revise contrasena", 240, 180, 2);
      Serial.println("\nFallo conexion WiFi");
      delay(2000);
-     wifiConectado = false;
   }
 }
-
 
 // ======================================================================
 // INTERFAZ GRÁFICA
@@ -490,7 +469,7 @@ void dibujarBotonSiguiente(bool activo) {
   int circX = 430, circY = 275, r = 22;
   
   // Decidir el color del boton según el estado: "true" (verde) o "false" (gris)
-  uint16_t colorFondo = activo ? COLOR_BOTON_SIGUIENTE : COLOR_BOTON_DESACTIVADO;
+  uint16_t colorFondo = activo ? COLOR_BOTON_SIGUIENTE : COLOR_BOTON;
   tft.fillCircle(circX, circY, r, colorFondo);
   tft.fillTriangle(circX+11, circY, circX-2, circY-7, circX-2, circY+7, COLOR_FLECHA);
   tft.fillRect(circX-10, circY-2, 9, 5, COLOR_FLECHA);
@@ -521,7 +500,7 @@ void mostrarAlertaValorInvalido(String titulo, String mensaje) {
 
   // Botón OK
   int okW = 120, okH = 35; int okX = 230 - (okW / 2); int okY = py + 165;
-  tft.fillRoundRect(okX, okY, okW, okH, 5, TFT_LIGHTGREY);
+  tft.fillRoundRect(okX, okY, okW, okH, 5, COLOR_BOTON);
   tft.setTextColor(COLOR_TEXTO);
   tft.drawString("OK", 230, okY + 15, 2);
 
@@ -545,9 +524,9 @@ void mostrarAlertaValorInvalido(String titulo, String mensaje) {
 }
 
 void actualizarDisplayEdad() {
-  tft.fillRoundRect(170, 60, 140, 45, 22,  COLOR_BOTON); 
-  tft.setTextColor(COLOR_TEXTO_BOTON); 
-  tft.drawString(edadInput, 240, 80, 4);
+  tft.fillRoundRect(170, 60, 140, 45, 22,  COLOR_TECLADO); 
+  tft.setTextColor(COLOR_TEXTO_TECLADO); 
+  tft.drawString(edadInput, 240, 85, 4);
 }
 
 void dibujarTecladoEdad() {
@@ -567,8 +546,8 @@ void dibujarTecladoEdad() {
     if (i == 9) { col = 1; row = 3; } if (i == 10) { col = 2; row = 3; }
     int kX = tstartX + (col * tgapX); int kY = tstartY + (row * tgapY);
 
-    uint16_t colorBtn = (i == 10) ? COLOR_BOTON_ACCION : COLOR_BOTON;            // Relleno
-    uint16_t colorTxt = (i == 10) ? COLOR_TEXTO_BOTON_ACCION : COLOR_TEXTO_BOTON;      // Texto
+    uint16_t colorBtn = (i == 10) ? COLOR_BOTON_ACCION : COLOR_TECLADO;              // Relleno
+    uint16_t colorTxt = (i == 10) ? COLOR_TEXTO_BOTON_ACCION : COLOR_TEXTO_TECLADO;  // Texto
     tft.fillRoundRect(kX - 22, kY - 18, 45, 35, 4, colorBtn); 
     tft.setTextColor(colorTxt);
 
@@ -583,9 +562,9 @@ void dibujarTecladoEdad() {
 }
 
 void actualizarDisplayAltura() {
-  tft.fillRoundRect(170, 60, 140, 45, 22,  COLOR_BOTON); 
-  tft.setTextColor(COLOR_TEXTO_BOTON); 
-  tft.drawString(alturaInput, 240, 80, 4);
+  tft.fillRoundRect(170, 60, 140, 45, 22,  COLOR_TECLADO); 
+  tft.setTextColor(COLOR_TEXTO_TECLADO); 
+  tft.drawString(alturaInput, 240, 85, 4);
 }
 
 void dibujarTecladoAltura() {
@@ -604,8 +583,8 @@ void dibujarTecladoAltura() {
     int row = i / 3; int col = i % 3;
     if (i == 9) { col = 1; row = 3; } if (i == 10) { col = 2; row = 3; }
     int kX = tstartX + (col * tgapX); int kY = tstartY + (row * tgapY);
-    uint16_t colorBtn    = (i == 10) ? COLOR_BOTON_ACCION : COLOR_BOTON;               // Relleno 
-    uint16_t colorTxt    = (i == 10) ? COLOR_TEXTO_BOTON_ACCION : COLOR_TEXTO_BOTON;   // Texto
+    uint16_t colorBtn    = (i == 10) ? COLOR_BOTON_ACCION : COLOR_TECLADO;               // Relleno 
+    uint16_t colorTxt    = (i == 10) ? COLOR_TEXTO_BOTON_ACCION : COLOR_TEXTO_TECLADO;   // Texto
     tft.fillRoundRect(kX - 22, kY - 18, 45, 35, 4, colorBtn); 
     tft.setTextColor(colorTxt);
 
@@ -713,12 +692,6 @@ void actualizarMedicion() {
     int yMsg1 = yCentro + 10 ; // Línea de texto 1
     int yMsg2 = yCentro + 50;  // Línea de texto 2
 
-    // Sonar alarma
-    if (millis() - ultimoSonido > 4000) { 
-        sonarAlerta();
-        ultimoSonido = millis();
-    }
-
     // CASO 1: Ambos sensores no colocados
     if (!s1ok && !s2ok) {
         int inicioX = (GRAPH_W - 320) / 2; 
@@ -735,25 +708,34 @@ void actualizarMedicion() {
     }
 
     // CASO 2: Sensor 1 no colocado
-        else if (!s1ok) {
-            graphSprite.setTextDatum(MC_DATUM);
-            graphSprite.setTextColor(COLOR_S1); 
-            graphSprite.drawString("Sensor Proximal (1)", GRAPH_W/2, yMsg1, 4);
-            graphSprite.setTextColor(COLOR_TEXTO); 
-            graphSprite.drawString("no colocado", GRAPH_W/2, yMsg2, 4);
-        }
-        // CASO 3: Sensor 2 no colocado
-        else if (!s2ok) {
-            graphSprite.setTextDatum(MC_DATUM);
-            graphSprite.setTextColor(COLOR_S2); 
-            graphSprite.drawString("Sensor Distal (2)", GRAPH_W/2, yMsg1, 4);
-            graphSprite.setTextColor(COLOR_TEXTO); 
-            graphSprite.drawString("no colocado", GRAPH_W/2, yMsg2, 4);
-        }
+    else if (!s1ok) {
+        graphSprite.setTextDatum(MC_DATUM);
+        graphSprite.setTextColor(COLOR_S1); 
+        graphSprite.drawString("Sensor Proximal (1)", GRAPH_W/2, yMsg1, 4);
+        graphSprite.setTextColor(COLOR_TEXTO); 
+        graphSprite.drawString("no colocado", GRAPH_W/2, yMsg2, 4);
+    }
+    // CASO 3: Sensor 2 no colocado
+    else if (!s2ok) {
+        graphSprite.setTextDatum(MC_DATUM);
+        graphSprite.setTextColor(COLOR_S2); 
+        graphSprite.drawString("Sensor Distal (2)", GRAPH_W/2, yMsg1, 4);
+        graphSprite.setTextColor(COLOR_TEXTO); 
+        graphSprite.drawString("no colocado", GRAPH_W/2, yMsg2, 4);
+    }
 
-        graphSprite.pushSprite(11, 51); // Mostrar sprite
-        return;
-      }
+    graphSprite.pushSprite(11, 51); // Mostrar sprite
+
+    // Sonar alarma
+    if (millis() - ultimoSonido > 4000) { 
+        sonarAlerta();
+        ultimoSonido = millis();
+    }
+
+    return;
+  }
+
+    
 
   
   // CALCULANDO -----------------------------------------------------------------------------------
@@ -790,7 +772,9 @@ void actualizarMedicion() {
 
       // HR
       int yHR = 220;
+      tft.setSwapBytes(true);
       tft.pushImage(centroX - 80, yHR - 12, 24, 24, (const uint16_t*)epd_bitmap_ImgCorazon);
+      tft.setSwapBytes(false);
       tft.setTextColor(COLOR_TEXTO, COLOR_FONDO);
       if (localBPM > 0) tft.drawString(String(localBPM) + "  BPM", centroX + 10, yHR, 4);
       else tft.drawString("---", centroX + 10, yHR, 4);
@@ -837,7 +821,7 @@ void actualizarMedicion() {
         if (tNext > tCurrent) {
             unsigned long secCurrent = tCurrent / 1000; unsigned long secNext = tNext / 1000;
             if (secNext > secCurrent) { 
-                graphSprite.drawFastVLine(x2, 0, GRAPH_H, COLOR_GRILLA); 
+                graphSprite.drawFastVLine(x2, 0, GRAPH_H, 0xE71C); 
                 graphSprite.drawString(String(secNext)+"s", x2, GRAPH_H - 20, 2);
             }
         }
@@ -869,7 +853,9 @@ void actualizarMedicion() {
       else tft.drawString("--- m/s", 180, yInfo, 4);
 
       // Corazón + BPM
+      tft.setSwapBytes(true);
       tft.pushImage(288, yInfo - 12, 24, 24, (const uint16_t*)epd_bitmap_ImgCorazon);
+      tft.setSwapBytes(false);
       if(localBPM > 0) tft.drawString(String(localBPM), 318, yInfo, 4);
       else tft.drawString("---", 318, yInfo, 4);
     }
@@ -885,7 +871,7 @@ bool confirmarSalir() {
   // Texto
   tft.setTextDatum(MC_DATUM);
   tft.setTextColor(COLOR_TEXTO);
-  tft.drawString("¿Desea realizar", 230, 110, 4);
+  tft.drawString("Desea realizar", 230, 110, 4);
   tft.drawString("una nueva medicion?", 230, 140, 4);
 
   // Botones

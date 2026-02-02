@@ -16,7 +16,7 @@ import time
 # ==============================================================================
 # Esta IP es la que muestra la pantalla del ESP32 al conectarse (letras verdes).
 # Tus amigas deben cambiar esto por lo que vean en SU pantalla.
-esp_ip = "192.168.0.45"  
+esp_ip = "192.168.137.86"  
 ws_url = f"ws://{esp_ip}:81/"
 
 # ==============================================================================
