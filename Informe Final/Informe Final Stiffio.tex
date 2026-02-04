@@ -3,9 +3,9 @@
 
 % MÁRGENES
 \textheight = 21cm
-\textwidth  = 15cm
+\textwidth  = 16cm
 \topmargin  = -0.5cm
-\oddsidemargin = 0.46cm
+\oddsidemargin = -0.27cm
 
 % IDIOMA Y ENCODING
 \usepackage[spanish]{babel}      % Documentos en español
@@ -17,6 +17,7 @@
 \usepackage{enumerate}           % Listas personalizadas
 \usepackage{multicol}            % Varias columnas
 \usepackage{tocloft}             % Personalización del índice
+\usepackage{etoolbox}
 \renewcommand{\cftsecleader}{\cftdotfill{\cftdotsep}}
 \renewcommand{\cftdotsep}{1.5}
 \newcommand{\HRule}{\rule{\linewidth}{0.5mm}}
@@ -62,11 +63,13 @@
 	{\LARGE Instrumentación Biomédica II\par} 
 	\vspace{0.2cm}
 	{\text{Segundo Cuatrimestre 2025}\par}
-        \rule{150mm}{0.1mm}\vspace{0.5cm}
-    \includegraphics[width=0.4\textwidth]{images/Logo Stiffio.jpg}\par
-        {\LARGE\bfseries Evaluación de rigidez arterial mediante medición de velocidad de onda de pulso con fotopletismografía\par}
+    \rule{150mm}{0.1mm}
+    \vspace{0.7cm}
+    
+    \includegraphics[width=0.45\textwidth]{images/Logo Stiffio.jpg}\par
+        {\Large\bfseries Evaluación de rigidez arterial mediante la medición de velocidad de onda de pulso con fotopletismografía\par}
 	\vspace{1cm}
-
+ 
     \begin{center}
 	{\LARGE\bfseries Grupo 6}\par 
         \vspace{0.1cm}
@@ -75,7 +78,7 @@
             \text{Jonquieres, Catalina (63369)}\par 
             \text{Orsi, Victoria (62526)}\par 
 
-        \vspace{1cm}
+        \vspace{0.8cm}
         
 	{\LARGE\bfseries Profesores}\par 
         \vspace{0.2cm}
@@ -84,7 +87,8 @@
             \text{Herve Birnie Scott, Santiago}\par
     \end{center}
       
-	\vfill
+	\vspace{1cm}
+
 	{\large \textbf{Fecha de entrega:} 24/02/2026\par} 
  
 \end{titlepage}
@@ -94,6 +98,21 @@
 \newpage
 \tableofcontents
 
+\newpage
+\section*{Anexos}
+\addcontentsline{toc}{section}{Anexos}
+
+\newpage
+
+\begingroup
+\let\oldcontentsline\contentsline
+\def\contentsline#1#2#3#4{%
+  \ifnum\pdfstrcmp{#1}{section}=0
+    \oldcontentsline{#1}{#2}{#3}{#4}
+  \fi
+}
+\tableofcontents
+\endgroup
 
 % INTRODUCCIÓN ------------------------------------------------------------------------------------
 \newpage
@@ -270,13 +289,15 @@
         
 
         
-        \subsubsection{Diseño y Fabricación de Carcasa}
-        El diseño de la carcasa del dispositivo se realizó utilizando el software de diseño asistido por computadora \textit{SolidWorks}. El modelo tridimensional se muestra en la Figura \ref{fig:Caja Solid}.
+        \subsubsection{Diseño y Fabricación de Carcasa y Sensores}
+        El diseño de la carcasa del dispositivo se realizó utilizando el software de diseño asistido por computadora \textit{SolidWorks}. El modelo tridimensional desarrollado se presenta en la Figura \ref{fig:Caja Solid}. En el Anexo se incluyen imágenes adicionales del modelo, donde se detallan con mayor precisión la geometría y las características constructivas de la carcasa.
         
         \vspace{0.1cm}
-        
-        El diseño se desarrolló con el objetivo de alojar de manera segura los componentes electrónicos y facilitar la interacción con el usuario. La tapa superior cuenta con una abertura rectangular para la visualización de la pantalla OLED y un pequeño orificio adyacente para el indicador LED de encendido. Además, se incorporó un orificio lateral para el interruptor de encendido y apagado, y dos orificios en el panel trasero destinados a la instalación de los conectores de los sensores.
-        
+
+        El diseño fue concebido con el objetivo de alojar de manera segura los componentes electrónicos y, al mismo tiempo, facilitar la interacción del usuario con el dispositivo. En uno de los laterales de la carcasa se incorporó un orificio destinado al interruptor de encendido y apagado, mientras que en el panel trasero se dispusieron dos orificios para los conectores de los sensores.
+        La tapa superior cuenta con una abertura rectangular que permite la correcta visualización de la pantalla, un orificio adyacente para el LED indicador de encendido y un segundo orificio de menor tamaño para permitir la salida del sonido generado por el buzzer. La tapa se fija al cuerpo de la carcasa mediante tornillos con cabeza Allen, los cuales atraviesan también la placa electrónica, asegurando su correcta sujeción. Esta configuración dificulta el acceso del usuario a los componentes internos, limitando la apertura del dispositivo únicamente a situaciones que requieran mantenimiento o servicio técnico.
+        Por otro lado, en la parte inferior de la carcasa se incorporó un compartimiento independiente, aislado del área donde se encuentra la placa electrónica, destinado al alojamiento de las baterías. Este compartimiento incluye un portapilas para cuatro baterías AA y presenta un diseño de fácil acceso para el usuario mediante una tapa deslizante, la cual cuenta con un mecanismo de traba que genera un clic al cerrarse.
+
         \begin{figure}[H]
         \centering
         \includegraphics[width=0.9\textwidth]{images/Caja Solid.png}
@@ -553,52 +574,7 @@ Esta estructura asegurará transparencia en la interpretación y alineación con
 \bibliographystyle{IEEEtran}
 \bibliography{Referencias}
 
+\clearpage
+\input{Anexos.sty}
 
-\newpage
-
-\section{Anexo}
-
-\begin{table}[!ht]
-    \centering
-    \begin{tabular}{|l|l|l|l|l|}
-    \hline
-        Edad & Sexo & Altura (cm) & Distancia medida (cm) & Factor de corrección \\ \hline
-        61 & Femenino & 155 & 65 & 0,4193548387 \\ \hline
-        62 & Masculino & 179 & 86 & 0,4804469274 \\ \hline
-        22 & Femenino & 168 & 72 & 0,4285714286 \\ \hline
-        22 & Femenino & 175 & 73 & 0,4171428571 \\ \hline
-        22 & Femenino & 155 & 69 & 0,4451612903 \\ \hline
-        22 & Femenino & 159 & 72 & 0,4528301887 \\ \hline
-        22 & Femenino & 180 & 80 & 0,4444444444 \\ \hline
-        23 & Masculino & 180 & 81 & 0,45 \\ \hline
-        23 & Masculino & 174 & 74 & 0,4252873563 \\ \hline
-        22 & Masculino & 177 & 81 & 0,4576271186 \\ \hline
-        23 & Masculino & 179 & 78 & 0,4357541899 \\ \hline
-        22 & Masculino & 185 & 80 & 0,4324324324 \\ \hline
-        23 & Masculino & 177 & 75 & 0,4237288136 \\ \hline
-        23 & Masculino & 192 & 80 & 0,4166666667 \\ \hline
-        24 & Femenino & 154 & 64 & 0,4155844156 \\ \hline
-        24 & Femenino & 170 & 73 & 0,4294117647 \\ \hline
-        25 & Femenino & 159 & 71 & 0,4465408805 \\ \hline
-        24 & Femenino & 174 & 82 & 0,4712643678 \\ \hline
-        22 & Femenino & 158 & 72 & 0,4556962025 \\ \hline
-        22 & Femenino & 164 & 70 & 0,4268292683 \\ \hline
-        23 & Masculino & 167 & 70 & 0,4191616766 \\ \hline
-        22 & Femenino & 159 & 66 & 0,4150943396 \\ \hline
-        24 & Femenino & 162 & 71 & 0,4382716049 \\ \hline
-        23 & Masculino & 178 & 78 & 0,4382022472 \\ \hline
-        23 & Femenino & 168 & 74 & 0,4404761905 \\ \hline
-        23 & Femenino & 165 & 68 & 0,4121212121 \\ \hline
-        25 & Masculino & 176 & 81 & 0,4602272727 \\ \hline
-        62 & Masculino & 187 & 78 & 0,4171122995 \\ \hline
-        61 & Femenino & 157 & 67 & 0,4267515924 \\ \hline
-        60 & Masculino & 180 & 82 & 0,4555555556 \\ \hline
-        60 & Femenino & 150 & 62 & 0,4133333333 \\ \hline
-        20 & Femenino & 161 & 72 & 0,4472049689 \\ \hline
-        ~ & ~ & ~ & ~ & ~ \\ \hline
-        ~ & ~ & ~ & Factor de correccion final & 0,4361964921 \\ \hline
-    \end{tabular}
-\end{table}
-
- 
 \end{document}

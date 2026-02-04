@@ -12,11 +12,9 @@ import json
 import time
 
 # ==============================================================================
-# CONFIGURACIÓN DE RED (¡CAMBIAR ESTO SEGÚN LA RED!)
+# CONFIGURACIÓN DE RED
 # ==============================================================================
-# Esta IP es la que muestra la pantalla del ESP32 al conectarse (letras verdes).
-# Tus amigas deben cambiar esto por lo que vean en SU pantalla.
-esp_ip = "192.168.137.86"  
+esp_ip = "172.20.10.4"  
 ws_url = f"ws://{esp_ip}:81/"
 
 # ==============================================================================
@@ -72,6 +70,7 @@ def on_open(ws):
     connected = True
 
 def on_message(ws, message):
+    print(f"RECIBIDO: {message}")
     global sensor1_ok, sensor2_ok, remote_hr, remote_pwv
     
     try:
@@ -134,3 +133,22 @@ def start_connection():
     t = threading.Thread(target=run_ws)
     t.daemon = True # El hilo muere si cierras la app principal
     t.start()
+
+
+
+# ==============================================================================
+# BLOQUE DE PRUEBA (ESTO ES LO QUE TE FALTABA)
+# ==============================================================================
+if __name__ == "__main__":
+    print(f"--- Intentando conectar a: {ws_url} ---")
+    print("Espere unos segundos...")
+    
+    # 1. Iniciamos la conexión
+    start_connection()
+    
+    # 2. Bucle infinito para mantener el programa abierto y ver los prints
+    try:
+        while True:
+            time.sleep(1) # Mantiene el script vivo
+    except KeyboardInterrupt:
+        print("\nPrueba finalizada.")

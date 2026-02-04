@@ -16,24 +16,24 @@
 // ==============================================================================================
 
 // Wi-Fi  ===============================================================
-const char* ssid = "StiffioNet";     // WiFi 
-const char* password = "12345678";   // Contraseña
+const char* ssid = "iPhonedeVictoria";     // WiFi 
+const char* password = "vitucapa";   // Contraseña
 WebSocketsServer webSocket(81);
 bool wifiConectado = false;
 
 // HARDWARE  =============================================================
 
 // Pantalla Touch
-#define TOUCH_CS   32
-#define TOUCH_IRQ  14
+#define TOUCH_CS   5
+#define TOUCH_IRQ  27
 #define BUZZER_PIN 33
 //#define LCD_LED_PIN 13
 
 // Sensores MAX30102
 #define SDA1 21
 #define SCL1 22
-#define SDA2 16
-#define SCL2 17
+#define SDA2 25
+#define SCL2 26
 
 
 // ======================================================================

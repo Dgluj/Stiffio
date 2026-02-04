@@ -1,6 +1,6 @@
-PWD c:\Users\Victoria\Desktop\ITBA\Instrumentación Biomédica 2\Informe Final
+PWD c:\Users\Victoria\Desktop\Stiffio\Informe Final
 INPUT C:\Users\Victoria\AppData\Local\MiKTeX\miktex\data\le\pdftex\pdflatex.fmt
-INPUT c:\Users\Victoria\Desktop\ITBA\Instrumentación Biomédica 2\Informe Final\Informe Final Stiffio.tex
+INPUT c:\Users\Victoria\Desktop\Stiffio\Informe Final\Informe Final Stiffio.tex
 OUTPUT Informe Final Stiffio.log
 INPUT C:\Users\Victoria\AppData\Local\Programs\MiKTeX\tex\latex\base\article.cls
 INPUT C:\Users\Victoria\AppData\Local\Programs\MiKTeX\tex\latex\base\article.cls
@@ -45,6 +45,8 @@ INPUT C:\Users\Victoria\AppData\Local\Programs\MiKTeX\tex\latex\tools\multicol.s
 INPUT C:\Users\Victoria\AppData\Local\Programs\MiKTeX\tex\latex\tools\multicol.sty
 INPUT C:\Users\Victoria\AppData\Local\Programs\MiKTeX\tex\latex\tocloft\tocloft.sty
 INPUT C:\Users\Victoria\AppData\Local\Programs\MiKTeX\tex\latex\tocloft\tocloft.sty
+INPUT C:\Users\Victoria\AppData\Local\Programs\MiKTeX\tex\latex\etoolbox\etoolbox.sty
+INPUT C:\Users\Victoria\AppData\Local\Programs\MiKTeX\tex\latex\etoolbox\etoolbox.sty
 INPUT C:\Users\Victoria\AppData\Local\Programs\MiKTeX\tex\latex\amsmath\amsmath.sty
 INPUT C:\Users\Victoria\AppData\Local\Programs\MiKTeX\tex\latex\amsmath\amsmath.sty
 INPUT C:\Users\Victoria\AppData\Local\Programs\MiKTeX\tex\latex\amsmath\amsopn.sty
@@ -133,8 +135,6 @@ INPUT C:\Users\Victoria\AppData\Local\Programs\MiKTeX\tex\generic\gettitlestring
 INPUT C:\Users\Victoria\AppData\Local\Programs\MiKTeX\tex\generic\gettitlestring\gettitlestring.sty
 INPUT C:\Users\Victoria\AppData\Local\Programs\MiKTeX\tex\latex\kvoptions\kvoptions.sty
 INPUT C:\Users\Victoria\AppData\Local\Programs\MiKTeX\tex\latex\kvoptions\kvoptions.sty
-INPUT C:\Users\Victoria\AppData\Local\Programs\MiKTeX\tex\latex\etoolbox\etoolbox.sty
-INPUT C:\Users\Victoria\AppData\Local\Programs\MiKTeX\tex\latex\etoolbox\etoolbox.sty
 INPUT C:\Users\Victoria\AppData\Local\Programs\MiKTeX\tex\latex\hyperref\pd1enc.def
 INPUT C:\Users\Victoria\AppData\Local\Programs\MiKTeX\tex\latex\hyperref\pd1enc.def
 INPUT C:\Users\Victoria\AppData\Local\Programs\MiKTeX\tex\latex\hyperref\pd1enc.def
@@ -200,12 +200,12 @@ INPUT .\images\Logo Stiffio.jpg
 INPUT .\images\Logo Stiffio.jpg
 INPUT .\images\Logo Stiffio.jpg
 INPUT .\images\Logo Stiffio.jpg
+INPUT C:\Users\Victoria\AppData\Local\Programs\MiKTeX\fonts\tfm\public\cm\cmr17.tfm
+INPUT C:\Users\Victoria\AppData\Local\Programs\MiKTeX\fonts\tfm\public\cm\cmbx12.tfm
 INPUT C:\Users\Victoria\AppData\Local\Programs\MiKTeX\fonts\tfm\public\cm\cmbx12.tfm
 INPUT C:\Users\Victoria\AppData\Local\Programs\MiKTeX\fonts\tfm\public\cm\cmr12.tfm
 INPUT C:\Users\Victoria\AppData\Local\Programs\MiKTeX\fonts\tfm\public\cm\cmbx12.tfm
 INPUT C:\Users\Victoria\AppData\Local\MiKTeX\fonts\map\pdftex\pdftex.map
-INPUT C:\Users\Victoria\AppData\Local\Programs\MiKTeX\fonts\tfm\public\cm\cmr17.tfm
-INPUT C:\Users\Victoria\AppData\Local\Programs\MiKTeX\fonts\tfm\public\cm\cmbx12.tfm
 INPUT .\Informe Final Stiffio.toc
 INPUT .\Informe Final Stiffio.toc
 INPUT Informe Final Stiffio.toc
@@ -221,6 +221,10 @@ INPUT C:\Users\Victoria\AppData\Local\Programs\MiKTeX\fonts\tfm\public\cm\cmsy6.
 INPUT C:\Users\Victoria\AppData\Local\Programs\MiKTeX\fonts\tfm\public\cm\cmex10.tfm
 INPUT C:\Users\Victoria\AppData\Local\Programs\MiKTeX\fonts\tfm\public\amsfonts\cmextra\cmex8.tfm
 INPUT C:\Users\Victoria\AppData\Local\Programs\MiKTeX\fonts\tfm\public\amsfonts\cmextra\cmex7.tfm
+OUTPUT Informe Final Stiffio.toc
+INPUT .\Informe Final Stiffio.toc
+INPUT .\Informe Final Stiffio.toc
+INPUT Informe Final Stiffio.toc
 OUTPUT Informe Final Stiffio.toc
 INPUT C:\Users\Victoria\AppData\Local\Programs\MiKTeX\fonts\tfm\public\cm\cmti12.tfm
 INPUT .\images\Diagrama de Bloques.png
@@ -297,6 +301,13 @@ INPUT .\images\Interfaz Main.png
 INPUT .\Informe Final Stiffio.bbl
 INPUT .\Informe Final Stiffio.bbl
 INPUT Informe Final Stiffio.bbl
+INPUT .\Anexos.sty
+INPUT .\Anexos.sty
+INPUT Anexos.sty
+INPUT .\images\Circuito.jpg
+INPUT .\images\Circuito.jpg
+INPUT .\images\Circuito.jpg
+INPUT .\images\Circuito.jpg
 INPUT Informe Final Stiffio.aux
 INPUT .\Informe Final Stiffio.out
 INPUT .\Informe Final Stiffio.out

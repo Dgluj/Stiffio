@@ -67,7 +67,7 @@ class WelcomeScreen(QWidget):
         layout.addWidget(text_label)
         layout.addSpacing(50)
 
-        # Botón -----------------------------------------------------------
+        # Botón comenzar -----------------------------------------------------------
         start_button = QPushButton("Comenzar")
         start_button.setStyleSheet("""
             QPushButton {
@@ -87,7 +87,7 @@ class WelcomeScreen(QWidget):
         start_button.clicked.connect(self.open_patient_data_window) # Clic en comenzar
         layout.addWidget(start_button)
 
-# boton de historial
+        # Botón historial  -----------------------------------------------------------
         history_button = QPushButton("Historial de Mediciones")
         history_button.setStyleSheet("""
             QPushButton {
@@ -1081,12 +1081,10 @@ class MainScreen(QMainWindow):
         super().__init__() # Inicializar la ventana
         
         # Inicializar comunicación (verificar si el método existe)
-        if hasattr(ComunicacionMax, 'start'):
-            ComunicacionMax.start()
-        elif hasattr(ComunicacionMax, 'init'):
-            ComunicacionMax.init()
-        elif hasattr(ComunicacionMax, 'initialize'):
-            ComunicacionMax.initialize()
+        try:
+            ComunicacionMax.start_connection()
+        except Exception as e:
+            print(f"[FrontEnd] Error al iniciar comunicación: {e}")       
 
         # Variables
         self.patient_data = patient_data
@@ -1591,7 +1589,8 @@ class MainScreen(QMainWindow):
         if s1_ok:
             self.curve1.setData(t, y1)
             self.graph1.setXRange(t_start, t_end)
-            self.graph1.setYRange(-0.1, 0.1)
+            self.graph1.setYRange(-110, 110)
+            # self.graph1.enableAutoRange(axis='y')
         else:
             self.curve1.setData([])
 
@@ -1599,18 +1598,40 @@ class MainScreen(QMainWindow):
         if s2_ok:
             self.curve2.setData(t, y2)
             self.graph2.setXRange(t_start, t_end)
-            self.graph2.setYRange(-0.1, 0.1)
+            self.graph2.setYRange(-110, 110)
+            # self.graph2.enableAutoRange(axis='y')
         else:
             self.curve2.setData([])
 
 
         # Actualizar HR promedio si está disponible
+        hr_remoto = ComunicacionMax.remote_hr
+
+        if hr_remoto > 0:
+            self.hr_esp_label.setText(f"HR: {hr_remoto} bpm")
+        else:
+            self.hr_esp_label.setText("HR: -- bpm")
+
+        '''
         if ComunicacionMax.hr_avg is not None:
             self.hr_esp_label.setText(f"HR: {ComunicacionMax.hr_avg:.0f} bpm")
         else:
             self.hr_esp_label.setText("HR: -- bpm")
+        '''
 
         # Calcular y actualizar la PWV
+        pwv_remoto = ComunicacionMax.remote_pwv
+
+        if pwv_remoto > 0:
+            self.pwv_label.setText(f"PWV: {pwv_remoto:.2f} m/s")
+            
+            # Actualizar punto en el gráfico (Edad vs PWV)
+            if self.patient_age is not None:
+                self.patient_point_item.setData([self.patient_age], [pwv_remoto])
+        else:
+            self.pwv_label.setText("PWV: -- m/s")
+
+        '''
         processor.process_all()
         pwv = processor.get_metrics().get('pwv')
 
@@ -1624,8 +1645,9 @@ class MainScreen(QMainWindow):
         else:
             # Si no hay PWV (aún calibrando), mostramos "--"
             self.pwv_label.setText("PWV: -- m/s")
+        '''
 
-    # ... (tus otras funciones como setup_ui, update_plot, etc.) ...
+
 
     # Guardar medición
     def save_measurement(self):
