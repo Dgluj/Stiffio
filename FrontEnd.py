@@ -1589,8 +1589,8 @@ class MainScreen(QMainWindow):
         if s1_ok:
             self.curve1.setData(t, y1)
             self.graph1.setXRange(t_start, t_end)
-            self.graph1.setYRange(-110, 110)
-            # self.graph1.enableAutoRange(axis='y')
+            # self.graph1.setYRange(-110, 110)
+            self.graph1.enableAutoRange(axis='y')
         else:
             self.curve1.setData([])
 
@@ -1598,8 +1598,8 @@ class MainScreen(QMainWindow):
         if s2_ok:
             self.curve2.setData(t, y2)
             self.graph2.setXRange(t_start, t_end)
-            self.graph2.setYRange(-110, 110)
-            # self.graph2.enableAutoRange(axis='y')
+            # self.graph2.setYRange(-110, 110)
+            self.graph2.enableAutoRange(axis='y')
         else:
             self.curve2.setData([])
 

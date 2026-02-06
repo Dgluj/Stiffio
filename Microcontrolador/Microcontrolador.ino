@@ -24,7 +24,7 @@ bool wifiConectado = false;
 // HARDWARE  =============================================================
 
 // Pantalla Touch
-#define TOUCH_CS   5
+#define TOUCH_CS   15
 #define TOUCH_IRQ  27
 #define BUZZER_PIN 33
 //#define LCD_LED_PIN 13
