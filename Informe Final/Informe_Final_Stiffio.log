@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.25 (MiKTeX 24.1) (preloaded format=pdflatex 2025.11.27)  8 FEB 2026 10:56
+This is pdfTeX, Version 3.141592653-2.6-1.40.25 (MiKTeX 24.1) (preloaded format=pdflatex 2025.11.27)  8 FEB 2026 18:53
 entering extended mode
  restricted \write18 enabled.
  file:line:error style messages enabled.
@@ -597,100 +597,100 @@ pdfTeX warning (ext4): destination with the same identifier (name{page.1}) has b
                    \relax 
 l.157     \subsection
                      {Velocidad de onda de pulso} [1] [2] [3] [4] [5]
-<images/Diagrama de Bloques.png, id=258, 452.892pt x 316.7835pt>
+<images/Diagrama de Bloques.png, id=258, 377.0085pt x 332.442pt>
 File: images/Diagrama de Bloques.png Graphic file (type png)
 <use images/Diagrama de Bloques.png>
-Package pdftex.def Info: images/Diagrama de Bloques.png  used on input line 281.
-(pdftex.def)             Requested size: 409.71689pt x 286.5913pt.
+Package pdftex.def Info: images/Diagrama de Bloques.png  used on input line 282.
+(pdftex.def)             Requested size: 455.24408pt x 401.43428pt.
  [6 <./images/Diagrama de Bloques.png>] [7]
-<images/Circuito.jpeg, id=270, 1606.0pt x 809.0225pt>
+<images/Circuito.jpeg, id=272, 1606.0pt x 809.0225pt>
 File: images/Circuito.jpeg Graphic file (type jpg)
 <use images/Circuito.jpeg>
-Package pdftex.def Info: images/Circuito.jpeg  used on input line 312.
+Package pdftex.def Info: images/Circuito.jpeg  used on input line 324.
 (pdftex.def)             Requested size: 455.24408pt x 229.327pt.
-<images/Placa Front.png, id=271, 550.055pt x 456.70625pt>
+ [8 <./images/Circuito.jpeg>]
+<images/Placa Front.png, id=278, 550.055pt x 456.70625pt>
 File: images/Placa Front.png Graphic file (type png)
 <use images/Placa Front.png>
-Package pdftex.def Info: images/Placa Front.png  used on input line 329.
+Package pdftex.def Info: images/Placa Front.png  used on input line 341.
 (pdftex.def)             Requested size: 204.85844pt x 170.09366pt.
-<images/Placa Back.png, id=272, 559.08875pt x 449.68pt>
+<images/Placa Back.png, id=279, 559.08875pt x 449.68pt>
 File: images/Placa Back.png Graphic file (type png)
 <use images/Placa Back.png>
-Package pdftex.def Info: images/Placa Back.png  used on input line 334.
+Package pdftex.def Info: images/Placa Back.png  used on input line 346.
 (pdftex.def)             Requested size: 204.85844pt x 164.76653pt.
- [8 <./images/Circuito.jpeg> <./images/Placa Front.png> <./images/Placa Back.png>]
-<images/Caja 2.png, id=281, 572.89032pt x 370.38374pt>
+ [9 <./images/Placa Front.png> <./images/Placa Back.png>]
+<images/Caja 2.png, id=288, 572.89032pt x 370.38374pt>
 File: images/Caja 2.png Graphic file (type png)
 <use images/Caja 2.png>
-Package pdftex.def Info: images/Caja 2.png  used on input line 368.
+Package pdftex.def Info: images/Caja 2.png  used on input line 380.
 (pdftex.def)             Requested size: 182.09485pt x 117.72833pt.
-<images/Caja 1.png, id=282, 555.57562pt x 379.4175pt>
+<images/Caja 1.png, id=289, 555.57562pt x 379.4175pt>
 File: images/Caja 1.png Graphic file (type png)
 <use images/Caja 1.png>
-Package pdftex.def Info: images/Caja 1.png  used on input line 373.
+Package pdftex.def Info: images/Caja 1.png  used on input line 385.
 (pdftex.def)             Requested size: 182.09485pt x 124.3571pt.
- [9]
-<images/Codigo Colores.png, id=288, 848.4197pt x 567.62062pt>
+<images/Codigo Colores.png, id=290, 848.4197pt x 567.62062pt>
 File: images/Codigo Colores.png Graphic file (type png)
 <use images/Codigo Colores.png>
-Package pdftex.def Info: images/Codigo Colores.png  used on input line 387.
+Package pdftex.def Info: images/Codigo Colores.png  used on input line 399.
 (pdftex.def)             Requested size: 273.14922pt x 182.74226pt.
- [10 <./images/Caja 2.png> <./images/Caja 1.png> <./images/Codigo Colores.png>]
+ [10 <./images/Caja 2.png> <./images/Caja 1.png>]
 <images/Sensor Front.png, id=298, 651.93562pt x 678.28406pt>
 File: images/Sensor Front.png Graphic file (type png)
 <use images/Sensor Front.png>
-Package pdftex.def Info: images/Sensor Front.png  used on input line 414.
+Package pdftex.def Info: images/Sensor Front.png  used on input line 426.
 (pdftex.def)             Requested size: 159.3382pt x 165.77223pt.
 <images/Sensor Front 2.png, id=299, 750.55406pt x 773.13844pt>
 File: images/Sensor Front 2.png Graphic file (type png)
 <use images/Sensor Front 2.png>
-Package pdftex.def Info: images/Sensor Front 2.png  used on input line 419.
+Package pdftex.def Info: images/Sensor Front 2.png  used on input line 431.
 (pdftex.def)             Requested size: 159.3382pt x 164.13344pt.
-<images/Sensor Back.png, id=300, 1284.8pt x 1036.87375pt>
+ [11 <./images/Codigo Colores.png>]
+<images/Sensor Back.png, id=306, 1284.8pt x 1036.87375pt>
 File: images/Sensor Back.png Graphic file (type png)
 <use images/Sensor Back.png>
-Package pdftex.def Info: images/Sensor Back.png  used on input line 434.
+Package pdftex.def Info: images/Sensor Back.png  used on input line 446.
 (pdftex.def)             Requested size: 204.85844pt x 165.3178pt.
-<images/Sensor Back 2.png, id=301, 903.375pt x 780.9175pt>
+<images/Sensor Back 2.png, id=307, 903.375pt x 780.9175pt>
 File: images/Sensor Back 2.png Graphic file (type png)
 <use images/Sensor Back 2.png>
-Package pdftex.def Info: images/Sensor Back 2.png  used on input line 439.
+Package pdftex.def Info: images/Sensor Back 2.png  used on input line 451.
 (pdftex.def)             Requested size: 204.85844pt x 177.08109pt.
- [11 <./images/Sensor Front.png> <./images/Sensor Front 2.png>]
-<images/Sensor.png, id=309, 661.72218pt x 585.68813pt>
+<images/Sensor.png, id=308, 661.72218pt x 585.68813pt>
 File: images/Sensor.png Graphic file (type png)
 <use images/Sensor.png>
-Package pdftex.def Info: images/Sensor.png  used on input line 451.
+Package pdftex.def Info: images/Sensor.png  used on input line 463.
 (pdftex.def)             Requested size: 227.62204pt x 201.46385pt.
- [12 <./images/Sensor Back.png> <./images/Sensor Back 2.png> <./images/Sensor.png>] [13] [14]
-Underfull \hbox (badness 10000) in paragraph at lines 531--532
+ [12 <./images/Sensor Front.png> <./images/Sensor Front 2.png> <./images/Sensor Back.png> <./images/Sensor Back 2.png>] [13 <./images/Sensor.png>] [14]
+Underfull \hbox (badness 10000) in paragraph at lines 543--544
 
  []
 
-<images/Arterias.jpg, id=329, 1003.75pt x 1248.665pt>
+[15]
+<images/Arterias.jpg, id=337, 1003.75pt x 1248.665pt>
 File: images/Arterias.jpg Graphic file (type jpg)
 <use images/Arterias.jpg>
-Package pdftex.def Info: images/Arterias.jpg  used on input line 543.
+Package pdftex.def Info: images/Arterias.jpg  used on input line 555.
 (pdftex.def)             Requested size: 227.62204pt x 283.14766pt.
-[15]
-<images/Interfaz Datos.png, id=338, 1153.911pt x 595.023pt>
+ [16 <./images/Arterias.jpg>]
+<images/Interfaz Datos.png, id=345, 1153.911pt x 595.023pt>
 File: images/Interfaz Datos.png Graphic file (type png)
 <use images/Interfaz Datos.png>
-Package pdftex.def Info: images/Interfaz Datos.png  used on input line 557.
+Package pdftex.def Info: images/Interfaz Datos.png  used on input line 569.
 (pdftex.def)             Requested size: 409.71689pt x 211.26642pt.
- [16 <./images/Arterias.jpg>]
-<images/Interfaz Main.png, id=344, 963.6pt x 502.87875pt>
+<images/Interfaz Main.png, id=346, 963.6pt x 502.87875pt>
 File: images/Interfaz Main.png Graphic file (type png)
 <use images/Interfaz Main.png>
-Package pdftex.def Info: images/Interfaz Main.png  used on input line 578.
+Package pdftex.def Info: images/Interfaz Main.png  used on input line 590.
 (pdftex.def)             Requested size: 409.71689pt x 213.81656pt.
  [17 <./images/Interfaz Datos.png>] [18 <./images/Interfaz Main.png>]
-Underfull \hbox (badness 10000) in paragraph at lines 620--621
+Underfull \hbox (badness 10000) in paragraph at lines 632--633
 
  []
 
 
-Underfull \hbox (badness 10000) in paragraph at lines 629--630
+Underfull \hbox (badness 10000) in paragraph at lines 641--642
 
  []
 
@@ -705,28 +705,28 @@ Overfull \hbox (180.99681pt too wide) in paragraph at lines 72--76
  []
 
 [22]) [23] (Anexos.tex [24]
-<images/Carcasa Solid 1.png, id=427, 819.06pt x 553.06625pt>
+<images/Carcasa Solid 1.png, id=429, 819.06pt x 553.06625pt>
 File: images/Carcasa Solid 1.png Graphic file (type png)
 <use images/Carcasa Solid 1.png>
 Package pdftex.def Info: images/Carcasa Solid 1.png  used on input line 85.
 (pdftex.def)             Requested size: 273.14922pt x 184.44498pt.
-<images/Carcasa Solid 2.png, id=428, 989.6975pt x 585.18625pt>
+<images/Carcasa Solid 2.png, id=430, 989.6975pt x 585.18625pt>
 File: images/Carcasa Solid 2.png Graphic file (type png)
 <use images/Carcasa Solid 2.png>
 Package pdftex.def Info: images/Carcasa Solid 2.png  used on input line 94.
 (pdftex.def)             Requested size: 273.14922pt x 161.50264pt.
-<images/Carcasa Solid 3.png, id=429, 670.505pt x 484.81125pt>
+<images/Carcasa Solid 3.png, id=431, 670.505pt x 484.81125pt>
 File: images/Carcasa Solid 3.png Graphic file (type png)
 <use images/Carcasa Solid 3.png>
 Package pdftex.def Info: images/Carcasa Solid 3.png  used on input line 103.
 (pdftex.def)             Requested size: 273.14922pt x 197.5015pt.
  [25 <./images/Carcasa Solid 1.png> <./images/Carcasa Solid 2.png>]
-<images/Sensor Solid.png, id=438, 383.93437pt x 377.15906pt>
+<images/Sensor Solid.png, id=440, 383.93437pt x 377.15906pt>
 File: images/Sensor Solid.png Graphic file (type png)
 <use images/Sensor Solid.png>
 Package pdftex.def Info: images/Sensor Solid.png  used on input line 120.
 (pdftex.def)             Requested size: 204.85844pt x 201.24577pt.
-<images/Sensor Solid 2.png, id=439, 380.17032pt x 383.93437pt>
+<images/Sensor Solid 2.png, id=441, 380.17032pt x 383.93437pt>
 File: images/Sensor Solid 2.png Graphic file (type png)
 <use images/Sensor Solid 2.png>
 Package pdftex.def Info: images/Sensor Solid 2.png  used on input line 125.
@@ -743,17 +743,17 @@ Package rerunfilecheck Info: File `Informe_Final_Stiffio.out' has not changed.
 (rerunfilecheck)             Checksum: 96E92D9F27816686AA209A88619D2D74;5755.
  ) 
 Here is how much of TeX's memory you used:
- 15827 strings out of 474485
- 263288 string characters out of 5742317
+ 15829 strings out of 474485
+ 263302 string characters out of 5742317
  1952542 words of memory out of 5000000
  37781 multiletter control sequences out of 15000+600000
  564287 words of font info for 57 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
- 67i,9n,77p,906b,616s stack positions out of 10000i,1000n,20000p,200000b,200000s
+ 67i,9n,77p,947b,618s stack positions out of 10000i,1000n,20000p,200000b,200000s
  <C:\Users\Victoria\AppData\Local\MiKTeX\fonts/pk/ljfour/jknappen/ec/dpi600\tcrm1200.pk><C:/Users/Victoria/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmbx12.pfb><C:/Users/Victoria/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmmi12.pfb><C:/Users/Victoria/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmr12.pfb><C:/Users/Victoria/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmr17.pfb><C:/Users/Victoria/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmti12.pfb>
-Output written on Informe_Final_Stiffio.pdf (31 pages, 6529328 bytes).
+Output written on Informe_Final_Stiffio.pdf (31 pages, 6501147 bytes).
 PDF statistics:
- 509 PDF objects out of 1000 (max. 8388607)
- 121 named destinations out of 1000 (max. 500000)
+ 511 PDF objects out of 1000 (max. 8388607)
+ 123 named destinations out of 1000 (max. 500000)
  367 words of extra memory for PDF output out of 10000 (max. 10000000)
 

@@ -265,25 +265,37 @@ la necesidad de fijación manual del sensor sobre la arteria y la dependencia de
 
 % DESCRIPCIÓN GENERAL ==============================================================================================
 \section{Descripción General y Uso Previsto}
-El presente proyecto se centra en el desarrollo de un sistema de bajo costo y alta fiabilidad para la cuantificación de la rigidez arterial mediante la medición de la Velocidad de la Onda de Pulso (PWV). El sistema emplea sensores de fotopletismografía (PPG) ubicados estratégicamente para capturar la onda de pulso en dos puntos del trayecto arterial:
+El presente proyecto se centra en el desarrollo de un dispositivo biomédico de bajo costo diseñado para la estimación no invasiva de la rigidez arterial, utilizando como indicador principal la velocidad de onda de pulso (PWV). 
 
-\begin{itemize}
-    \item \textbf{Sensor proximal:} colocado a nivel de la arteria carótida (cuello).
-    \item \textbf{Sensor distal:} colocado a nivel de la arteria radial (muñeca).
-\end{itemize}
+\vspace{0.2cm}
 
-A partir de la diferencia temporal entre las señales proximal y distal, el dispositivo determina el tiempo de tránsito de pulso (PTT). Con este valor y la distancia anatómica estimada entre los puntos de medición, se calcula la PWV. La distancia se obtiene mediante una función de estimación basada en la altura del paciente. Además, con la señal obtenida del sensor proximal, se calcula la frecuencia cardíaca (HR) como variable adicional.
+El sistema emplea dos sensores ópticos infrarrojos para capturar la onda de pulso en dos puntos estratégicos del trayecto arterial. El sensor proximal se coloca a nivel de la arteria carótida en el cuello, mientras que el sensor distal va colocado sobre de la arteria radial en la muñeca. La selección de estos puntos anatómicos responde a criterios de ergonomía y calidad de señal. Ambas son zonas de fácil acceso para el operador, ofrecen comodidad al paciente y presentan una baja densidad capilar, lo que optimiza la lectura óptica. Desde el punto de vista fisiológico, la medición en el segmento carótido-radial permite evaluar un trayecto arterial significativo, proporcionando una estimación de la rigidez que no se limita exclusivamente a la vasculatura periférica, sino que incorpora componentes centrales del árbol arterial.
 
-El diagrama de bloques general del sistema se ilustra en la Figura~\ref{fig:Diagrama de Bloques}.
+El principio de operación del dispositivo consiste en calcular el tiempo de tránsito del pulso (PTT) a partir del desfase temporal entre las señales proximal y distal. Combinando este valor con la distancia anatómica entre los sensores, el sistema computa la PWV. La distancia utilizada para el cálculo se estima a partir de la altura del paciente Adicionalmente, a partir de la señal del sensor distal, se obtiene la frecuencia cardíaca (HR) como variable adicional.
+
+\vspace{0.2cm}
+
+El diagrama de bloques del funcionamiento general del sistema se ilustra en la Figura~\ref{fig:Diagrama de Bloques}.
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.9\textwidth]{images/Diagrama de Bloques.png}
+\includegraphics[width=1\textwidth]{images/Diagrama de Bloques.png}
 \caption{Diagrama de bloque general del funcionamiento  del dispositivo.}
 \label{fig:Diagrama de Bloques}
 \end{figure}
 
+\vspace{0.2cm}
+
+Para adaptarse a distintos flujos de trabajo, el dispositivo ofrece dos modos de uso:
+\begin{enumerate}
+    \item \textbf{Modo Estudio Clínico (Vinculado):} El dispositivo establece comunicación con \textit{StiffioApp}, una aplicación de escritorio que permite no solo la visualización en tiempo real de las señales, sino también el almacenamiento de los registros para el seguimiento y análisis de la evolución clínica del paciente.
+    \item \textbf{Modo Prueba Rápida (Autónomo):} Permite operar el equipo de manera independiente a través de su pantalla táctil integrada, sin requerir conexión a una PC. En este modo, sólo se ingresan los datos del paciente que son estrictamente necesarios para el cálculo, por lo que es ideal para mediciones rápidas. 
+\end{enumerate}
+
 El dispositivo está dirigido al uso en consultorio clínico. La propuesta no busca reemplazar a los sistemas de referencia hospitalarios, sino brindar una herramienta de apoyo confiable, pensada para médicos clínicos que deseen incorporar la evaluación de rigidez arterial en controles de rutina. 
+
+
+
 
 
 
