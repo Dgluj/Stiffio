@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.25 (MiKTeX 24.1) (preloaded format=pdflatex 2025.11.27)  8 FEB 2026 02:48
+This is pdfTeX, Version 3.141592653-2.6-1.40.25 (MiKTeX 24.1) (preloaded format=pdflatex 2025.11.27)  8 FEB 2026 10:56
 entering extended mode
  restricted \write18 enabled.
  file:line:error style messages enabled.
@@ -704,34 +704,34 @@ Overfull \hbox (180.99681pt too wide) in paragraph at lines 72--76
 \OT1/cmr/m/n/12 Cj0KCQjw-[]4XFBhCBARIsAAdNOkvujAaAVo7O9baRTQIExI5MjX-[]2NNtmu49EKrIE1ClUliBbz06PJhEaAjTHEALw[]
  []
 
-[22]) [23] (Anexos.tex
-<images/Carcasa Solid 1.png, id=420, 819.06pt x 553.06625pt>
+[22]) [23] (Anexos.tex [24]
+<images/Carcasa Solid 1.png, id=427, 819.06pt x 553.06625pt>
 File: images/Carcasa Solid 1.png Graphic file (type png)
 <use images/Carcasa Solid 1.png>
-Package pdftex.def Info: images/Carcasa Solid 1.png  used on input line 15.
+Package pdftex.def Info: images/Carcasa Solid 1.png  used on input line 85.
 (pdftex.def)             Requested size: 273.14922pt x 184.44498pt.
-<images/Carcasa Solid 2.png, id=421, 989.6975pt x 585.18625pt>
+<images/Carcasa Solid 2.png, id=428, 989.6975pt x 585.18625pt>
 File: images/Carcasa Solid 2.png Graphic file (type png)
 <use images/Carcasa Solid 2.png>
-Package pdftex.def Info: images/Carcasa Solid 2.png  used on input line 24.
+Package pdftex.def Info: images/Carcasa Solid 2.png  used on input line 94.
 (pdftex.def)             Requested size: 273.14922pt x 161.50264pt.
-<images/Carcasa Solid 3.png, id=422, 670.505pt x 484.81125pt>
+<images/Carcasa Solid 3.png, id=429, 670.505pt x 484.81125pt>
 File: images/Carcasa Solid 3.png Graphic file (type png)
 <use images/Carcasa Solid 3.png>
-Package pdftex.def Info: images/Carcasa Solid 3.png  used on input line 33.
+Package pdftex.def Info: images/Carcasa Solid 3.png  used on input line 103.
 (pdftex.def)             Requested size: 273.14922pt x 197.5015pt.
- [24 <./images/Carcasa Solid 1.png> <./images/Carcasa Solid 2.png>]
-<images/Sensor Solid.png, id=432, 383.93437pt x 377.15906pt>
+ [25 <./images/Carcasa Solid 1.png> <./images/Carcasa Solid 2.png>]
+<images/Sensor Solid.png, id=438, 383.93437pt x 377.15906pt>
 File: images/Sensor Solid.png Graphic file (type png)
 <use images/Sensor Solid.png>
-Package pdftex.def Info: images/Sensor Solid.png  used on input line 49.
+Package pdftex.def Info: images/Sensor Solid.png  used on input line 120.
 (pdftex.def)             Requested size: 204.85844pt x 201.24577pt.
-<images/Sensor Solid 2.png, id=433, 380.17032pt x 383.93437pt>
+<images/Sensor Solid 2.png, id=439, 380.17032pt x 383.93437pt>
 File: images/Sensor Solid 2.png Graphic file (type png)
 <use images/Sensor Solid 2.png>
-Package pdftex.def Info: images/Sensor Solid 2.png  used on input line 54.
+Package pdftex.def Info: images/Sensor Solid 2.png  used on input line 125.
 (pdftex.def)             Requested size: 204.85844pt x 206.8938pt.
-) [25 <./images/Carcasa Solid 3.png> <./images/Sensor Solid.png> <./images/Sensor Solid 2.png>] [26] (Informe_Final_Stiffio.aux
+ [26 <./images/Carcasa Solid 3.png> <./images/Sensor Solid.png> <./images/Sensor Solid 2.png>]) [27] (Informe_Final_Stiffio.aux
 LaTeX Info: Redefining \. on input line 13.
 LaTeX Info: Redefining \% on input line 13.
 )
@@ -740,20 +740,20 @@ LaTeX2e <2023-11-01> patch level 1
 L3 programming layer <2024-01-04>
  ***********
 Package rerunfilecheck Info: File `Informe_Final_Stiffio.out' has not changed.
-(rerunfilecheck)             Checksum: D87A1298CE3A287FE05A87FE8C70B895;5620.
+(rerunfilecheck)             Checksum: 96E92D9F27816686AA209A88619D2D74;5755.
  ) 
 Here is how much of TeX's memory you used:
- 15820 strings out of 474485
- 263196 string characters out of 5742317
+ 15827 strings out of 474485
+ 263288 string characters out of 5742317
  1952542 words of memory out of 5000000
- 37777 multiletter control sequences out of 15000+600000
+ 37781 multiletter control sequences out of 15000+600000
  564287 words of font info for 57 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
  67i,9n,77p,906b,616s stack positions out of 10000i,1000n,20000p,200000b,200000s
  <C:\Users\Victoria\AppData\Local\MiKTeX\fonts/pk/ljfour/jknappen/ec/dpi600\tcrm1200.pk><C:/Users/Victoria/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmbx12.pfb><C:/Users/Victoria/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmmi12.pfb><C:/Users/Victoria/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmr12.pfb><C:/Users/Victoria/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmr17.pfb><C:/Users/Victoria/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmti12.pfb>
-Output written on Informe_Final_Stiffio.pdf (30 pages, 6527075 bytes).
+Output written on Informe_Final_Stiffio.pdf (31 pages, 6529328 bytes).
 PDF statistics:
- 501 PDF objects out of 1000 (max. 8388607)
- 118 named destinations out of 1000 (max. 500000)
+ 509 PDF objects out of 1000 (max. 8388607)
+ 121 named destinations out of 1000 (max. 500000)
  367 words of extra memory for PDF output out of 10000 (max. 10000000)
 

@@ -2,11 +2,81 @@
 % TíÍTULO
 \section*{Anexos}
 % ANEXO A =================================================================================================================
-\section{Conexionado de pines}
+\section{Asignación de pines del circuito electrónico}
 \label{anexo:ConexionPines}
 
+\begin{table}[H]
+    \centering
+    \caption{Pines de conexión de la Pantalla TFT a la ESP32}
+    \label{tab:ConexionPantalla}
+    
+    % {|l|l|} significa: Línea | Columna Izq | Línea | Columna Izq | Línea
+    \begin{tabular}{|l|l|} 
+        \hline
+        \textbf{Pin Pantalla TFT} & \textbf{Pin ESP32} \\
+        \hline
+        VCC             & 3V3 \\
+        \hline
+        GND             & GND \\
+        \hline
+        CS              & GPIO 5 \\
+        \hline
+        RESET           & GPIO 4 \\
+        \hline
+        DC / RS         & GPIO 2 \\
+        \hline
+        SDI (MOSI)      & GPIO 23 \\
+        \hline
+        SCK             & GPIO 18 \\
+        \hline
+        LED             & 3V3 \\
+        \hline
+        SDO (MISO)      & GPIO 19 \\
+        \hline
+        T\_CLOCK (Touch)   & GPIO 18 \\
+        \hline
+        T\_CS (Touch)   & GPIO 15 \\
+        \hline
+        T\_DIN (Touch)   & GPIO 23 \\
+        \hline
+        T\_DO (Touch)   & GPIO 19 \\
+        \hline
+        T\_IRQ (Touch)   & GPIO 27 \\ 
+        \hline
+
+    \end{tabular}
+\end{table}
+
+
+
+
+\begin{table}[H]
+    \centering
+    \caption{Pines de conexión de los sensores MAX3012 a la ESP32}
+    \label{tab:ConexionSensores}
+
+    \begin{tabular}{|l|l|} 
+        \hline
+        \textbf{Pin Pantalla TFT} & \textbf{Pin ESP32} \\
+        \hline
+        VCC             & 3V3 \\
+        \hline
+        GND             & GND \\
+        \hline
+        SDA1              & GPIO 21 \\
+        \hline
+        SCL1           & GPIO 22 \\
+        \hline
+        SDA2         & GPIO 25 \\
+        \hline
+        SCL2      & GPIO 26 \\
+        \hline
+
+    \end{tabular}
+\end{table}
 
 % ANEXO B =================================================================================================================
+\newpage
 \section{Modelo 3D  de la carcasa}
 \label{anexo:ModeloCarcasa}
 
@@ -38,6 +108,7 @@
 
 
 % ANEXO C =================================================================================================================
+\vspace{1cm}
 \section{Modelo 3D del encapsulado de sensores}
 \label{anexo:ModeloSensor}
 
@@ -55,11 +126,12 @@
     \end{minipage}
     
 \captionsetup{margin=1.5cm, justification=centering}
-        \caption{Frente (izquierda) y contrafrente (derecha) del modelo de la pieza frontal para el encapsulado del sensor.}
+        \caption{Vista frontal (izquierda) y posterior (derecha) del modelo 3D de la pieza frontal para el encapsulado del sensor.}
         \label{fig:Sensor Solid}
         \end{figure}
 
 % ANEXO C =================================================================================================================
+\newpage
 \section{factor de corrección altura}
 \begin{table}[!ht]
     \centering

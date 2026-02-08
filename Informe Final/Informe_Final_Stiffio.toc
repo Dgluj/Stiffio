@@ -33,7 +33,7 @@
 \contentsline {section}{\numberline {8}Conclusiones}{21}{section.8}%
 \contentsline {section}{Bibliografía}{22}{section.8}%
 \etoc@depthtag {anexo}
-\contentsline {section}{\numberline {A}Conexionado de pines}{24}{appendix.Alph1}%
-\contentsline {section}{\numberline {B}Modelo 3D de la carcasa}{24}{appendix.Alph2}%
-\contentsline {section}{\numberline {C}Modelo 3D del encapsulado de sensores}{25}{appendix.Alph3}%
-\contentsline {section}{\numberline {D}factor de corrección altura}{25}{appendix.Alph4}%
+\contentsline {section}{\numberline {A}Asignación de pines del circuito electrónico}{24}{appendix.Alph1}%
+\contentsline {section}{\numberline {B}Modelo 3D de la carcasa}{25}{appendix.Alph2}%
+\contentsline {section}{\numberline {C}Modelo 3D del encapsulado de sensores}{26}{appendix.Alph3}%
+\contentsline {section}{\numberline {D}factor de corrección altura}{27}{appendix.Alph4}%
