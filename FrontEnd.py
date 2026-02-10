@@ -12,8 +12,6 @@ import time
 import csv
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
-
-
 from datetime import datetime
 
 from PyQt6.QtWidgets import (
@@ -51,7 +49,7 @@ class WelcomeScreen(QWidget):
 
 
         # Logo -----------------------------------------------------------
-        logo_path = "Logo invertido.png" # Si está en la misma carpeta alcanza solo con el nombre del archivo
+        logo_path = "Logo invertido.png"
         if os.path.exists(logo_path):
             logo_label = QLabel()
             pixmap = QPixmap(logo_path)
@@ -61,7 +59,7 @@ class WelcomeScreen(QWidget):
             layout.addWidget(logo_label)
 
         # Texto -----------------------------------------------------------
-        text_label = QLabel("Sistema de Medición de Rigidez Arterial")
+        text_label = QLabel("Sistema de Medición de Velocidad de Onda de Pulso")
         text_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         text_label.setStyleSheet("font-size: 16pt; font-weight: bold;")
         layout.addWidget(text_label)
@@ -254,8 +252,7 @@ class PatientDataScreen(QWidget):
         self.observations_input.setFixedWidth(750)
         self.observations_input.setFixedHeight(50)
         self.observations_input.setPlaceholderText("Ingrese síntomas, antecedentes u otras observaciones relevantes...")
-        # AGREGAR ESTA LÍNEA para evitar que el texto expanda el widget:
-        self.observations_input.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
+        self.observations_input.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOn) # Evita que el texto expanda el widget
         self.layout.addWidget(self.observations_input, alignment=Qt.AlignmentFlag.AlignCenter)
         self.layout.addSpacing(10)
 
@@ -451,6 +448,10 @@ class PatientDataScreen(QWidget):
             msg.exec()
 
 
+
+# =================================================================================================
+# Ventana de Historial de Mediciones
+# =================================================================================================
 class HistoryScreen(QWidget):
     def save_pdf(self, report_text):
         file_path, _ = QFileDialog.getSaveFileName(
@@ -680,15 +681,16 @@ class HistoryScreen(QWidget):
                 self.table.setItem(r, c + 1, item)
 
             actions_widget = QWidget()
+            actions_widget.setStyleSheet("background-color: transparent;") 
             actions_layout = QHBoxLayout(actions_widget)
             actions_layout.setContentsMargins(5, 2, 5, 2)
             actions_layout.setSpacing(8)
 
-            print_button = QPushButton()
-            print_button.setIcon(QIcon("print-icon.png"))
-            print_button.setIconSize(QSize(24, 24))
-            print_button.setFixedSize(50, 50)
-            print_button.setStyleSheet("""
+            download_button = QPushButton()
+            download_button.setIcon(QIcon("download-icon.png"))
+            download_button.setIconSize(QSize(35, 35))
+            download_button.setFixedSize(50, 50)
+            download_button.setStyleSheet("""
                 QPushButton {
                     background-color: transparent;
                     border: none;
@@ -697,12 +699,12 @@ class HistoryScreen(QWidget):
                     background-color: rgba(255, 255, 255, 0.1);
                 }
             """)
-            print_button.clicked.connect(lambda checked, row=r: self.print_record(row))
-            actions_layout.addWidget(print_button)
+            download_button.clicked.connect(lambda checked, row=r: self.print_record(row))
+            actions_layout.addWidget(download_button)
 
             delete_button = QPushButton()
             delete_button.setIcon(QIcon("delete-icon.png"))
-            delete_button.setIconSize(QSize(24, 24))
+            delete_button.setIconSize(QSize(35, 35))
             delete_button.setFixedSize(50, 50)
             delete_button.setStyleSheet("""
                 QPushButton {
@@ -749,7 +751,7 @@ class HistoryScreen(QWidget):
         msg.setFont(font)
 
         # Botones personalizados
-        yes_button = msg.addButton("Sí, Eliminar", QMessageBox.ButtonRole.YesRole)
+        yes_button = msg.addButton("Eliminar", QMessageBox.ButtonRole.YesRole)
         no_button = msg.addButton("Cancelar", QMessageBox.ButtonRole.NoRole)
 
         yes_button.setStyleSheet("""
@@ -909,19 +911,17 @@ class HistoryScreen(QWidget):
         try:
             pwv_value = float(pwv)
             if pwv_value < 7.0:
-                pwv_status = " (Saludable)"
+                pwv_status = " (Normal)"
             else:
-                pwv_status = " (Elevado)"
+                pwv_status = " (Anormal)"
         except ValueError:
             pass
     
         # Construir el texto del reporte
         report_text = f"""
 
-REPORTE DE MEDICIÓN - STIFFIO
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Fecha y Hora: {fecha_hora}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 DATOS DEL PACIENTE:
   • Nombre: {nombre}
@@ -929,22 +929,22 @@ DATOS DEL PACIENTE:
   • Altura: {altura} cm
   • Sexo: {sexo}
 
+  
 RESULTADOS DE LA MEDICIÓN:
   • Frecuencia Cardíaca: {hr} bpm
   • PWV (Velocidad de Onda de Pulso): {pwv} m/s{pwv_status}
+
 """
-        
         # Agregar observaciones solo si existen
         if observaciones and observaciones.strip():
             report_text += f"""
-OBSERVACIONES DEL MÉDICO:
+OBSERVACIONES:
   {observaciones}
 """
         
         report_text += """
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         """
-
 
         msg.setText(report_text)
         msg.setInformativeText("Este reporte se puede exportar como archivo pdf.")
@@ -987,7 +987,7 @@ OBSERVACIONES DEL MÉDICO:
 
         msg.exec()
 
-        # If print was clicked, trigger system print dialog
+        #
         if msg.clickedButton() == print_btn:
             self.save_pdf(report_text)
 
@@ -1070,6 +1070,13 @@ OBSERVACIONES DEL MÉDICO:
         )
 
         dialog.accept()
+
+
+
+
+
+
+
 
 # =================================================================================================
 # Ventana Principal

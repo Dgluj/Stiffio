@@ -471,7 +471,7 @@ El dispositivo está dirigido al uso en consultorio clínico. La propuesta no bu
         
     % SOFTWARE -----------------------------------------------------------------------------------------------------
     \subsection{Software}
-        \subsubsection{Adquisición y Transmisión de Datos}
+        \subsubsection{Arquitectura del sistema y flujo de datos}
         El firmware de la ESP32 se encarga de muestrear las señales infrarrojas provenientes de los sensores MAX30102 a 50 Hz (intervalo de 20 ms). Tras la adquisición, las señales son filtradas y procesadas localmente para obtener en tiempo real la frecuencia cardíaca, cuyo cálculo se detalla en secciones posteriores. Además, el sistema monitorea el estado de conexión de cada sensor, enviando esta información para que la interfaz pueda generar alertas ante cualquier desconexión o falla en la adquisición.
 
         \vspace{0.1cm}
@@ -481,7 +481,7 @@ El dispositivo está dirigido al uso en consultorio clínico. La propuesta no bu
         
 
             
-        \subsubsection{Preprocesamiento}
+        \subsubsection{Filtrado digital de las señales}
         Para mejorar la calidad de la señal fotopletismográfica adquirida por los sensores MAX30102, se implementó en el microcontrolador un preprocesamiento de la misma.
 
         \vspace{0.1cm}
@@ -557,8 +557,13 @@ El dispositivo está dirigido al uso en consultorio clínico. La propuesta no bu
         \label{fig:Arterias}
         \end{figure}
         
-        \subsubsection{Interfaz Gráfica}
-        Se diseñó una interfaz gráfica que permite visualizar los valores medidos por el dispositivo y controlar la sesión de adquisición en tiempo real. La aplicación de escritorio fue desarrollada en Python utilizando el framework PyQt.
+
+        \subsubsection{Interfaz táctil en display integrado (Modo Test Rápido)}
+
+
+
+        \subsubsection{Aplicación de escritorio (Modo Estudio Clínico)}
+        Se diseñó una aplicación de escritorio que permite visualizar los valores medidos por el dispositivo y controlar la sesión de adquisición en tiempo real. La aplicación de escritorio fue desarrollada en Python utilizando el framework PyQt.
 
         \vspace{0.1cm}
         
