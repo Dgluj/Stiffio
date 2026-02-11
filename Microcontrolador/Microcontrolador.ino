@@ -256,13 +256,13 @@ void TaskSensores(void *pvParameters) {
 
             if (faseMedicion == 2) {
                // Detección S1 (Cuello) - ALGORITMO ADAPTATIVO para PWV
-               if (checkForBeatS1(ir1) == true) {  // Detector independiente para S1
+               if (checkForBeatS1(valFinal1) == true) {  // Detector independiente para S1
                    idxPeakS1 = writeHead;  // Guardar índice para timestamp correcto
                    waitingForS2 = true;
                }
                
                // Detección S2 (Muñeca) - ALGORITMO SPARKFUN con promedio de 10 latidos
-               if (checkForBeat(ir2) == true) {  // checkForBeat() de SparkFun (usa IR raw)
+               if (checkForBeat(valFinal2) == true) {  // checkForBeat() de SparkFun (usa IR raw)
                   long delta = now - lastBeatTime_sparkfun;
                   lastBeatTime_sparkfun = now;
                   
