@@ -85,6 +85,10 @@ float pwvBuffer_global[10] = {0.0};
 int pwvIdx_global = 0;
 int validSamplesPWV_global = 0;
 
+// Variables para HPF anti-deriva
+float lastVal1_centered = 0;
+float lastVal2_centered = 0;
+
 // ======================================================================
 // OBJETOS
 // ======================================================================
@@ -157,11 +161,14 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
 // ======================================================================
 void TaskSensores(void *pvParameters) {
   
-  // Filtros - Estándar IEEE para PPG
+  // Filtros anti-deriva mejorados
   float s1_lp = 0, s1_dc = 0;
   float s2_lp = 0, s2_dc = 0;
-  const float ALPHA_LP = 0.80;  // Estándar IEEE (preserva dinámica cardíaca)
-  const float ALPHA_DC = 0.96;  // Estándar para PPG real
+  float s1_hp = 0, s2_hp = 0;  // High-pass filter para deriva
+  const float ALPHA_LP = 0.75;  // Más suavizado (0.80 → 0.75)
+  const float ALPHA_DC = 0.97;  // Más drift removal (0.96 → 0.97)
+  const float ALPHA_HP_S1 = 0.97;  // HPF MÁS SUAVE para carótida @ 0.3Hz
+  const float ALPHA_HP_S2 = 0.95;  // HPF normal para muñeca @ 0.5Hz
   const long SENSOR_THRESHOLD = 50000; 
   
   // Media Móvil (usar globales bufMA1_global, bufMA2_global, idxMA_global)
@@ -169,7 +176,7 @@ void TaskSensores(void *pvParameters) {
   // Tiempo
   unsigned long startContactTime = 0; 
   unsigned long baseTime = 0;         
-  const unsigned long TIEMPO_ESTABILIZACION = 5000; 
+  const unsigned long TIEMPO_ESTABILIZACION = 10000;  // 10s para estabilización completa 
 
   // Detección PWV/HR
   float lastValS1 = 0; float lastValS2 = 0;
@@ -209,19 +216,30 @@ void TaskSensores(void *pvParameters) {
         s2ok = currentS2;
 
         if (currentS1 && currentS2) {
-            // --- FILTRADO ---
+            // --- CASCADA DE FILTRADO ANTI-DERIVA ---
+            
+            // 1. Low-Pass Filter (suaviza ruido de alta frecuencia)
             if (s1_lp == 0) s1_lp = ir1; if (s2_lp == 0) s2_lp = ir2;
             s1_lp = (s1_lp * ALPHA_LP) + (ir1 * (1.0 - ALPHA_LP));
             s2_lp = (s2_lp * ALPHA_LP) + (ir2 * (1.0 - ALPHA_LP));
 
+            // 2. DC Removal (elimina offset lento)
             if (s1_dc == 0) s1_dc = ir1; if (s2_dc == 0) s2_dc = ir2;
             s1_dc = (s1_dc * ALPHA_DC) + (s1_lp * (1.0 - ALPHA_DC));
             s2_dc = (s2_dc * ALPHA_DC) + (s2_lp * (1.0 - ALPHA_DC));
 
-            float rawVal1 = s1_lp - s1_dc;
-            float rawVal2 = s2_lp - s2_dc;
+            float val1_centered = s1_lp - s1_dc;
+            float val2_centered = s2_lp - s2_dc;
 
-            bufMA1_global[idxMA_global] = rawVal1; bufMA2_global[idxMA_global] = rawVal2;
+            // 3. High-Pass Filter diferenciado (carótida vs muñeca)
+            s1_hp = ALPHA_HP_S1 * (s1_hp + val1_centered - lastVal1_centered);  // Carótida: HPF @ 0.3Hz
+            s2_hp = ALPHA_HP_S2 * (s2_hp + val2_centered - lastVal2_centered);  // Muñeca: HPF @ 0.5Hz
+            lastVal1_centered = val1_centered;
+            lastVal2_centered = val2_centered;
+
+            // 4. Media Móvil (suavizado final sin perder picos)
+            bufMA1_global[idxMA_global] = s1_hp;
+            bufMA2_global[idxMA_global] = s2_hp;
             idxMA_global = (idxMA_global + 1) % MA_SIZE;
 
             float sum1 = 0; float sum2 = 0;
@@ -354,6 +372,8 @@ void TaskSensores(void *pvParameters) {
              if (faseMedicion != 0) {
                  faseMedicion = 0; porcentajeEstabilizacion = 0;
                  s1_lp=0; s1_dc=0; s2_lp=0; s2_dc=0;
+                 s1_hp=0; s2_hp=0;  // Reset HPF
+                 lastVal1_centered=0; lastVal2_centered=0;  // Reset HPF vars
                  bpmMostrado = 0; pwvMostrado = 0.0;
                  sensorProx.nextSample(); sensorDist.nextSample();
              }
