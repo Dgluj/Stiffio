@@ -71,6 +71,20 @@ int modoVisualizacion = 1;
 
 portMUX_TYPE bufferMux = portMUX_INITIALIZER_UNLOCKED;
 
+// GLOBALES PARA TASKSENSORES (evitar stack overflow)
+const int MA_SIZE = 4;
+float bufMA1_global[4] = {0};
+float bufMA2_global[4] = {0};
+int idxMA_global = 0;
+
+const int AVG_SIZE = 10;
+int bpmBuffer_global[10] = {0}; 
+int bpmIdx_global = 0;
+int validSamplesBPM_global = 0;
+float pwvBuffer_global[10] = {0.0}; 
+int pwvIdx_global = 0;
+int validSamplesPWV_global = 0;
+
 // ======================================================================
 // OBJETOS
 // ======================================================================
@@ -143,18 +157,14 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
 // ======================================================================
 void TaskSensores(void *pvParameters) {
   
-  // Filtros
+  // Filtros - Estándar IEEE para PPG
   float s1_lp = 0, s1_dc = 0;
   float s2_lp = 0, s2_dc = 0;
-  const float ALPHA_LP = 0.7; 
-  const float ALPHA_DC = 0.95;
+  const float ALPHA_LP = 0.80;  // Estándar IEEE (preserva dinámica cardíaca)
+  const float ALPHA_DC = 0.96;  // Estándar para PPG real
   const long SENSOR_THRESHOLD = 50000; 
   
-  // Media Móvil
-  const int MA_SIZE = 5; 
-  float bufMA1[MA_SIZE] = {0};
-  float bufMA2[MA_SIZE] = {0};
-  int idxMA = 0;
+  // Media Móvil (usar globales bufMA1_global, bufMA2_global, idxMA_global)
 
   // Tiempo
   unsigned long startContactTime = 0; 
@@ -163,16 +173,16 @@ void TaskSensores(void *pvParameters) {
 
   // Detección PWV/HR
   float lastValS1 = 0; float lastValS2 = 0;
-  unsigned long timePeakS1 = 0; 
+  int idxPeakS1 = -1;           // Índice en buffer del último pico S1
+  int idxPeakS2 = -1;           // Índice en buffer del último pico S2
+  int lastIdxPeakS2 = -1;       // Índice del pico anterior (para HR)
+  unsigned long timePeakS1 = 0; // Solo para refractory period
   bool waitingForS2 = false;    
-  unsigned long lastBeatTime = 0; 
-  const int REFRACTORY_PERIOD = 250; 
-  const float BEAT_THRESHOLD = 15.0; 
+  unsigned long lastBeatTime = 0; // Solo para refractory period
+  const int REFRACTORY_PERIOD = 350;  // Fisiológico
+  const float BEAT_THRESHOLD = 20.0;  // Selectivo 
   
-  // Buffers Promedio
-  const int AVG_SIZE = 10;
-  int bpmBuffer[AVG_SIZE] = {0}; int bpmIdx = 0; int validSamplesBPM = 0;
-  float pwvBuffer[AVG_SIZE] = {0.0}; int pwvIdx = 0; int validSamplesPWV = 0;
+  // Buffers Promedio (usando globales bpmBuffer_global, pwvBuffer_global, etc)
 
   for (;;) {
     if (medicionActiva) {
@@ -185,6 +195,9 @@ void TaskSensores(void *pvParameters) {
       sensorDist.check(); 
       
       if (sensorProx.available()) {
+        // Timestamp EXACTO cuando llega la muestra
+        unsigned long sampleTimestamp = millis();
+        
         // Leer sensores
         long ir1 = sensorProx.getIR();
         long ir2 = sensorDist.getIR(); 
@@ -208,11 +221,11 @@ void TaskSensores(void *pvParameters) {
             float rawVal1 = s1_lp - s1_dc;
             float rawVal2 = s2_lp - s2_dc;
 
-            bufMA1[idxMA] = rawVal1; bufMA2[idxMA] = rawVal2;
-            idxMA = (idxMA + 1) % MA_SIZE;
+            bufMA1_global[idxMA_global] = rawVal1; bufMA2_global[idxMA_global] = rawVal2;
+            idxMA_global = (idxMA_global + 1) % MA_SIZE;
 
             float sum1 = 0; float sum2 = 0;
-            for(int i=0; i<MA_SIZE; i++) { sum1 += bufMA1[i]; sum2 += bufMA2[i]; }
+            for(int i=0; i<MA_SIZE; i++) { sum1 += bufMA1_global[i]; sum2 += bufMA2_global[i]; }
             float valFinal1 = sum1 / MA_SIZE;
             float valFinal2 = sum2 / MA_SIZE;
 
@@ -223,43 +236,61 @@ void TaskSensores(void *pvParameters) {
             lastValS1 = valFinal1; lastValS2 = valFinal2;
 
             if (faseMedicion == 2) {
-               // Detección S1 (Cuello)
+               // Detección S1 (Cuello) - Guardar ÍNDICE del pico
                if (deltaS1 > BEAT_THRESHOLD && !waitingForS2) {
                    if (now - timePeakS1 > REFRACTORY_PERIOD) {
-                       timePeakS1 = now; waitingForS2 = true;
+                       idxPeakS1 = writeHead;  // Guardar índice para timestamp correcto
+                       timePeakS1 = now;       // Solo para refractory
+                       waitingForS2 = true;
                    }
                }
-               // Detección S2 (Muñeca)
+               
+               // Detección S2 (Muñeca) - Guardar ÍNDICE y calcular con timestamps reales
                if (deltaS2 > BEAT_THRESHOLD && (now - lastBeatTime > REFRACTORY_PERIOD)) {
-                  unsigned long deltaBeat = now - lastBeatTime;
-                  lastBeatTime = now;
-                  int instantBPM = 60000 / deltaBeat;
-                  if (instantBPM > 40 && instantBPM < 200) {
-                     bpmBuffer[bpmIdx] = instantBPM; bpmIdx = (bpmIdx + 1) % AVG_SIZE;
-                     if (validSamplesBPM < AVG_SIZE) validSamplesBPM++;
-                     if (validSamplesBPM >= AVG_SIZE) {
-                        long total = 0; for(int i=0; i<AVG_SIZE; i++) total += bpmBuffer[i];
-                        bpmMostrado = total / AVG_SIZE;
-                     }
+                  int currentIdxS2 = writeHead;  // Índice actual
+                  lastBeatTime = now;  // Solo para refractory
+                  
+                  // HR: Calcular usando timestamps guardados en buffer
+                  if (lastIdxPeakS2 >= 0) {
+                      unsigned long timeLastPeak = buffer_time[lastIdxPeakS2];
+                      unsigned long timeCurrentPeak = buffer_time[currentIdxS2];
+                      unsigned long deltaBeat = timeCurrentPeak - timeLastPeak;
+                      
+                      int instantBPM = 60000 / deltaBeat;
+                      if (instantBPM > 40 && instantBPM < 200) {
+                         bpmBuffer_global[bpmIdx_global] = instantBPM; 
+                         bpmIdx_global = (bpmIdx_global + 1) % AVG_SIZE;
+                         if (validSamplesBPM_global < AVG_SIZE) validSamplesBPM_global++;
+                         if (validSamplesBPM_global >= AVG_SIZE) {
+                            long total = 0; 
+                            for(int i=0; i<AVG_SIZE; i++) total += bpmBuffer_global[i];
+                            bpmMostrado = total / AVG_SIZE;
+                         }
+                      }
                   }
-                  // PWV
-                  if (waitingForS2) {
-                      long transitTime = now - timePeakS1;
+                  
+                  lastIdxPeakS2 = currentIdxS2;  // Actualizar índice anterior
+                  
+                  // PWV: Calcular usando timestamps guardados en buffer
+                  if (waitingForS2 && idxPeakS1 >= 0) {
+                      unsigned long timeS1 = buffer_time[idxPeakS1];
+                      unsigned long timeS2 = buffer_time[currentIdxS2];
+                      long transitTime = timeS2 - timeS1;
                       waitingForS2 = false;
-                      // Filtro de tiempo fisiológico (evita dedo-dedo falso o ruido)
+                      
+                      // Filtro de tiempo fisiológico
                       if (transitTime > 20 && transitTime < 400) {
-                          
-                          // USAR ALTURA RECIBIDA DE LA PC (O DEL TEST RÁPIDO)
-                          int alturaCalc = (pacienteAltura > 0) ? pacienteAltura : 170; // Default 170
-                          
+                          int alturaCalc = (pacienteAltura > 0) ? pacienteAltura : 170;
                           float distMeters = (alturaCalc * 0.436) / 100.0;
                           float instantPWV = distMeters / (transitTime / 1000.0);
                           
                           if (instantPWV > 3.0 && instantPWV < 50.0) {
-                              pwvBuffer[pwvIdx] = instantPWV; pwvIdx = (pwvIdx + 1) % AVG_SIZE;
-                              if (validSamplesPWV < AVG_SIZE) validSamplesPWV++;
-                              if (validSamplesPWV >= AVG_SIZE) {
-                                  float totalPWV = 0; for(int i=0; i<AVG_SIZE; i++) totalPWV += pwvBuffer[i];
+                              pwvBuffer_global[pwvIdx_global] = instantPWV; 
+                              pwvIdx_global = (pwvIdx_global + 1) % AVG_SIZE;
+                              if (validSamplesPWV_global < AVG_SIZE) validSamplesPWV_global++;
+                              if (validSamplesPWV_global >= AVG_SIZE) {
+                                  float totalPWV = 0; 
+                                  for(int i=0; i<AVG_SIZE; i++) totalPWV += pwvBuffer_global[i];
                                   pwvMostrado = totalPWV / AVG_SIZE;
                               }
                           }
@@ -271,11 +302,13 @@ void TaskSensores(void *pvParameters) {
             // --- ACCIÓN SEGÚN MODO ---
             if (modoActual == MODO_TEST_RAPIDO) {
                 if (faseMedicion == 2) {
-                    unsigned long tiempoRelativo = millis() - baseTime;
+                    unsigned long tiempoRelativo = sampleTimestamp - baseTime;  // Usa timestamp capturado
                     portENTER_CRITICAL(&bufferMux); 
-                    buffer_s1[writeHead] = valFinal1; buffer_s2[writeHead] = valFinal2;
+                    buffer_s1[writeHead] = valFinal1; 
+                    buffer_s2[writeHead] = valFinal2;
                     buffer_time[writeHead] = tiempoRelativo;
-                    writeHead++; if (writeHead >= BUFFER_SIZE) writeHead = 0;
+                    writeHead++; 
+                    if (writeHead >= BUFFER_SIZE) writeHead = 0;
                     portEXIT_CRITICAL(&bufferMux);
                 }
             } 
@@ -308,8 +341,8 @@ void TaskSensores(void *pvParameters) {
                   }
                   bpmMostrado = 0; 
                   pwvMostrado = 0.0;
-                  validSamplesBPM = 0; 
-                  validSamplesPWV = 0;
+                  validSamplesBPM_global = 0; 
+                  validSamplesPWV_global = 0;
                }
             }
 
