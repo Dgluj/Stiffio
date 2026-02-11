@@ -8,7 +8,8 @@
 #include <WiFi.h>
 #include <WebSocketsServer.h>
 #include "MAX30105.h"
-#include "heartRate.h"  // Algoritmo SparkFun para detección de latidos
+#include "heartRate.h"  // Algoritmo SparkFun para detección de latidos S2
+#include "heartRateDual.h"  // Detector adaptativo para S1 (carótida)
 #include "bitmaps.h" // Imagenes
 
 
@@ -254,13 +255,10 @@ void TaskSensores(void *pvParameters) {
             lastValS1 = valFinal1; lastValS2 = valFinal2;
 
             if (faseMedicion == 2) {
-               // Detección S1 (Cuello) - Guardar ÍNDICE del pico
-               if (deltaS1 > BEAT_THRESHOLD && !waitingForS2) {
-                   if (now - timePeakS1 > REFRACTORY_PERIOD) {
-                       idxPeakS1 = writeHead;  // Guardar índice para timestamp correcto
-                       timePeakS1 = now;       // Solo para refractory
-                       waitingForS2 = true;
-                   }
+               // Detección S1 (Cuello) - ALGORITMO ADAPTATIVO para PWV
+               if (checkForBeatS1(ir1) == true) {  // Detector independiente para S1
+                   idxPeakS1 = writeHead;  // Guardar índice para timestamp correcto
+                   waitingForS2 = true;
                }
                
                // Detección S2 (Muñeca) - ALGORITMO SPARKFUN con promedio de 10 latidos
@@ -278,13 +276,14 @@ void TaskSensores(void *pvParameters) {
                       bpmIdx_global = (bpmIdx_global + 1) % AVG_SIZE;
                       if (validSamplesBPM_global < AVG_SIZE) validSamplesBPM_global++;
                       
-                      // Calcular promedio cuando tenemos suficientes muestras
-                      if (validSamplesBPM_global >= AVG_SIZE) {
+                      // Mostrar HR desde 5 latidos (no esperar 10)
+                      if (validSamplesBPM_global >= 5) {
                           long total = 0;
-                          for (int i = 0; i < AVG_SIZE; i++) {
+                          int count = (validSamplesBPM_global < AVG_SIZE) ? validSamplesBPM_global : AVG_SIZE;
+                          for (int i = 0; i < count; i++) {
                               total += bpmBuffer_global[i];
                           }
-                          bpmMostrado = total / AVG_SIZE;
+                          bpmMostrado = total / count;
                       }
                       
                       // Guardar índice para PWV (usa mismo timestamp que HR)
@@ -309,10 +308,13 @@ void TaskSensores(void *pvParameters) {
                            pwvBuffer_global[pwvIdx_global] = instantPWV; 
                            pwvIdx_global = (pwvIdx_global + 1) % AVG_SIZE;
                            if (validSamplesPWV_global < AVG_SIZE) validSamplesPWV_global++;
-                           if (validSamplesPWV_global >= AVG_SIZE) {
+                           
+                           // Mostrar PWV con solo 2 muestras para rapidez
+                           if (validSamplesPWV_global >= 2) {
                                float totalPWV = 0; 
-                               for(int i=0; i<AVG_SIZE; i++) totalPWV += pwvBuffer_global[i];
-                               pwvMostrado = totalPWV / AVG_SIZE;
+                               int count = (validSamplesPWV_global < AVG_SIZE) ? validSamplesPWV_global : AVG_SIZE;
+                               for(int i=0; i<count; i++) totalPWV += pwvBuffer_global[i];
+                               pwvMostrado = totalPWV / count;
                            }
                        }
                    }
@@ -1002,7 +1004,7 @@ bool iniciarSensores() {
   Wire.setClock(400000); Wire1.setClock(400000);
   if (!sensorProx.begin(Wire, I2C_SPEED_FAST)) return false;
   if (!sensorDist.begin(Wire1, I2C_SPEED_FAST)) return false;
-  sensorProx.setup(20, 8, 2, 400, 411, 4096);
+  sensorProx.setup(30, 8, 2, 400, 411, 4096);  // Carótida: brightness 30 (antes 20)
   sensorDist.setup(30, 8, 2, 400, 411, 4096);
   return true;
 }
