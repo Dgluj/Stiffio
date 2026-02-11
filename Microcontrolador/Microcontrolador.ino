@@ -8,6 +8,7 @@
 #include <WiFi.h>
 #include <WebSocketsServer.h>
 #include "MAX30105.h"
+#include "heartRate.h"  // Algoritmo SparkFun para detección de latidos
 #include "bitmaps.h" // Imagenes
 
 
@@ -178,16 +179,15 @@ void TaskSensores(void *pvParameters) {
   unsigned long baseTime = 0;         
   const unsigned long TIEMPO_ESTABILIZACION = 10000;  // 10s para estabilización completa 
 
-  // Detección PWV/HR
+  // Detección PWV/HR - HR con algoritmo SparkFun
   float lastValS1 = 0; float lastValS2 = 0;
   int idxPeakS1 = -1;           // Índice en buffer del último pico S1
   int idxPeakS2 = -1;           // Índice en buffer del último pico S2
-  int lastIdxPeakS2 = -1;       // Índice del pico anterior (para HR)
+  long lastBeatTime_sparkfun = 0;  // Timestamp del último latido (SparkFun)
   unsigned long timePeakS1 = 0; // Solo para refractory period
   bool waitingForS2 = false;    
-  unsigned long lastBeatTime = 0; // Solo para refractory period
   const int REFRACTORY_PERIOD = 350;  // Fisiológico
-  const float BEAT_THRESHOLD = 20.0;  // Selectivo 
+  const float BEAT_THRESHOLD = 20.0;  // Selectivo (solo para S1) 
   
   // Buffers Promedio (usando globales bpmBuffer_global, pwvBuffer_global, etc)
 
@@ -263,57 +263,59 @@ void TaskSensores(void *pvParameters) {
                    }
                }
                
-               // Detección S2 (Muñeca) - Guardar ÍNDICE y calcular con timestamps reales
-               if (deltaS2 > BEAT_THRESHOLD && (now - lastBeatTime > REFRACTORY_PERIOD)) {
-                  int currentIdxS2 = writeHead;  // Índice actual
-                  lastBeatTime = now;  // Solo para refractory
+               // Detección S2 (Muñeca) - ALGORITMO SPARKFUN con promedio de 10 latidos
+               if (checkForBeat(ir2) == true) {  // checkForBeat() de SparkFun (usa IR raw)
+                  long delta = now - lastBeatTime_sparkfun;
+                  lastBeatTime_sparkfun = now;
                   
-                  // HR: Calcular usando timestamps guardados en buffer
-                  if (lastIdxPeakS2 >= 0) {
-                      unsigned long timeLastPeak = buffer_time[lastIdxPeakS2];
-                      unsigned long timeCurrentPeak = buffer_time[currentIdxS2];
-                      unsigned long deltaBeat = timeCurrentPeak - timeLastPeak;
+                  // Calcular BPM instantáneo
+                  float beatsPerMinute = 60.0 / (delta / 1000.0);
+                  
+                  // Validación fisiológica
+                  if (beatsPerMinute > 40 && beatsPerMinute < 200) {
+                      // Guardar en buffer circular de 10 latidos
+                      bpmBuffer_global[bpmIdx_global] = (int)beatsPerMinute;
+                      bpmIdx_global = (bpmIdx_global + 1) % AVG_SIZE;
+                      if (validSamplesBPM_global < AVG_SIZE) validSamplesBPM_global++;
                       
-                      int instantBPM = 60000 / deltaBeat;
-                      if (instantBPM > 40 && instantBPM < 200) {
-                         bpmBuffer_global[bpmIdx_global] = instantBPM; 
-                         bpmIdx_global = (bpmIdx_global + 1) % AVG_SIZE;
-                         if (validSamplesBPM_global < AVG_SIZE) validSamplesBPM_global++;
-                         if (validSamplesBPM_global >= AVG_SIZE) {
-                            long total = 0; 
-                            for(int i=0; i<AVG_SIZE; i++) total += bpmBuffer_global[i];
-                            bpmMostrado = total / AVG_SIZE;
-                         }
-                      }
-                  }
-                  
-                  lastIdxPeakS2 = currentIdxS2;  // Actualizar índice anterior
-                  
-                  // PWV: Calcular usando timestamps guardados en buffer
-                  if (waitingForS2 && idxPeakS1 >= 0) {
-                      unsigned long timeS1 = buffer_time[idxPeakS1];
-                      unsigned long timeS2 = buffer_time[currentIdxS2];
-                      long transitTime = timeS2 - timeS1;
-                      waitingForS2 = false;
-                      
-                      // Filtro de tiempo fisiológico
-                      if (transitTime > 20 && transitTime < 400) {
-                          int alturaCalc = (pacienteAltura > 0) ? pacienteAltura : 170;
-                          float distMeters = (alturaCalc * 0.436) / 100.0;
-                          float instantPWV = distMeters / (transitTime / 1000.0);
-                          
-                          if (instantPWV > 3.0 && instantPWV < 50.0) {
-                              pwvBuffer_global[pwvIdx_global] = instantPWV; 
-                              pwvIdx_global = (pwvIdx_global + 1) % AVG_SIZE;
-                              if (validSamplesPWV_global < AVG_SIZE) validSamplesPWV_global++;
-                              if (validSamplesPWV_global >= AVG_SIZE) {
-                                  float totalPWV = 0; 
-                                  for(int i=0; i<AVG_SIZE; i++) totalPWV += pwvBuffer_global[i];
-                                  pwvMostrado = totalPWV / AVG_SIZE;
-                              }
+                      // Calcular promedio cuando tenemos suficientes muestras
+                      if (validSamplesBPM_global >= AVG_SIZE) {
+                          long total = 0;
+                          for (int i = 0; i < AVG_SIZE; i++) {
+                              total += bpmBuffer_global[i];
                           }
+                          bpmMostrado = total / AVG_SIZE;
                       }
+                      
+                      // Guardar índice para PWV (usa mismo timestamp que HR)
+                      idxPeakS2 = writeHead;
                   }
+               }
+                  
+               // PWV: Calcular usando timestamps guardados en buffer
+               if (waitingForS2 && idxPeakS1 >= 0 && idxPeakS2 >= 0) {
+                   unsigned long timeS1 = buffer_time[idxPeakS1];
+                   unsigned long timeS2 = buffer_time[idxPeakS2];
+                   long transitTime = timeS2 - timeS1;
+                   waitingForS2 = false;
+                   
+                   // Filtro de tiempo fisiológico
+                   if (transitTime > 20 && transitTime < 400) {
+                       int alturaCalc = (pacienteAltura > 0) ? pacienteAltura : 170;
+                       float distMeters = (alturaCalc * 0.436) / 100.0;
+                       float instantPWV = distMeters / (transitTime / 1000.0);
+                       
+                       if (instantPWV > 3.0 && instantPWV < 50.0) {
+                           pwvBuffer_global[pwvIdx_global] = instantPWV; 
+                           pwvIdx_global = (pwvIdx_global + 1) % AVG_SIZE;
+                           if (validSamplesPWV_global < AVG_SIZE) validSamplesPWV_global++;
+                           if (validSamplesPWV_global >= AVG_SIZE) {
+                               float totalPWV = 0; 
+                               for(int i=0; i<AVG_SIZE; i++) totalPWV += pwvBuffer_global[i];
+                               pwvMostrado = totalPWV / AVG_SIZE;
+                           }
+                       }
+                   }
                }
             }
 
