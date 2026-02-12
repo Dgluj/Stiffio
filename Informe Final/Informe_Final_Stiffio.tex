@@ -226,9 +226,11 @@ la necesidad de fijación manual del sensor sobre la arteria y la dependencia de
     Indicar si el valor obtenido de PWV se encuentra dentro de los rangos normales reportados en la literatura para el grupo etario del paciente.
     \vspace{0.1cm}
 
-    \item \textbf{Validación de resultados}\par 
-    Validar las mediciones de HR y PWV obtenidas con el dispositivo a partir de su comparación con un dispositivo clínico de referencia (Arteriograph, provisto por el ICBA), evaluando concordancia y precisión.
+
+    \item \textbf{Evaluación estadística de las mediciones}\par
+    Analizar las mediciones de HR y PWV obtenidas con el dispositivo mediante estudios estadísticos realizados sobre un conjunto de voluntarios, evaluando la estabilidad, dispersión y coherencia fisiológica de los resultados. En caso de contar con disponibilidad de un dispositivo clínico de referencia, se realizará adicionalmente un análisis comparativo para evaluar la concordancia y precisión de las mediciones obtenidas.
     \vspace{0.1cm}
+
 
     \item \textbf{Diseño y desarrollo de la carcasa del dispositivo}\par 
     Diseñar y fabricar una carcasa que asegure la correcta fijación de los componentes internos. El diseño debe contemplar un compartimiento de baterías aislado y de fácil acceso para el usuario, así como la integración de una pantalla táctil que posibilite el ingreso de los datos del paciente sin necesidad de la app.
@@ -375,17 +377,23 @@ El dispositivo está dirigido al uso en consultorio clínico. La propuesta no bu
         \begin{figure}[H]
         \centering
         
-        \begin{minipage}[b]{0.4\textwidth}
+        \begin{minipage}[b]{0.3\textwidth}
+            \centering
+            \includegraphics[width=\textwidth]{images/Caja 1.png}
+        \end{minipage}
+        \hspace{0.01cm} 
+        \begin{minipage}[b]{0.3\textwidth}
             \centering
             \includegraphics[width=\textwidth]{images/Caja 2.png}
         \end{minipage}
         \hspace{0.01cm} 
-        \begin{minipage}[b]{0.4\textwidth}
+        \begin{minipage}[b]{0.3\textwidth}
             \centering
-            \includegraphics[width=\textwidth]{images/Caja 1.png}
+            \includegraphics[width=\textwidth]{images/Bateria.png}
         \end{minipage}
         
-        \caption{Carcasa impresa en 3D.}
+        \captionsetup{margin=2cm, justification=centering}
+        \caption{Carcasa impresa en 3D: vista frontal (izquierda), posterior (centro) e inferior (derecha).}
         \label{fig:Carcasa}
         \end{figure}
 
@@ -396,8 +404,9 @@ El dispositivo está dirigido al uso en consultorio clínico. La propuesta no bu
 
         \begin{figure}[H]
         \centering
-        \includegraphics[width=0.6\textwidth]{images/Codigo Colores.png}
-        \caption{Referencias de colores para correcta conexión de los sensores al dispositivo}
+        \includegraphics[width=0.65\textwidth]{images/Colores Puertos.png}
+        \captionsetup{margin=1.5cm, justification=centering}
+        \caption{Código de colores para la correcta conexión de los sensores al dispositivo}
         \label{fig:Colores Conectores}
         \end{figure}
 
@@ -460,7 +469,7 @@ El dispositivo está dirigido al uso en consultorio clínico. La propuesta no bu
 
         \begin{figure}[H]
         \centering
-        \includegraphics[width=0.5\textwidth]{images/Sensor.png}
+        \includegraphics[width=0.45\textwidth]{images/Sensor.png}
         \captionsetup{margin=1.5cm, justification=centering}
         \caption{Encapsulado completo y ensamblado del sensor MAX30102}
         \label{fig:Sensor}
@@ -472,6 +481,12 @@ El dispositivo está dirigido al uso en consultorio clínico. La propuesta no bu
     % SOFTWARE -----------------------------------------------------------------------------------------------------
     \subsection{Software}
         \subsubsection{Arquitectura del sistema y flujo de datos}
+
+
+        ACA METER DIAGRAMA DE BLOQUES/FLUJO Y EXPLICAR LOS DOS MODOS DE USO
+
+
+
         El firmware de la ESP32 se encarga de muestrear las señales infrarrojas provenientes de los sensores MAX30102 a 50 Hz (intervalo de 20 ms). Tras la adquisición, las señales son filtradas y procesadas localmente para obtener en tiempo real la frecuencia cardíaca, cuyo cálculo se detalla en secciones posteriores. Además, el sistema monitorea el estado de conexión de cada sensor, enviando esta información para que la interfaz pueda generar alertas ante cualquier desconexión o falla en la adquisición.
 
         \vspace{0.1cm}
@@ -553,49 +568,140 @@ El dispositivo está dirigido al uso en consultorio clínico. La propuesta no bu
         \begin{figure}[H]
         \centering
         \includegraphics[width=0.5\textwidth]{images/Arterias.jpg}
+        \captionsetup{margin=1.5cm, justification=centering}
         \caption{Distancia recorrida por la onda de pulso en A. Aorta ascendente y Tronco braquilocefálico  B. Arteria Carótida; C. Arteria braquial y arteria radial}
         \label{fig:Arterias}
         \end{figure}
         
 
+
+    % INTERFACES DE USUARIO -----------------------------------------------------------------------------------------------------
+    \subsection{Interfaces de usuario}
+
         \subsubsection{Interfaz táctil en display integrado (Modo Test Rápido)}
+        Con el objetivo de permitir el uso autónomo del dispositivo, se desarrolló una interfaz gráfica embebida en el display táctil integrado. Esta interfaz posibilita la utilización de todas las funcionalidades principales del sistema sin necesidad de conexión a una PC, a excepción del almacenamiento y la gestión avanzada de datos, que se realizan exclusivamente mediante la aplicación de escritorio \textit{StiffioApp}.
 
+        La interfaz fue desarrollada en lenguaje C++ utilizando el entorno Arduino IDE. Para el control gráfico del display se empleó la librería \texttt{TFT\_eSPI.h}, encargada del renderizado de texto, botones, gráficos y actualización dinámica de pantalla, mientras que para la detección y procesamiento de las coordenadas del panel táctil resistivo se utilizó la librería \texttt{XPT2046\_Touchscreen.h}.  La arquitectura lógica de la interfaz se estructuró como una máquina de estados, donde cada pantalla corresponde a un estado específico del sistema. Este enfoque permitió organizar el flujo de navegación de manera clara, secuencial y robusta frente a eventos del usuario.
 
+        Al encender el dispositivo, se presenta un menú inicial en el cual el usuario debe seleccionar el modo de funcionamiento: ESTUDIO CLÍNICO o TEST RÁPIDO, tal como se muestra en la Figura~\ref{fig:MenuDisplay}.
 
-        \subsubsection{Aplicación de escritorio (Modo Estudio Clínico)}
-        Se diseñó una aplicación de escritorio que permite visualizar los valores medidos por el dispositivo y controlar la sesión de adquisición en tiempo real. La aplicación de escritorio fue desarrollada en Python utilizando el framework PyQt.
-
-        \vspace{0.1cm}
-        
-        Al iniciar la aplicación, se presenta una ventana destinada a la carga de datos del paciente, donde es posible ingresar nombre, edad, altura y sexo antes de comenzar la medición. El diseño y la disposición de los elementos de esta ventana se muestran en la Figura \ref{fig:Interfaz Datos}.
 
         \begin{figure}[H]
         \centering
         \includegraphics[width=0.9\textwidth]{images/Interfaz Datos.png}
-        \caption{Ventana de carga de datos de la interfaz grafica.}
-        \label{fig:Interfaz Datos}
+        \captionsetup{margin=1.5cm, justification=centering}
+        \caption{Menú principal de la interfaz táctil en el display integrado. Selección de modo de uso.}
+        \label{fig:MenuDisplay}
         \end{figure}
 
-        La ventana principal, que se muestra en la Figura \ref{fig:Interfaz Main}, concentra todas las funcionalidades del dispositivo. El botón de control “Iniciar medición” activa la visualización de las señales en tiempo real en el panel derecho. Cada señal se muestra con el mismo color que la funda de silicona del sensor correspondiente, facilitando su identificación. Debajo de las gráficas se presentan los valores calculados de frecuencia cardíaca y PWV. Al presionar nuevamente el botón, la adquisición se detiene y los valores y las señales quedan congelados en pantalla.
 
-        \vspace{0.1cm}
+        En caso de seleccionar el modo \textbf{ESTUDIO CLÍNICO}, el dispositivo establece conexión WiFi y muestra un mensaje indicando que debe abrirse la aplicación de escritorio \textit{StiffioApp}. En este modo, el ingreso de datos del paciente, la visualización detallada de señales y el almacenamiento de resultados se gestionan exclusivamente desde la aplicación externa. El modo ESTUDIO CLÍNICO solo puede ser utilizado desde la PC por medio de la aplicación.
+
+        Si el usuario selecciona el modo \textbf{TEST RÁPIDO}, la interfaz en la pantalla solicita la carga de los datos estrictamente necesarios para el cálculo, que son edad y altura. El ingreso de los mismos se realiza mediante un teclado numérico táctil como el que se ilustra en la Figura~\ref{fig:TecladoNumerico}. El dato de entrada es verificado antes de permitir avanzar, y en caso de ser inválido se muestra una alerta. Una vez completados los campos requeridos, el usuario debe presionar el botón de continuar (flecha verde) para iniciar la medición. 
+
         
-        En el panel lateral izquierdo, bajo los datos del paciente, se incluye un gráfico de PWV vs. edad. Sobre él, se indica con un punto indica el valor de PWV medido, permitiendo así visualizar si este se encuentra dentro de los rangos normales para su grupo etario (zona verde) o fuera de ellos (zona roja). Además, debajo del gráfico se indica explícitamente si el valor es normal o no, para mayor claridad.
+        \begin{figure}[H]
+        \centering
+        \includegraphics[width=0.9\textwidth]{images/Interfaz Datos.png}
+        \captionsetup{margin=1.5cm, justification=centering}
+        \caption{Teclado numérico para el ingreso de datos de la interfaz táctil en el display integrado.}
+        \label{fig:TecladoNumerico}
+        \end{figure}
 
-        \vspace{0.1cm}
-        Los parámetros medidos pueden guardarse junto con los datos del paciente haciendo clic en el botón “Guardar medición”. De este modo, se genera un registro histórico que permite conservar las mediciones a lo largo del tiempo, funcionando como una historia clínica electrónica.
 
-        \vspace{0.1cm}
+        En la Figura  \ref{fig:MedicionDisplay} se puede observar la ventana principal de medición, donde se muestran los resultados del cálculo. El usuario puede seleccionar el modo de visualización deseado presionando los íconos ubicados en la esquina superior derecha del display:
+        \begin{itemize}
+            \item \textbf{Modo Métricas}: Muestra sólo los valores numéricos calculados (HR y PWV).
+            \item \textbf{Modo Curvas}: Además de las métricas, muestra en tiempo real las señales pletismográficas provenientes de ambos sensores.
+        \end{itemize}
+
+        A modo indicativo, los valores de PWV se muestran en color rojo cuando se encuentran fuera del rango considerado normal para el grupo etario del paciente, y en color verde cuando se encuentran dentro de los valores de referencia.
+
+
+        \begin{figure}[H]
+        \centering
+        \includegraphics[width=0.9\textwidth]{images/Interfaz Datos.png}
+        \captionsetup{margin=1.5cm, justification=centering}
+        \caption{Pantalla de visualización de resultados de la interfaz táctil en el display integrado.}
+        \label{fig:MedicionDisplay}
+        \end{figure}
+    
+
+        Para finalizar la medición y regresar al menú principal, el usuario debe presionar el botón SALIR, ubicado en la esquina inferior derecha de la interfaz.
+    
+
+
+        \subsubsection{Aplicación de escritorio (Modo Estudio Clínico)}
+        Además de la interfaz embebida en el dispositivo, se diseñó una aplicación de escritorio denominada \textit{StiffioApp}, destinada a la visualización, almacenamiento y gestión de datos clínicos. Esta aplicación fue desarrollada en Python utilizando el framework PyQt.
+
+        \vspace{0.2cm}
+
+
+        Para utilizar esta aplicación, el usuario debe seleccionar la opción ESTUDIO CLÍNICO desde el display del dispositivo, tal como se mostró previamente en la Figura~\ref{fig:MenuDisplay}. Al hacerlo, el sistema establece comunicación vía WiFi con la computadora para la transmisión de datos.
+
+        Al iniciar la aplicación, se presenta la pantalla mostrada en la Figura~\ref{fig:MenuInterfaz}, donde se ofrecen dos opciones. La opción Comenzar permite iniciar una nueva medición utilizando el dispositivo, mientras que Historial de Mediciones posibilita acceder a los registros previamente almacenados.
+
+
+        \begin{figure}[H]
+        \centering
+        \includegraphics[width=0.9\textwidth]{images/Menu Interfaz.png}
+        \captionsetup{margin=1.5cm, justification=centering}
+        \caption{Menú principal de \textit{StiffioApp}.}
+        \label{fig:MenuInterfaz}
+        \end{figure}
+
+
+        Al seleccionar \textbf{Comenzar}, se despliega una ventana destinada a la carga de datos del paciente, donde es posible ingresar nombre, apellido, DNI, edad, altura y sexo antes de comenzar la adquisición. Asimismo, se dispone de un campo adicional para incorporar observaciones clínicas relevantes, tales como síntomas o antecedentes médicos, en caso de que el usuario lo considere pertinente. El diseño y la disposición de los elementos de esta ventana se muestran en la Figura~\ref{fig:DatosInterfaz}.
+
+
+
+        \begin{figure}[H]
+        \centering
+        \includegraphics[width=0.9\textwidth]{images/Interfaz Datos.png}
+        \caption{Pantalla de carga de datos de \textit{StiffioApp}.}
+        \label{fig:DatosInterfaz}
+        \end{figure}
+
+
+        Una vez completados los datos y confirmada la acción, se accede a la ventana principal de la aplicación, mostrada en la Figura~\ref{fig:MedicionInterfaz}. En esta interfaz se concentran las funcionalidades operativas del sistema.
         
-        Si se desea realizar una nueva medición, basta con hacer clic en el botón “Nuevo paciente”, lo que devuelve a la ventana de carga de datos para ingresar la información de un paciente diferente.
+        El botón de control Iniciar Medición activa la adquisición y visualización en tiempo real de las señales en el panel derecho. Cada señal se representa con el mismo color que la funda de silicona del sensor correspondiente, facilitando su identificación visual. Debajo de las gráficas se muestran los valores calculados de frecuencia cardíaca (HR) y velocidad de onda de pulso (PWV). Al presionar  el botón Detener Medición, la adquisición se detiene y tanto las señales como los valores calculados permanecen congelados en pantalla para su análisis.
+        
+        En el panel lateral izquierdo, debajo de los datos del paciente, se incluye un gráfico de PWV en función de la edad. Sobre dicho gráfico se marca con un punto el valor de PWV medido, permitiendo visualizar si se encuentra dentro de los rangos considerados normales para el grupo etario correspondiente (zona verde) o fuera de ellos (zona roja). Además, debajo del gráfico se indica explícitamente la interpretación del resultado (normal / anormal), brindando mayor claridad al usuario.
+
+        Los parámetros medidos pueden almacenarse junto con los datos del paciente mediante el botón Guardar Medición. De este modo, se genera un registro histórico que permite conservar las mediciones en el tiempo, funcionando como una historia clínica digital.
+        
+        Si se desea realizar una nueva medición, el botón Nuevo Paciente redirige nuevamente a la ventana de carga de datos. Para regresar al menú principal, se dispone de un botón "Salir" ubicado justo al lado.
 
 
         \begin{figure}[H]
         \centering
         \includegraphics[width=0.9\textwidth]{images/Interfaz Main.png}
-        \caption{Ventana principal de la interfaz grafica.}
-        \label{fig:Interfaz Main}
+        \caption{Pantalla de visualización de resultados de \textit{StiffioApp}}
+        \label{fig:MedicionInterfaz}
         \end{figure}
+
+
+        Por otro lado, al seleccionar la opción \textbf{Historial de Mediciones} en el menú principal, se accede a la pantalla mostrada en la Figura~\ref{fig:HistorialInterfaz}. En esta sección es posible visualizar la lista completa de mediciones previamente almacenadas en la base de datos del sistema. 
+        
+        La interfaz presenta los registros en formato tabular, incluyendo los datos identificatorios del paciente y los principales parámetros obtenidos durante cada estudio. Para localizar un registro específico, el usuario dispone de herramientas de búsqueda y filtrado que permiten acotar los resultados según distintos criterios. Asimismo, puede desplazarse verticalmente mediante la barra de desplazamiento para navegar entre todos los registros disponibles.
+        
+        Si se desea exportar una medición, se debe presionar el ícono de descarga correspondiente al registro seleccionado. Esta acción genera automáticamente un reporte en formato PDF que incluye los datos del paciente y los resultados obtenidos durante la medición. Se puede observar un ejemplo de dicho reporte en el Anexo \ref{anexo:ReportePDF}. 
+        
+        En caso de que se requiera eliminar un registro, se puede presionar el ícono de borrado asociado. Antes de proceder, la aplicación solicita una confirmación para evitar perdida de información accidental.
+        
+        Finalmente, para salir del historial y regresar al menú principal, el usuario debe presionar el botón Volver, ubicado en la esquina superior derecha de la pantalla.
+
+
+        \begin{figure}[H]
+        \centering
+        \includegraphics[width=0.9\textwidth]{images/Historial Interfaz.png}
+        \caption{Pantalla de historial de mediciones de \textit{StiffioApp}}
+        \label{fig:HistorialInterfaz}
+        \end{figure}
+        
+        
+        
 
 
     \subsection{Protocolo de Medición}

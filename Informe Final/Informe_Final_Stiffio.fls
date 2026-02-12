@@ -254,13 +254,6 @@ INPUT .\images\Placa Back.png
 INPUT .\images\Placa Back.png
 INPUT .\images\Placa Back.png
 INPUT .\images\Placa Back.png
-INPUT .\images\Caja 2.png
-INPUT .\images\Caja 2.png
-INPUT .\images\Caja 2.png
-INPUT .\images\Caja 2.png
-INPUT .\images\Caja 2.png
-INPUT .\images\Caja 2.png
-INPUT .\images\Caja 2.png
 INPUT .\images\Caja 1.png
 INPUT .\images\Caja 1.png
 INPUT .\images\Caja 1.png
@@ -268,13 +261,27 @@ INPUT .\images\Caja 1.png
 INPUT .\images\Caja 1.png
 INPUT .\images\Caja 1.png
 INPUT .\images\Caja 1.png
-INPUT .\images\Codigo Colores.png
-INPUT .\images\Codigo Colores.png
-INPUT .\images\Codigo Colores.png
-INPUT .\images\Codigo Colores.png
-INPUT .\images\Codigo Colores.png
-INPUT .\images\Codigo Colores.png
-INPUT .\images\Codigo Colores.png
+INPUT .\images\Caja 2.png
+INPUT .\images\Caja 2.png
+INPUT .\images\Caja 2.png
+INPUT .\images\Caja 2.png
+INPUT .\images\Caja 2.png
+INPUT .\images\Caja 2.png
+INPUT .\images\Caja 2.png
+INPUT .\images\Bateria.png
+INPUT .\images\Bateria.png
+INPUT .\images\Bateria.png
+INPUT .\images\Bateria.png
+INPUT .\images\Bateria.png
+INPUT .\images\Bateria.png
+INPUT .\images\Bateria.png
+INPUT .\images\Colores Puertos.png
+INPUT .\images\Colores Puertos.png
+INPUT .\images\Colores Puertos.png
+INPUT .\images\Colores Puertos.png
+INPUT .\images\Colores Puertos.png
+INPUT .\images\Colores Puertos.png
+INPUT .\images\Colores Puertos.png
 INPUT .\images\Sensor Front.png
 INPUT .\images\Sensor Front.png
 INPUT .\images\Sensor Front.png
@@ -317,9 +324,29 @@ INPUT .\images\Arterias.jpg
 INPUT .\images\Arterias.jpg
 INPUT .\images\Arterias.jpg
 INPUT .\images\Arterias.jpg
+INPUT C:\Users\Victoria\AppData\Local\Programs\MiKTeX\fonts\tfm\public\cm\cmtt12.tfm
 INPUT .\images\Interfaz Datos.png
 INPUT .\images\Interfaz Datos.png
 INPUT .\images\Interfaz Datos.png
+INPUT .\images\Interfaz Datos.png
+INPUT .\images\Interfaz Datos.png
+INPUT .\images\Interfaz Datos.png
+INPUT .\images\Interfaz Datos.png
+INPUT .\images\Interfaz Datos.png
+INPUT .\images\Interfaz Datos.png
+INPUT .\images\Interfaz Datos.png
+INPUT .\images\Interfaz Datos.png
+INPUT .\images\Interfaz Datos.png
+INPUT .\images\Interfaz Datos.png
+INPUT .\images\Interfaz Datos.png
+INPUT .\images\Interfaz Datos.png
+INPUT .\images\Menu Interfaz.png
+INPUT .\images\Menu Interfaz.png
+INPUT .\images\Menu Interfaz.png
+INPUT .\images\Menu Interfaz.png
+INPUT .\images\Menu Interfaz.png
+INPUT .\images\Menu Interfaz.png
+INPUT .\images\Menu Interfaz.png
 INPUT .\images\Interfaz Datos.png
 INPUT .\images\Interfaz Datos.png
 INPUT .\images\Interfaz Datos.png
@@ -331,6 +358,13 @@ INPUT .\images\Interfaz Main.png
 INPUT .\images\Interfaz Main.png
 INPUT .\images\Interfaz Main.png
 INPUT .\images\Interfaz Main.png
+INPUT .\images\Historial Interfaz.png
+INPUT .\images\Historial Interfaz.png
+INPUT .\images\Historial Interfaz.png
+INPUT .\images\Historial Interfaz.png
+INPUT .\images\Historial Interfaz.png
+INPUT .\images\Historial Interfaz.png
+INPUT .\images\Historial Interfaz.png
 INPUT .\Informe_Final_Stiffio.bbl
 INPUT .\Informe_Final_Stiffio.bbl
 INPUT Informe_Final_Stiffio.bbl
@@ -372,6 +406,13 @@ INPUT .\images\Sensor Solid 2.png
 INPUT .\images\Sensor Solid 2.png
 INPUT .\images\Sensor Solid 2.png
 INPUT .\images\Sensor Solid 2.png
+INPUT .\images\Reporte PDF.png
+INPUT .\images\Reporte PDF.png
+INPUT .\images\Reporte PDF.png
+INPUT .\images\Reporte PDF.png
+INPUT .\images\Reporte PDF.png
+INPUT .\images\Reporte PDF.png
+INPUT .\images\Reporte PDF.png
 INPUT Informe_Final_Stiffio.aux
 INPUT .\Informe_Final_Stiffio.out
 INPUT .\Informe_Final_Stiffio.out
@@ -387,3 +428,5 @@ INPUT C:\Users\Victoria\AppData\Local\Programs\MiKTeX\fonts\type1\public\amsfont
 INPUT C:\Users\Victoria\AppData\Local\Programs\MiKTeX\fonts\type1\public\amsfonts\cm\cmr17.pfb
 INPUT C:\Users\Victoria\AppData\Local\Programs\MiKTeX\fonts\type1\public\amsfonts\cm\cmti12.pfb
 INPUT C:\Users\Victoria\AppData\Local\Programs\MiKTeX\fonts\type1\public\amsfonts\cm\cmti12.pfb
+INPUT C:\Users\Victoria\AppData\Local\Programs\MiKTeX\fonts\type1\public\amsfonts\cm\cmtt12.pfb
+INPUT C:\Users\Victoria\AppData\Local\Programs\MiKTeX\fonts\type1\public\amsfonts\cm\cmtt12.pfb
