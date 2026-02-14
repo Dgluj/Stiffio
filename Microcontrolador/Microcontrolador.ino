@@ -18,8 +18,8 @@
 // ==============================================================================================
 
 // Wi-Fi  ===============================================================
-const char* ssid = "iPhonedeVictoria";     // WiFi 
-const char* password = "vitucapa";   // Contraseña
+const char* ssid = "Di Toro1 2.4GHz";     // WiFi 
+const char* password = "ditoro3080";   // Contraseña
 WebSocketsServer webSocket(81);
 bool wifiConectado = false;
 
@@ -56,6 +56,9 @@ volatile int porcentajeEstabilizacion = 0;
 
 volatile bool s1ok = false;
 volatile bool s2ok = false;
+volatile bool s1_conectado = true;
+volatile bool s2_conectado = true;
+const uint8_t SENSOR_I2C_ADDR = 0x57; // Dirección del MAX30102
 
 // Resultados
 volatile int bpmMostrado = 0; 
@@ -161,70 +164,128 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
 // ======================================================================
 // CORE 0: MOTOR MATEMÁTICO + ENVÍO WEBSOCKET
 // ======================================================================
+bool verificarConexionI2C(TwoWire &wirePort) {
+    wirePort.beginTransmission(SENSOR_I2C_ADDR);
+    return (wirePort.endTransmission() == 0);
+}
+
+
 void TaskSensores(void *pvParameters) {
-  
+
   // Filtros anti-deriva mejorados
   float s1_lp = 0, s1_dc = 0;
   float s2_lp = 0, s2_dc = 0;
-  float s1_hp = 0, s2_hp = 0;  // High-pass filter para deriva
-  const float ALPHA_LP = 0.75;  // Más suavizado (0.80 → 0.75)
-  const float ALPHA_DC = 0.97;  // Más drift removal (0.96 → 0.97)
-  const float ALPHA_HP_S1 = 0.97;  // HPF MÁS SUAVE para carótida @ 0.3Hz
-  const float ALPHA_HP_S2 = 0.95;  // HPF normal para muñeca @ 0.5Hz
-  const long SENSOR_THRESHOLD = 50000; 
-  
-  // Media Móvil (usar globales bufMA1_global, bufMA2_global, idxMA_global)
+  float s1_hp = 0, s2_hp = 0;
+  const float ALPHA_LP = 0.75;
+  const float ALPHA_DC = 0.97;
+  const float ALPHA_HP_S1 = 0.97;
+  const float ALPHA_HP_S2 = 0.95;
+  const long SENSOR_THRESHOLD = 50000;
 
   // Tiempo
-  unsigned long startContactTime = 0; 
-  unsigned long baseTime = 0;         
-  const unsigned long TIEMPO_ESTABILIZACION = 10000;  // 10s para estabilización completa 
+  unsigned long startContactTime = 0;
+  unsigned long baseTime = 0;
+  const unsigned long TIEMPO_ESTABILIZACION = 10000;
 
-  // Detección PWV/HR - HR con algoritmo SparkFun
+  // Detección PWV/HR
   float lastValS1 = 0; float lastValS2 = 0;
-  int idxPeakS1 = -1;           // Índice en buffer del último pico S1
-  int idxPeakS2 = -1;           // Índice en buffer del último pico S2
-  long lastBeatTime_sparkfun = 0;  // Timestamp del último latido (SparkFun)
-  unsigned long timePeakS1 = 0; // Solo para refractory period
-  bool waitingForS2 = false;    
-  const int REFRACTORY_PERIOD = 350;  // Fisiológico
-  const float BEAT_THRESHOLD = 20.0;  // Selectivo (solo para S1) 
-  
-  // Buffers Promedio (usando globales bpmBuffer_global, pwvBuffer_global, etc)
+  int idxPeakS1 = -1;
+  int idxPeakS2 = -1;
+  long lastBeatTime_sparkfun = 0;
+  unsigned long timePeakS1 = 0;
+  bool waitingForS2 = false;
+
+  // Hardware Check
+  unsigned long lastHardwareCheck = 0;
+  const int CHECK_INTERVAL = 500;
 
   for (;;) {
     if (medicionActiva) {
-      
+
       if (modoActual == MODO_ESTUDIO_CLINICO) {
         webSocket.loop();
       }
 
-      sensorProx.check();
-      sensorDist.check(); 
-      
-      if (sensorProx.available() && sensorDist.available()) {
-        // Timestamp EXACTO cuando llega la muestra
-        unsigned long sampleTimestamp = millis();
+      // --- BLOQUE 1: VERIFICACIÓN DE HARDWARE ---
+      if (millis() - lastHardwareCheck > CHECK_INTERVAL) {
+        lastHardwareCheck = millis();
+
+        // ---------------- SENSOR 1 (WIRE / PROXIMAL) ----------------
+        bool s1_fisico = verificarConexionI2C(Wire);
         
-        // Leer sensores
-        long ir1 = sensorProx.getIR();
-        long ir2 = sensorDist.getIR(); 
+        if (!s1_conectado && s1_fisico) {
+          // Se acaba de reconectar físicamente. Intentamos revivirlo:
+          
+          // 1. Reiniciamos el BUS Wire por si quedó "tonto"
+          Wire.begin(SDA1, SCL1, 100000); 
+          delay(10); 
 
-        // Chequeo sensores colocados
-        bool currentS1 = (ir1 > SENSOR_THRESHOLD);
-        bool currentS2 = (ir2 > SENSOR_THRESHOLD);
-        s1ok = currentS1; 
-        s2ok = currentS2;
+          // 2. Intentamos inicializar la librería
+          if (sensorProx.begin(Wire, I2C_SPEED_STANDARD)) {
+              sensorProx.softReset(); // Reset de software para limpiar registros basura
+              delay(10);
+              sensorProx.setup(30, 8, 2, 400, 411, 4096);
+              s1_conectado = true; // ÉXITO: Ahora sí lo marcamos como conectado
+          } else {
+              s1_conectado = false; // Falló el handshake lógico, seguimos intentando
+          }
+        } 
+        else if (s1_conectado && !s1_fisico) {
+           s1_conectado = false; // Se desconectó
+        }
 
-        if (currentS1 && currentS2) {
-            // --- CASCADA DE FILTRADO ANTI-DERIVA ---
+
+        // ---------------- SENSOR 2 (WIRE1 / DISTAL) ----------------
+        bool s2_fisico = verificarConexionI2C(Wire1);
+        
+        if (!s2_conectado && s2_fisico) {
+          // 1. Reiniciamos el BUS Wire1
+          Wire1.begin(SDA2, SCL2, 100000);
+          delay(10);
+
+          // 2. Inicializamos librería
+          if (sensorDist.begin(Wire1, I2C_SPEED_STANDARD)) {
+              sensorDist.softReset();
+              delay(10);
+              sensorDist.setup(30, 8, 2, 400, 411, 4096);
+              s2_conectado = true;
+          } else {
+              s2_conectado = false;
+          }
+        }
+        else if (s2_conectado && !s2_fisico) {
+           s2_conectado = false;
+        }
+      }
+
+      // --- BLOQUE 2: LECTURA DE DATOS ---
+      if (s1_conectado && s2_conectado) {
+
+        sensorProx.check();
+        sensorDist.check();
+
+        if (sensorProx.available() && sensorDist.available()) {
+          // Timestamp EXACTO
+          unsigned long sampleTimestamp = millis();
+
+          long ir1 = sensorProx.getIR();
+          long ir2 = sensorDist.getIR();
+
+          // Chequeo sensores colocados (Dedo puesto)
+          bool currentS1 = (ir1 > SENSOR_THRESHOLD);
+          bool currentS2 = (ir2 > SENSOR_THRESHOLD);
+          s1ok = currentS1;
+          s2ok = currentS2;
+
+          if (currentS1 && currentS2) {
+            // --- PROCESAMIENTO DE SEÑAL ---
             
-            // 1. Low-Pass Filter (suaviza ruido de alta frecuencia)
+            // 1. Low-Pass
             if (s1_lp == 0) s1_lp = ir1; if (s2_lp == 0) s2_lp = ir2;
             s1_lp = (s1_lp * ALPHA_LP) + (ir1 * (1.0 - ALPHA_LP));
             s2_lp = (s2_lp * ALPHA_LP) + (ir2 * (1.0 - ALPHA_LP));
 
-            // 2. DC Removal (elimina offset lento)
+            // 2. DC Removal
             if (s1_dc == 0) s1_dc = ir1; if (s2_dc == 0) s2_dc = ir2;
             s1_dc = (s1_dc * ALPHA_DC) + (s1_lp * (1.0 - ALPHA_DC));
             s2_dc = (s2_dc * ALPHA_DC) + (s2_lp * (1.0 - ALPHA_DC));
@@ -232,160 +293,146 @@ void TaskSensores(void *pvParameters) {
             float val1_centered = s1_lp - s1_dc;
             float val2_centered = s2_lp - s2_dc;
 
-            // 3. High-Pass Filter diferenciado (carótida vs muñeca)
-            s1_hp = ALPHA_HP_S1 * (s1_hp + val1_centered - lastVal1_centered);  // Carótida: HPF @ 0.3Hz
-            s2_hp = ALPHA_HP_S2 * (s2_hp + val2_centered - lastVal2_centered);  // Muñeca: HPF @ 0.5Hz
+            // 3. High-Pass Filter
+            s1_hp = ALPHA_HP_S1 * (s1_hp + val1_centered - lastVal1_centered);
+            s2_hp = ALPHA_HP_S2 * (s2_hp + val2_centered - lastVal2_centered);
             lastVal1_centered = val1_centered;
             lastVal2_centered = val2_centered;
 
-            // 4. Media Móvil (suavizado final sin perder picos)
+            // 4. Media Móvil
             bufMA1_global[idxMA_global] = s1_hp;
             bufMA2_global[idxMA_global] = s2_hp;
             idxMA_global = (idxMA_global + 1) % MA_SIZE;
 
             float sum1 = 0; float sum2 = 0;
-            for(int i=0; i<MA_SIZE; i++) { sum1 += bufMA1_global[i]; sum2 += bufMA2_global[i]; }
+            for (int i = 0; i < MA_SIZE; i++) { sum1 += bufMA1_global[i]; sum2 += bufMA2_global[i]; }
             float valFinal1 = sum1 / MA_SIZE;
             float valFinal2 = sum2 / MA_SIZE;
 
-            // --- LÓGICA DE DETECCIÓN (HR y PWV) ---
-            unsigned long now = millis();
-            float deltaS1 = valFinal1 - lastValS1;
-            float deltaS2 = valFinal2 - lastValS2;
-            lastValS1 = valFinal1; lastValS2 = valFinal2;
-
+            float deltaS1 = valFinal1 - lastValS1; lastValS1 = valFinal1;
+            float deltaS2 = valFinal2 - lastValS2; lastValS2 = valFinal2;
+            
+            // --- ALGORITMOS HR / PWV ---
             if (faseMedicion == 2) {
-               // Detección S1 (Cuello) - ALGORITMO ADAPTATIVO para PWV
-               if (checkForBeatS1(valFinal1) == true) {  // Detector independiente para S1
-                   idxPeakS1 = writeHead;  // Guardar índice para timestamp correcto
-                   waitingForS2 = true;
+               // Detección S1
+               if (checkForBeatS1(valFinal1) == true) {
+                  idxPeakS1 = writeHead;
+                  waitingForS2 = true;
                }
-               
-               // Detección S2 (Muñeca) - ALGORITMO SPARKFUN con promedio de 10 latidos
-               if (checkForBeat(valFinal2) == true) {  // checkForBeat() de SparkFun (usa IR raw)
-                  long delta = now - lastBeatTime_sparkfun;
-                  lastBeatTime_sparkfun = now;
-                  
-                  // Calcular BPM instantáneo
+               // Detección S2 & HR
+               if (checkForBeat(valFinal2) == true) {
+                  long delta = sampleTimestamp - lastBeatTime_sparkfun;
+                  lastBeatTime_sparkfun = sampleTimestamp;
                   float beatsPerMinute = 60.0 / (delta / 1000.0);
-                  
-                  // Validación fisiológica
+
                   if (beatsPerMinute > 40 && beatsPerMinute < 200) {
-                      // Guardar en buffer circular de 10 latidos
                       bpmBuffer_global[bpmIdx_global] = (int)beatsPerMinute;
                       bpmIdx_global = (bpmIdx_global + 1) % AVG_SIZE;
                       if (validSamplesBPM_global < AVG_SIZE) validSamplesBPM_global++;
-                      
-                      // Mostrar HR desde 5 latidos (no esperar 10)
+
                       if (validSamplesBPM_global >= 5) {
                           long total = 0;
                           int count = (validSamplesBPM_global < AVG_SIZE) ? validSamplesBPM_global : AVG_SIZE;
-                          for (int i = 0; i < count; i++) {
-                              total += bpmBuffer_global[i];
-                          }
+                          for (int i = 0; i < count; i++) total += bpmBuffer_global[i];
                           bpmMostrado = total / count;
                       }
-                      
-                      // Guardar índice para PWV (usa mismo timestamp que HR)
                       idxPeakS2 = writeHead;
                   }
                }
-                  
-               // PWV: Calcular usando timestamps guardados en buffer
+               
+               // Cálculo PWV
                if (waitingForS2 && idxPeakS1 >= 0 && idxPeakS2 >= 0) {
                    unsigned long timeS1 = buffer_time[idxPeakS1];
                    unsigned long timeS2 = buffer_time[idxPeakS2];
                    long transitTime = timeS2 - timeS1;
                    waitingForS2 = false;
-                   
-                   // Filtro de tiempo fisiológico
+
                    if (transitTime > 20 && transitTime < 400) {
                        int alturaCalc = (pacienteAltura > 0) ? pacienteAltura : 170;
                        float distMeters = (alturaCalc * 0.436) / 100.0;
                        float instantPWV = distMeters / (transitTime / 1000.0);
-                       
+
                        if (instantPWV > 3.0 && instantPWV < 50.0) {
-                           pwvBuffer_global[pwvIdx_global] = instantPWV; 
+                           pwvBuffer_global[pwvIdx_global] = instantPWV;
                            pwvIdx_global = (pwvIdx_global + 1) % AVG_SIZE;
                            if (validSamplesPWV_global < AVG_SIZE) validSamplesPWV_global++;
-                           
-                           // Mostrar PWV con solo 2 muestras para rapidez
+
                            if (validSamplesPWV_global >= 2) {
-                               float totalPWV = 0; 
+                               float totalPWV = 0;
                                int count = (validSamplesPWV_global < AVG_SIZE) ? validSamplesPWV_global : AVG_SIZE;
-                               for(int i=0; i<count; i++) totalPWV += pwvBuffer_global[i];
+                               for (int i = 0; i < count; i++) totalPWV += pwvBuffer_global[i];
                                pwvMostrado = totalPWV / count;
                            }
                        }
                    }
                }
-            }
+            } // Fin Fase 2
 
-            // --- ACCIÓN SEGÚN MODO ---
+            // --- SALIDA DE DATOS ---
             if (modoActual == MODO_TEST_RAPIDO) {
-                if (faseMedicion == 2) {
-                    unsigned long tiempoRelativo = sampleTimestamp - baseTime;  // Usa timestamp capturado
-                    portENTER_CRITICAL(&bufferMux); 
-                    buffer_s1[writeHead] = valFinal1; 
-                    buffer_s2[writeHead] = valFinal2;
-                    buffer_time[writeHead] = tiempoRelativo;
-                    writeHead++; 
-                    if (writeHead >= BUFFER_SIZE) writeHead = 0;
-                    portEXIT_CRITICAL(&bufferMux);
-                }
-            } 
+              if (faseMedicion == 2) {
+                unsigned long tiempoRelativo = sampleTimestamp - baseTime;
+                portENTER_CRITICAL(&bufferMux);
+                buffer_s1[writeHead] = valFinal1;
+                buffer_s2[writeHead] = valFinal2;
+                buffer_time[writeHead] = tiempoRelativo;
+                writeHead++;
+                if (writeHead >= BUFFER_SIZE) writeHead = 0;
+                portEXIT_CRITICAL(&bufferMux);
+              }
+            }
             else if (modoActual == MODO_ESTUDIO_CLINICO) {
-                char json[128];
-                // Enviamos señales y resultados calculados
-                // 'p'=proximal, 'd'=distal, 'hr'=ritmo, 'pwv'=velocidad
-                snprintf(json, sizeof(json), 
-                         "{\"s1\":true,\"s2\":true,\"p\":%.2f,\"d\":%.2f,\"hr\":%d,\"pwv\":%.2f}", 
-                         valFinal1, valFinal2, bpmMostrado, pwvMostrado);
-                webSocket.broadcastTXT(json);
+              char json[128];
+              snprintf(json, sizeof(json), "{\"s1\":true,\"s2\":true,\"p\":%.2f,\"d\":%.2f,\"hr\":%d,\"pwv\":%.2f}",
+                       valFinal1, valFinal2, bpmMostrado, pwvMostrado);
+              webSocket.broadcastTXT(json);
             }
 
-            // Estados de medición
+            // --- MÁQUINA DE ESTADOS ---
             if (faseMedicion == 0) {
-               faseMedicion = 1; 
-               startContactTime = millis();
-            } 
-            
+              faseMedicion = 1;
+              startContactTime = millis();
+            }
             else if (faseMedicion == 1) {
-               unsigned long transcurrido = millis() - startContactTime;
-               porcentajeEstabilizacion = (transcurrido * 100) / TIEMPO_ESTABILIZACION;
-               if (transcurrido >= TIEMPO_ESTABILIZACION) {
-                  faseMedicion = 2; baseTime = millis();
-                  if(modoActual == MODO_TEST_RAPIDO) {
-                      portENTER_CRITICAL(&bufferMux);
-                      writeHead = 0;
-                      for(int i=0; i<BUFFER_SIZE; i++) {buffer_s1[i]=0; buffer_s2[i]=0; buffer_time[i]=0;}
-                      portEXIT_CRITICAL(&bufferMux);
-                  }
-                  bpmMostrado = 0; 
-                  pwvMostrado = 0.0;
-                  validSamplesBPM_global = 0; 
-                  validSamplesPWV_global = 0;
-               }
+              unsigned long transcurrido = millis() - startContactTime;
+              porcentajeEstabilizacion = (transcurrido * 100) / TIEMPO_ESTABILIZACION;
+              if (transcurrido >= TIEMPO_ESTABILIZACION) {
+                faseMedicion = 2; baseTime = millis();
+                if (modoActual == MODO_TEST_RAPIDO) {
+                  portENTER_CRITICAL(&bufferMux);
+                  writeHead = 0;
+                  for (int i = 0; i < BUFFER_SIZE; i++) { buffer_s1[i] = 0; buffer_s2[i] = 0; buffer_time[i] = 0; }
+                  portEXIT_CRITICAL(&bufferMux);
+                }
+                bpmMostrado = 0; pwvMostrado = 0.0;
+                validSamplesBPM_global = 0; validSamplesPWV_global = 0;
+              }
             }
 
-        } else {
-             // Sin dedos
-             if(modoActual == MODO_ESTUDIO_CLINICO) {
-                webSocket.broadcastTXT("{\"s1\":false,\"s2\":false}");
-             }
-             if (faseMedicion != 0) {
-                 faseMedicion = 0; porcentajeEstabilizacion = 0;
-                 s1_lp=0; s1_dc=0; s2_lp=0; s2_dc=0;
-                 s1_hp=0; s2_hp=0;  // Reset HPF
-                 lastVal1_centered=0; lastVal2_centered=0;  // Reset HPF vars
-                 bpmMostrado = 0; pwvMostrado = 0.0;
-                 sensorProx.nextSample(); sensorDist.nextSample();
-             }
+          } else {
+            // --- SIN DEDOS (Connected but no finger) ---
+            if (modoActual == MODO_ESTUDIO_CLINICO) {
+              webSocket.broadcastTXT("{\"s1\":false,\"s2\":false}");
+            }
+            if (faseMedicion != 0) {
+              faseMedicion = 0; porcentajeEstabilizacion = 0;
+              s1_lp = 0; s1_dc = 0; s2_lp = 0; s2_dc = 0;
+              s1_hp = 0; s2_hp = 0;
+              lastVal1_centered = 0; lastVal2_centered = 0;
+              bpmMostrado = 0; pwvMostrado = 0.0;
+              sensorProx.nextSample(); sensorDist.nextSample();
+            }
+          }
         }
+      } else {
+        // --- CABLES DESCONECTADOS ---
+        // Si hay desconexión física, reseteamos la lógica para que al volver empiece de 0
+        faseMedicion = 0;
+        porcentajeEstabilizacion = 0;
       }
     } else {
       vTaskDelay(10);
-      if (modoActual == MODO_ESTUDIO_CLINICO) webSocket.loop(); // Mantener vivo el socket aunque no mida
+      if (modoActual == MODO_ESTUDIO_CLINICO) webSocket.loop();
     }
     vTaskDelay(1);
   }
@@ -792,90 +839,145 @@ void actualizarMedicion() {
   float localBuf1[BUFFER_SIZE];                          // Buffer proximal
   float localBuf2[BUFFER_SIZE];                          // Buffer distal
   unsigned long localTime[BUFFER_SIZE];                  // Timestamp
-  int localFase = faseMedicion;                          // Estado del sistema (0= Esperando, 1=Calculando, 2=Mostrar medición)
+  int localFase = faseMedicion;                          // Estado del sistema
   static int faseAnterior = -1; 
   static unsigned long ultimoSonido = 0;                 // Memoria del cronómetro de alarma
-  int localHead;                                         // Indica donde empezar a leer el buffer                          
-  int localPorcentaje = porcentajeEstabilizacion;        // Porcentaje barra de progreso
+  int localHead;                                         // Indica donde empezar a leer
+  int localPorcentaje = porcentajeEstabilizacion;        // Porcentaje barra
   int localBPM = bpmMostrado;                            // BPM
   float localPWV = pwvMostrado;                          // PWV
 
-  // Copiar los buffers para graficar sin que se escriban nuevos datos
+  // Copiar los buffers para graficar (Protección con Mutex)
   portENTER_CRITICAL(&bufferMux); 
   if (localFase == 2) {
     memcpy(localBuf1, (const void*)buffer_s1, sizeof(buffer_s1));
     memcpy(localBuf2, (const void*)buffer_s2, sizeof(buffer_s2));
     memcpy(localTime, (const void*)buffer_time, sizeof(buffer_time));
-    localHead = writeHead;   // Indica cuál es la muestra más reciente
-    }
-  // Liberar acceso a los buffers para cargar datos nuevos
+    localHead = writeHead;   
+  }
   portEXIT_CRITICAL(&bufferMux);
 
-  // Limpiar pantalla
+  // Limpiar pantalla si cambia la fase
   if (localFase != faseAnterior) {
       tft.fillRect(0, 0, 380, 50, COLOR_FONDO);   // Borra las leyendas
-      tft.fillRect(0, 48, 480, 185, COLOR_FONDO);  //  Borra el marco negro y el contenido del gráfico  
-      tft.fillRect(80, 260, 280, 40, COLOR_FONDO);  // Borra resultados numéricos
+      tft.fillRect(0, 48, 480, 185, COLOR_FONDO);  // Borra gráfico  
+      tft.fillRect(80, 260, 280, 40, COLOR_FONDO);  // Borra resultados
       faseAnterior = localFase;    
   }
 
-  // ERROR SENSORES  --------------------------------------------------------------------------------
+  // ==========================================================================================
+  // ESTADO DE ERROR / ESPERA (Fase 0)
+  // Aquí es donde distinguimos entre "Desconectado" y "No Colocado"
+  // ==========================================================================================
   if (localFase == 0) {
-    graphSprite.fillSprite(COLOR_FONDO); // Limpiar sprite
-    graphSprite.setTextDatum(MC_DATUM); int yCentro = GRAPH_H / 2; 
-    int yIcono = yCentro - 75; // Icono de advertencia
+    graphSprite.fillSprite(COLOR_FONDO); 
+    graphSprite.setTextDatum(MC_DATUM); 
+    int yCentro = GRAPH_H / 2; 
+    int yIcono = yCentro - 75; 
+    int yMsg1 = yCentro + 10;
+    int yMsg2 = yCentro + 50;
+
+    // Dibujar Icono de Advertencia (común para ambos casos)
     graphSprite.setSwapBytes(true);
     graphSprite.pushImage((GRAPH_W - 60) / 2, yIcono, 60, 60, (const uint16_t*)epd_bitmap_IconoAdvertencia); 
     graphSprite.setSwapBytes(false);
-    int yMsg1 = yCentro + 10 ; // Línea de texto 1
-    int yMsg2 = yCentro + 50;  // Línea de texto 2
 
-    // CASO 1: Ambos sensores no colocados
-    if (!s1ok && !s2ok) {
-        int inicioX = (GRAPH_W - 320) / 2; 
-        graphSprite.setTextDatum(ML_DATUM); // Escribimos de izquierda a derecha
-        graphSprite.setTextColor(COLOR_S1); 
-        graphSprite.drawString("Sensor Proximal (1)", inicioX, yMsg1, 4);
-        graphSprite.setTextColor(COLOR_TEXTO); 
-        graphSprite.drawString(" y", inicioX + 230, yMsg1, 4); 
-        int inicioX2 = (GRAPH_W - 350) / 2;
-        graphSprite.setTextColor(COLOR_S2); 
-        graphSprite.drawString("Sensor Distal (2)", inicioX2, yMsg2, 4);
-        graphSprite.setTextColor(COLOR_TEXTO); 
-        graphSprite.drawString(" no colocados", inicioX2 + 190, yMsg2, 4);
+    // -----------------------------------------------------------------------
+    // PRIORIDAD 1: DESCONEXIÓN FÍSICA (Cables sueltos)
+    // -----------------------------------------------------------------------
+    if (!s1_conectado || !s2_conectado) {
+        
+        // Alarma Sonora RÁPIDA (Beep-Beep constante)
+        if (millis() - ultimoSonido > 200) { 
+            // Genera un pitido corto manual sin bloquear mucho tiempo
+            digitalWrite(BUZZER_PIN, HIGH);
+            delay(30); 
+            digitalWrite(BUZZER_PIN, LOW);
+            ultimoSonido = millis();
+        }
+
+        // Sub-caso: AMBOS desconectados
+        if (!s1_conectado && !s2_conectado) {
+            int inicioX = (GRAPH_W - 320) / 2; 
+            graphSprite.setTextDatum(ML_DATUM);
+            graphSprite.setTextColor(COLOR_S1); 
+            graphSprite.drawString("Sensor Proximal (1)", inicioX, yMsg1, 4);
+            graphSprite.setTextColor(COLOR_TEXTO); 
+            graphSprite.drawString(" y", inicioX + 230, yMsg1, 4); 
+            
+            int inicioX2 = (GRAPH_W - 350) / 2;
+            graphSprite.setTextColor(COLOR_S2); 
+            graphSprite.drawString("Sensor Distal (2)", inicioX2, yMsg2, 4);
+            graphSprite.setTextColor(COLOR_TEXTO); 
+            graphSprite.drawString(" desconectados", inicioX2 + 190, yMsg2, 4);
+        }
+        // Sub-caso: SOLO S1 desconectado
+        else if (!s1_conectado) {
+            graphSprite.setTextDatum(MC_DATUM);
+            graphSprite.setTextColor(COLOR_S1); 
+            graphSprite.drawString("Sensor Proximal (1)", GRAPH_W/2, yMsg1, 4);
+            graphSprite.setTextColor(COLOR_TEXTO); 
+            graphSprite.drawString("desconectado", GRAPH_W/2, yMsg2, 4);
+        }
+        // Sub-caso: SOLO S2 desconectado
+        else if (!s2_conectado) {
+            graphSprite.setTextDatum(MC_DATUM);
+            graphSprite.setTextColor(COLOR_S2); 
+            graphSprite.drawString("Sensor Distal (2)", GRAPH_W/2, yMsg1, 4);
+            graphSprite.setTextColor(COLOR_TEXTO); 
+            graphSprite.drawString("desconectado", GRAPH_W/2, yMsg2, 4);
+        }
     }
 
-    // CASO 2: Sensor 1 no colocado
-    else if (!s1ok) {
-        graphSprite.setTextDatum(MC_DATUM);
-        graphSprite.setTextColor(COLOR_S1); 
-        graphSprite.drawString("Sensor Proximal (1)", GRAPH_W/2, yMsg1, 4);
-        graphSprite.setTextColor(COLOR_TEXTO); 
-        graphSprite.drawString("no colocado", GRAPH_W/2, yMsg2, 4);
-    }
-    // CASO 3: Sensor 2 no colocado
-    else if (!s2ok) {
-        graphSprite.setTextDatum(MC_DATUM);
-        graphSprite.setTextColor(COLOR_S2); 
-        graphSprite.drawString("Sensor Distal (2)", GRAPH_W/2, yMsg1, 4);
-        graphSprite.setTextColor(COLOR_TEXTO); 
-        graphSprite.drawString("no colocado", GRAPH_W/2, yMsg2, 4);
+    // -----------------------------------------------------------------------
+    // PRIORIDAD 2: SENSORES CONECTADOS PERO SIN DEDO (Usuario)
+    // -----------------------------------------------------------------------
+    else {
+        // Alarma LENTA (Recordatorio cada 4 seg)
+        if (millis() - ultimoSonido > 4000) { 
+            sonarAlerta(); // Tu función de doble pitido
+            ultimoSonido = millis();
+        }
+
+        // CASO 1: Ambos sensores no colocados
+        if (!s1ok && !s2ok) {
+            int inicioX = (GRAPH_W - 320) / 2; 
+            graphSprite.setTextDatum(ML_DATUM); 
+            graphSprite.setTextColor(COLOR_S1); 
+            graphSprite.drawString("Sensor Proximal (1)", inicioX, yMsg1, 4);
+            graphSprite.setTextColor(COLOR_TEXTO); 
+            graphSprite.drawString(" y", inicioX + 230, yMsg1, 4); 
+            int inicioX2 = (GRAPH_W - 350) / 2;
+            graphSprite.setTextColor(COLOR_S2); 
+            graphSprite.drawString("Sensor Distal (2)", inicioX2, yMsg2, 4);
+            graphSprite.setTextColor(COLOR_TEXTO); 
+            graphSprite.drawString(" no colocados", inicioX2 + 190, yMsg2, 4);
+        }
+        // CASO 2: Sensor 1 no colocado
+        else if (!s1ok) {
+            graphSprite.setTextDatum(MC_DATUM);
+            graphSprite.setTextColor(COLOR_S1); 
+            graphSprite.drawString("Sensor Proximal (1)", GRAPH_W/2, yMsg1, 4);
+            graphSprite.setTextColor(COLOR_TEXTO); 
+            graphSprite.drawString("no colocado", GRAPH_W/2, yMsg2, 4);
+        }
+        // CASO 3: Sensor 2 no colocado
+        else if (!s2ok) {
+            graphSprite.setTextDatum(MC_DATUM);
+            graphSprite.setTextColor(COLOR_S2); 
+            graphSprite.drawString("Sensor Distal (2)", GRAPH_W/2, yMsg1, 4);
+            graphSprite.setTextColor(COLOR_TEXTO); 
+            graphSprite.drawString("no colocado", GRAPH_W/2, yMsg2, 4);
+        }
     }
 
-    graphSprite.pushSprite(11, 51); // Mostrar sprite
-
-    // Sonar alarma
-    if (millis() - ultimoSonido > 4000) { 
-        sonarAlerta();
-        ultimoSonido = millis();
-    }
-
+    graphSprite.pushSprite(11, 51); // Mostrar sprite final
     return;
   }
  
   // CALCULANDO -----------------------------------------------------------------------------------
   if (localFase == 1) {
-    graphSprite.fillSprite(COLOR_FONDO); // Limpiar sprite
+    graphSprite.fillSprite(COLOR_FONDO); 
     graphSprite.setTextDatum(MC_DATUM); 
     graphSprite.setTextColor(COLOR_TEXTO);
     graphSprite.drawString("CALCULANDO ...", GRAPH_W/2, GRAPH_H/2 - 20, 4);
@@ -883,7 +985,7 @@ void actualizarMedicion() {
     graphSprite.drawRect(barX, barY, barW, barH, TFT_BLACK);   // Barra de progreso
     int fillW = (barW * localPorcentaje) / 100;
     graphSprite.fillRect(barX+1, barY+1, fillW-2, barH-2, TFT_GREEN);
-    graphSprite.pushSprite(11, 51); // Mostrar sprite
+    graphSprite.pushSprite(11, 51); 
     return;
   }
 
@@ -931,7 +1033,6 @@ void actualizarMedicion() {
         if(localBuf1[i] < minV) minV = localBuf1[i]; 
         if(localBuf1[i] > maxV) maxV = localBuf1[i];
       }
-      // Ajuste automático si la señal es muy plana
       if((maxV - minV) < 100) { float mid = (maxV + minV) / 2; maxV = mid + 50; minV = mid - 50; }
       
       // 2. Dibujar Grilla y Ejes
@@ -944,13 +1045,11 @@ void actualizarMedicion() {
         int idx = (localHead + i) % BUFFER_SIZE; 
         int nextIdx = (localHead + i + 1) % BUFFER_SIZE;
         
-        // Si no hay datos de tiempo válidos, saltamos
         if (localTime[idx] == 0 && localTime[nextIdx] == 0) continue;
         
         int x1 = (int)(i * xStep); 
         int x2 = (int)((i + 1) * xStep);
         
-        // Dibujar marcas de tiempo (segundos)
         unsigned long tCurrent = localTime[idx]; unsigned long tNext = localTime[nextIdx];
         if (tNext > tCurrent) {
             unsigned long secCurrent = tCurrent / 1000; unsigned long secNext = tNext / 1000;
@@ -960,7 +1059,6 @@ void actualizarMedicion() {
             }
         }
         
-        // Mapeo de Y
         int margenSuperior = 28;
         int margenInferior = GRAPH_H - 38;
 
@@ -969,24 +1067,21 @@ void actualizarMedicion() {
         int y2A = map((long)localBuf2[idx], (long)minV, (long)maxV, margenInferior, margenSuperior);
         int y2B = map((long)localBuf2[nextIdx], (long)minV, (long)maxV, margenInferior, margenSuperior);
         
-        // Dibujar las líneas de señal
         graphSprite.drawLine(x1, constrain(y1A,0,GRAPH_H), x2, constrain(y1B,0,GRAPH_H), COLOR_S1);
         graphSprite.drawLine(x1, constrain(y2A,0,GRAPH_H), x2, constrain(y2B,0,GRAPH_H), COLOR_S2); 
       }
       
-      graphSprite.pushSprite(11, 51); // Mostrar sprite
+      graphSprite.pushSprite(11, 51); 
 
       // Datos numéricos 
-      int yInfo = 280; // Altura alineada con botones
+      int yInfo = 280; 
       
-      // PWV
       tft.setTextDatum(ML_DATUM); 
       tft.setTextColor(COLOR_TEXTO, COLOR_FONDO);
       tft.drawString("PWV = ", 100, yInfo, 4);
       if(localPWV > 0) tft.drawString(String(localPWV, 1) + " m/s", 180, yInfo, 4);
       else tft.drawString("--- m/s", 180, yInfo, 4);
 
-      // Corazón + BPM
       tft.setSwapBytes(true);
       tft.pushImage(288, yInfo - 12, 24, 24, (const uint16_t*)epd_bitmap_ImgCorazon);
       tft.setSwapBytes(false);
@@ -999,14 +1094,28 @@ void actualizarMedicion() {
 // ==================================================================================================================================================================
 // MAIN SETUP & LOOP
 // ==================================================================================================================================================================
-bool iniciarSensores() {
-  Wire.begin(SDA1, SCL1, 100000);Wire1.begin(SDA2, SCL2, 100000);
-  Wire.setClock(100000); Wire1.setClock(100000);
-  if (!sensorProx.begin(Wire, I2C_SPEED_STANDARD)) return false;
-  if (!sensorDist.begin(Wire1, I2C_SPEED_STANDARD)) return false;
-  sensorProx.setup(30, 8, 2, 400, 411, 4096);  // Carótida: brightness 30 (antes 20)
-  sensorDist.setup(30, 8, 2, 400, 411, 4096);
-  return true;
+void iniciarSensores() {
+  // Inicializamos los buses
+  Wire.begin(SDA1, SCL1, 100000); 
+  Wire1.begin(SDA2, SCL2, 100000);
+  Wire.setClock(100000); 
+  Wire1.setClock(100000);
+
+  // Intentamos iniciar Sensor 1
+  if (sensorProx.begin(Wire, I2C_SPEED_STANDARD)) {
+      sensorProx.setup(30, 8, 2, 400, 411, 4096);
+      s1_conectado = true;
+  } else {
+      s1_conectado = false; // Marcamos como desconectado desde el inicio
+  }
+
+  // Intentamos iniciar Sensor 2
+  if (sensorDist.begin(Wire1, I2C_SPEED_STANDARD)) {
+      sensorDist.setup(30, 8, 2, 400, 411, 4096);
+      s2_conectado = true;
+  } else {
+      s2_conectado = false; // Marcamos como desconectado desde el inicio
+  }
 }
 
 
@@ -1017,8 +1126,6 @@ void setup() {
   pinMode(BUZZER_PIN, OUTPUT); 
 
   // Inicializar pantalla
-  //pinMode(LCD_LED_PIN, OUTPUT); 
-  //digitalWrite(LCD_LED_PIN, HIGH);
   tft.init(); 
   tft.setRotation(3); 
   tft.setSwapBytes(true);
@@ -1035,8 +1142,8 @@ void setup() {
   
   // Sonido de encendido
   digitalWrite(BUZZER_PIN, HIGH); 
-  delay(500); 
-  digitalWrite(BUZZER_PIN, LOW); // Beep corto
+  delay(400); 
+  digitalWrite(BUZZER_PIN, LOW);
   delay(2000);
 
   tft.setTextDatum(MC_DATUM); 
@@ -1045,10 +1152,10 @@ void setup() {
   delay(3000); 
   // -----------------------------------------------------------------------------------
 
-  // Inicializar sensores
-  if (!iniciarSensores()) {
-     tft.fillScreen(TFT_RED); tft.drawString("ERROR I2C", 240, 160, 4); while(1); 
-  }
+  // Inicializar sensores (no bloquea si no los detecta)
+  // TaskSensores se encargará de intentar reconectarlos luego.
+  iniciarSensores(); 
+  delay(1000);
   xTaskCreatePinnedToCore(TaskSensores,"SensorTask",10000,NULL,1,NULL,0);
 
   // PANTALLA PRINCIPAL ----------------------------------------------------------------
