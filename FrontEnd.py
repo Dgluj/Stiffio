@@ -16,9 +16,10 @@ from datetime import datetime
 
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
-    QLabel, QLineEdit, QPushButton, QComboBox, QStatusBar, QMessageBox, QDialog, QDateEdit, QDialogButtonBox, QFileDialog, QTextEdit)
+    QLabel, QLineEdit, QPushButton, QComboBox, QStatusBar, QMessageBox, QDialog, QDateEdit, QDialogButtonBox, 
+    QFileDialog, QTextEdit, QAbstractItemView)
 from PyQt6.QtCore import QTimer, Qt, QRegularExpression, QDate, QSize
-from PyQt6.QtGui import QPixmap, QRegularExpressionValidator, QFont, QIcon, QTextDocument
+from PyQt6.QtGui import QPixmap, QRegularExpressionValidator, QFont, QIcon, QTextDocument, QIntValidator
 
 from pyqtgraph import FillBetweenItem
 
@@ -84,6 +85,8 @@ class WelcomeScreen(QWidget):
 
         start_button.clicked.connect(self.open_patient_data_window) # Clic en comenzar
         layout.addWidget(start_button)
+
+        layout.addSpacing(20)
 
         # Botón historial  -----------------------------------------------------------
         history_button = QPushButton("Historial de Mediciones")
@@ -161,59 +164,96 @@ class PatientDataScreen(QWidget):
             logo_label.setPixmap(pixmap)
             logo_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
             self.layout.addWidget(logo_label)
-            self.layout.addSpacing(20)
+            self.layout.addSpacing(30)
 
 
         # Título ----------------------------------------------------------
         title_label = QLabel("Datos del paciente")
         title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title_label.setStyleSheet("color: white; font-size: 20pt; font-weight: bold;")
+        title_label.setStyleSheet("color: white; font-size: 24pt; font-weight: bold;")
         self.layout.addWidget(title_label)
-        self.layout.addSpacing(40)
+        self.layout.addSpacing(30)
 
 
         # Inputs ----------------------------------------------------------
 
+        # --- FILA 1: Nombre y Apellido ---
+        row1_layout = QHBoxLayout()
+
         # Nombre
+        self.name_container = QVBoxLayout()
         self.name_label = QLabel("Nombre")
         self.name_label.setStyleSheet("color: white; font-size: 14pt;")
         self.name_input = QLineEdit()
         self.name_input.setStyleSheet("background-color: white; color: black; font-size: 14pt; padding: 5px;")
-        self.name_input.setFixedWidth(750)  # Limitar ancho
-        self.layout.addWidget(self.name_label, alignment=Qt.AlignmentFlag.AlignCenter)
-        self.layout.addWidget(self.name_input, alignment=Qt.AlignmentFlag.AlignCenter)
+        self.name_input.setFixedWidth(365)
+        self.name_container.addWidget(self.name_label)
+        self.name_container.addWidget(self.name_input)
+        
+        
+        # Apellido
+        self.surname_container = QVBoxLayout()
+        self.surname_label = QLabel("Apellido")
+        self.surname_label.setStyleSheet("color: white; font-size: 14pt;")
+        self.surname_input = QLineEdit()
+        self.surname_input.setStyleSheet("background-color: white; color: black; font-size: 14pt; padding: 5px;")
+        self.surname_input.setFixedWidth(365)
+        self.surname_container.addWidget(self.surname_label)
+        self.surname_container.addWidget(self.surname_input)
+        
+        row1_layout.addLayout(self.name_container)
+        row1_layout.addSpacing(20)
+        row1_layout.addLayout(self.surname_container)
+        self.layout.addLayout(row1_layout)
         self.layout.addSpacing(20)
 
+
+        # --- FILA 2: DNI  ---
+        self.dni_label = QLabel("DNI")
+        self.dni_label.setStyleSheet("color: white; font-size: 14pt;")
+        self.dni_input = QLineEdit()
+        self.dni_input.setStyleSheet("background-color: white; color: black; font-size: 14pt; padding: 5px;")
+        self.dni_input.setMaxLength(8)
+        self.dni_input.setValidator(QIntValidator()) # Solo números
+        self.dni_input.setFixedWidth(750)
+        self.layout.addWidget(self.dni_label)
+        self.layout.addWidget(self.dni_input, alignment=Qt.AlignmentFlag.AlignCenter)
+        self.layout.addSpacing(20)
+
+
+        # --- FILA 3: Edad, Altura y Sexo ---
+        row3_layout = QHBoxLayout()
+        
         # Edad
+        self.age_container = QVBoxLayout()
         self.age_label = QLabel("Edad")
         self.age_label.setStyleSheet("color: white; font-size: 14pt;")
         self.age_input = QLineEdit()
+        self.age_input.setFixedWidth(230) # Limitar ancho
         self.age_input.setStyleSheet("background-color: white; color: black; font-size: 14pt; padding: 5px;")
-        self.age_input.setMaxLength(3)
+        self.age_input.setMaxLength(2)
         self.age_input.setValidator(QRegularExpressionValidator(QRegularExpression(r"^[0-9]{1,3}$")))
-        self.age_input.setFixedWidth(750)  # Limitar ancho
-        self.layout.addWidget(self.age_label, alignment=Qt.AlignmentFlag.AlignCenter)
-        self.layout.addWidget(self.age_input, alignment=Qt.AlignmentFlag.AlignCenter)
-        self.layout.addSpacing(20)
+        self.age_container.addWidget(self.age_label)
+        self.age_container.addWidget(self.age_input)
 
         # Altura
+        self.height_container = QVBoxLayout()
         self.height_label = QLabel("Altura (cm)")
         self.height_label.setStyleSheet("color: white; font-size: 14pt;")
         self.height_input = QLineEdit()
+        self.height_input.setFixedWidth(230) # Limitar ancho
         self.height_input.setStyleSheet("background-color: white; color: black; font-size: 14pt; padding: 5px;")
         self.height_input.setMaxLength(3)
         self.height_input.setValidator(QRegularExpressionValidator(QRegularExpression(r"^[0-9]{2,3}$")))
-        self.height_input.setFixedWidth(750)  # Limitar ancho
-        self.layout.addWidget(self.height_label, alignment=Qt.AlignmentFlag.AlignCenter)
-        self.layout.addWidget(self.height_input, alignment=Qt.AlignmentFlag.AlignCenter)
-        self.layout.addSpacing(20)
+        self.height_container.addWidget(self.height_label)
+        self.height_container.addWidget(self.height_input)
 
         # Sexo
+        self.sex_container = QVBoxLayout()
         self.sex_label = QLabel("Sexo")
         self.sex_label.setStyleSheet("color: white; font-size: 14pt;")
-        self.layout.addWidget(self.sex_label, alignment=Qt.AlignmentFlag.AlignCenter)
-
         self.sex_combo = QComboBox()
+        self.sex_combo.setFixedWidth(230) # Limitar ancho
         self.sex_combo.addItem("")  # Item vacío inicial
         self.sex_combo.addItem("Femenino")
         self.sex_combo.addItem("Masculino")
@@ -238,23 +278,34 @@ class PatientDataScreen(QWidget):
 
         """)
 
-        self.sex_combo.setFixedWidth(750)  # Limitar ancho
-        self.layout.addWidget(self.sex_combo, alignment=Qt.AlignmentFlag.AlignCenter)
-        self.layout.addSpacing(20)
+        self.sex_container.addWidget(self.sex_label)
+        self.sex_container.addWidget(self.sex_combo)
+    
+        # Unir todo en la fila horizontal
+        row3_layout.addLayout(self.age_container)
+        row3_layout.addSpacing(20)
+        row3_layout.addLayout(self.height_container)
+        row3_layout.addSpacing(20)
+        row3_layout.addLayout(self.sex_container)
+        
+        self.layout.addLayout(row3_layout)
+        self.layout.addSpacing(30)
 
-       # Observaciones (opcional)
-        self.observations_label = QLabel("Observaciones del médico")
-        self.observations_label.setStyleSheet("color: white; font-size: 12pt;")
-        self.layout.addWidget(self.observations_label, alignment=Qt.AlignmentFlag.AlignCenter)
+
+        # --- FILA 4: Observaciones ---
+
+        # Observaciones (opcional)
+        self.observations_label = QLabel("Observaciones")
+        self.observations_label.setStyleSheet("color: white; font-size: 14pt;")
+        self.layout.addWidget(self.observations_label)
 
         self.observations_input = QTextEdit()
         self.observations_input.setStyleSheet("background-color: white; color: black; font-size: 10pt; padding: 5px;")
         self.observations_input.setFixedWidth(750)
-        self.observations_input.setFixedHeight(50)
-        self.observations_input.setPlaceholderText("Ingrese síntomas, antecedentes u otras observaciones relevantes...")
+        self.observations_input.setFixedHeight(100)
         self.observations_input.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOn) # Evita que el texto expanda el widget
         self.layout.addWidget(self.observations_input, alignment=Qt.AlignmentFlag.AlignCenter)
-        self.layout.addSpacing(10)
+        self.layout.addSpacing(60)
 
 
         # Botones --------------------------------------------------------
@@ -325,15 +376,28 @@ class PatientDataScreen(QWidget):
     def go_next(self):
         # Verificar que todos los campos estén completos
         name_ok = bool(self.name_input.text().strip())
+        surname_ok = bool(self.surname_input.text().strip())
+        dni_ok = bool(self.dni_input.text().strip())
         age_ok = bool(self.age_input.text().strip())
         height_ok = bool(self.height_input.text().strip())
         sex_ok = self.sex_combo.currentText() != ""
 
-        if not (name_ok and age_ok and height_ok and sex_ok):
+        if not (name_ok and surname_ok and dni_ok and age_ok and height_ok and sex_ok):
             msg = QMessageBox(self)
             msg.setIcon(QMessageBox.Icon.Warning)
             msg.setWindowTitle("Campos incompletos")
-            msg.setText("Por favor, completa todos los datos antes de continuar.")
+            msg.setText("Por favor, complete todos los datos antes de continuar.")
+
+            msg.setStyleSheet("""
+                QMessageBox { 
+                    background-color: white; 
+                }
+                QLabel { 
+                    color: black; 
+                    background-color: transparent; 
+                }
+            """)
+
             font = QFont()
             font.setPointSize(14)  # Tamaño
             msg.setFont(font)
@@ -341,14 +405,14 @@ class PatientDataScreen(QWidget):
             ok_button = msg.addButton(QMessageBox.StandardButton.Ok) # Botón OK
             ok_button.setStyleSheet("""
                 QPushButton {
-                    background-color: #FFD700; /* Amarillo */
-                    color: black;
+                    background-color: #424242;
+                    color: white;
                     font-size: 12pt;
-                    padding: 10px 20px;
+                    padding: 8px 16px;
                     border-radius: 5px;
                 }
                 QPushButton:hover {
-                    background-color: #FFC300;
+                    background-color: #616161;
                 }
             """)
 
@@ -416,9 +480,11 @@ class PatientDataScreen(QWidget):
             msg.exec()
             return
 
-                # Si todas las validaciones pasan, guardar datos y continuar a la ventana principal
+        # Si todas las validaciones pasan, guardar datos y continuar a la ventana principal
         patient_data = {
             "nombre": self.name_input.text(),
+            "apellido": self.surname_input.text(),
+            "dni": self.dni_input.text(),
             "edad": self.age_input.text(),
             "altura": self.height_input.text(),
             "sexo": self.sex_combo.currentText(),
@@ -473,23 +539,30 @@ class HistoryScreen(QWidget):
         # ================= LOGO =================
         logo_path = "Logo.jpg"
         if os.path.exists(logo_path):
+            logo_width = 140
+            logo_height = 60
+            # Calculamos x para centrar: (Ancho de hoja / 2) - (Ancho del logo / 2)
+            x_centered = (width - logo_width) / 2
+            
             c.drawImage(
                 logo_path,
-                x=50,
+                x=x_centered, # <--- Usamos el valor calculado
                 y=height - 100,
-                width=140,
-                height=60,
+                width=logo_width,
+                height=logo_height,
                 preserveAspectRatio=True,
                 mask='auto'
             )
 
         # ================= TÍTULO =================
         c.setFont("Helvetica-Bold", 16)
-        c.drawCentredString(width / 2, height - 130, "REPORTE DE MEDICIÓN - STIFFIO")
+        c.drawCentredString(width / 2, height - 160, "REPORTE DE MEDICIÓN")
 
         # ================= TEXTO =================
-        text = c.beginText(50, height - 170)
-        text.setFont("Helvetica", 10)
+        margen_izquierdo = 140 
+        text = c.beginText(margen_izquierdo, height - 200)
+        text.setFont("Helvetica", 11) 
+        text.setLeading(14)           # Espaciado entre líneas
 
         for line in report_text.strip().split("\n"):
             text.textLine(line)
@@ -499,11 +572,35 @@ class HistoryScreen(QWidget):
         c.showPage()
         c.save()
 
-        QMessageBox.information(
-            self,
-            "PDF guardado",
-            f"El reporte fue guardado correctamente en:\n{file_path}"
-        )
+        # Mensaje de PDF guardado
+        msg = QMessageBox(self)
+        msg.setIcon(QMessageBox.Icon.Information)
+        msg.setWindowTitle("Descarga completa")
+        msg.setText("Reporte Exportado")
+        msg.setInformativeText(f"El archivo se guardó correctamente en:\n{file_path}")
+        msg.setStyleSheet("""
+            QMessageBox {
+                background-color: white; 
+            }
+            QLabel {
+                color: black;
+                background-color: transparent;
+                font-family: 'Segoe UI';
+                font-size: 10pt;
+            }  
+            QPushButton {
+                    background-color: #424242;
+                    color: white;
+                    font-size: 10pt;
+                    padding: 8px 16px;
+                    border-radius: 5px;
+                }
+                QPushButton:hover {
+                    background-color: #616161;
+                }
+        """)
+
+        msg.exec()
 
 
     def __init__(self):
@@ -532,7 +629,7 @@ class HistoryScreen(QWidget):
         search_layout = QHBoxLayout()
 
         self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("Buscar por Nombre / ID...")
+        self.search_input.setPlaceholderText("Buscar por DNI, Nombre o Apellido...")
         self.search_input.setStyleSheet("""
             QLineEdit {
                 background-color: white;
@@ -576,8 +673,8 @@ class HistoryScreen(QWidget):
             QPushButton {
                 background-color: #F44336;
                 color: white;
-                font-size: 14pt;
-                padding: 15px 30px;
+                font-size: 12pt;
+                padding: 10px 20px;
                 border-radius: 5px;
                 font-weight: bold;
                 max-width: 200px;
@@ -587,41 +684,71 @@ class HistoryScreen(QWidget):
             }
         """)
         back_button.clicked.connect(self.go_back)
-        self.layout.addWidget(back_button, alignment=Qt.AlignmentFlag.AlignCenter)
+        self.layout.addWidget(back_button, alignment=Qt.AlignmentFlag.AlignLeft)
+
+
 
 
     def load_data(self):
-        filename = "mediciones_pwv.csv"
+        filename = "datos_stiffio.csv" 
+        self.all_data = [] # Inicializamos para evitar el AttributeError
 
+        # Si el archivo NO existe, lo creamos con el formato correcto y datos de prueba
         if not os.path.exists(filename):
+            print(f"Creando archivo nuevo: {filename}")
+            header = ["Fecha y Hora", "DNI", "Nombre", "Apellido", "Edad", "Altura (cm)", "Sexo", "HR (bpm)", "PWV (m/s)", "Observaciones"]
+            # Datos de prueba para que veas algo en la tabla apenas abrís
+            demo_data = [
+                ["2026-02-13 10:00:00", "43987562", "Victoria", "Orsi", "23", "168", "Femenino", "75", "6.5", "Control inicial"],
+                ["2026-02-13 10:15:00", "12345678", "Juan", "Perez", "45", "175", "Masculino", "82", "8.2", ""],
+                ["2026-02-13 11:00:00", "22333444", "Catalina", "Jonquieres", "23", "158", "Femenino", "65", "5.9", ""],
+                ["2026-02-13 11:30:00", "33444555", "Daniela", "Gluj", "22", "166", "Femenino", "60", "6.1", ""],
+                ["2026-02-13 12:00:00", "44555666", "Ricardo", "Gomez", "60", "170", "Masculino", "88", "10.5", "Riesgo alto"],
+                ["2026-02-13 12:45:00", "55666777", "Elena", "Lopez", "34", "160", "Femenino", "72", "7.1", ""],
+                ["2026-02-13 13:20:00", "66777888", "Pablo", "Sosa", "29", "182", "Masculino", "70", "6.8", "Atleta"],
+                ["2026-02-13 14:10:00", "77888999", "Lucia", "Diaz", "52", "163", "Femenino", "76", "9.2", ""],
+                ["2026-02-13 15:00:00", "88999000", "Marcos", "Ruiz", "41", "178", "Masculino", "81", "7.8", ""],
+                ["2026-02-13 15:45:00", "99000111", "Ana", "Torres", "67", "155", "Femenino", "68", "11.2", "Control preventivo"],
+                ["2026-02-13 16:30:00", "10111222", "Hugo", "Vaca", "38", "185", "Masculino", "74", "6.4", ""],
+                ["2026-02-13 17:15:00", "11222333", "Sofia", "Luna", "25", "170", "Femenino", "62", "5.5", ""]
+            ]
+
+            try:
+                with open(filename, mode='w', newline='', encoding='utf-8-sig') as file:
+                    writer = csv.writer(file, delimiter=';')
+                    writer.writerow(header)
+                    writer.writerows(demo_data)
+            except Exception as e:
+                print(f"Error al crear el archivo: {e}")
+
+        # Una vez creado (o si ya existía), lo cargamos normalmente
+        try:
+            with open(filename, newline='', encoding='utf-8-sig') as file:
+                rows = list(csv.reader(file, delimiter=';'))
+
+            if len(rows) > 1:
+                # Filtramos posibles filas vacías al final
+                self.all_data = [r for r in rows[1:] if len(r) >= 9]
+                self.show_table(self.all_data)
+            else:
+                self.show_empty_message()
+
+        except Exception as e:
+            print(f"Error al leer datos: {e}")
             self.show_empty_message()
-            return
-
-        with open(filename, newline='', encoding='utf-8-sig') as file:
-            rows = list(csv.reader(file, delimiter=';'))
-
-        if len(rows) <= 1:
-            self.show_empty_message()
-            return
-
-        header = rows[0]
-        data = rows[1:]
-        self.all_data = data  # Store all data for filtering
-        self.show_table(header, data)
 
     def show_empty_message(self):
-        label = QLabel("No existen registros.\nInicie una medición.")
+        label = QLabel("No existen registros.")
         label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         label.setStyleSheet("font-size: 18pt; color: gray;")
         self.layout.addWidget(label)
 
-    def show_table(self, header, data):
+    def show_table(self, data):
         self.table = QTableWidget()
         self.table.setRowCount(len(data))
-        self.table.setColumnCount(len(header) + 2)  # +1 for ID column, +1 for delete button
-
-        headers_with_id = ["ID"] + header + ["Acciones"]
-        self.table.setHorizontalHeaderLabels(headers_with_id)
+        visible_headers = ["Fecha y Hora", "DNI", "Nombre",  "Apellido", "Edad", "Altura", "Sexo", "HR", "PWV", "Acciones"]
+        self.table.setColumnCount(len(visible_headers))
+        self.table.setHorizontalHeaderLabels(visible_headers)
 
         self.table.setStyleSheet("""
             QTableWidget {
@@ -652,40 +779,53 @@ class HistoryScreen(QWidget):
             }
         """)
 
-        self.table.setAlternatingRowColors(True)
+        self.table.setAlternatingRowColors(False)
         self.table.verticalHeader().setVisible(False)
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-
+        self.table.setVerticalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel) # Barra deslizante
+        self.table.verticalScrollBar().setSingleStep(5)
 
         for r, row in enumerate(data):
-            # ID column
-            id_item = QTableWidgetItem(f"#{str(r+1).zfill(3)}")
-            id_item.setForeground(Qt.GlobalColor.gray)
-            self.table.setItem(r, 0, id_item)
+            # 0:Fecha, 1:DNI, 2:Nombre, 3:Apellido, 4:Edad, 5:Altura, 6:Sexo, 7:HR, 8:PWV
+            
+            # Fecha (DD/MM/YYYY HH:MM)
+            try:
+                raw_date = row[0]
+                # Leemos el formato del CSV (Año-Mes-Día)
+                dt_obj = datetime.strptime(raw_date, "%Y-%m-%d %H:%M:%S")
+                
+                # Lo escribimos en formato local (Día/Mes/Año) y sin segundos
+                clean_date = dt_obj.strftime("%d/%m/%Y %H:%M")
+                
+                self.table.setItem(r, 0, QTableWidgetItem(clean_date))
+            except Exception:
+                self.table.setItem(r, 0, QTableWidgetItem(row[0]))
+             
+            self.table.setItem(r, 1, QTableWidgetItem(row[1])) # DNI
+            self.table.setItem(r, 2, QTableWidgetItem(row[2])) # Nombre
+            self.table.setItem(r, 3, QTableWidgetItem(row[3])) # Apellido
+            self.table.setItem(r, 4, QTableWidgetItem(row[4])) # Edad
+            self.table.setItem(r, 5, QTableWidgetItem(row[5])) # Altura
+            self.table.setItem(r, 6, QTableWidgetItem(row[6])) # Sexo
+            self.table.setItem(r, 7, QTableWidgetItem(row[7])) # HR
 
-            # Data columns
-            for c, value in enumerate(row):
-                item = QTableWidgetItem(value)
+            # PWV con lógica de color 
+            pwv_item = QTableWidgetItem(row[8])
+            try:
+                val = float(row[8])
+                pwv_item.setForeground(Qt.GlobalColor.green if val < 7.0 else Qt.GlobalColor.red)
+            except: pass
+            self.table.setItem(r, 8, pwv_item)
 
-                if c == 6:  # PWV column
-                    try:
-                        pwv_value = float(value)
-                        if pwv_value < 7.0:
-                            item.setForeground(Qt.GlobalColor.green)
-                        else:
-                            item.setForeground(Qt.GlobalColor.red)
-                    except ValueError:
-                        pass
-
-                self.table.setItem(r, c + 1, item)
-
+            # Botones
             actions_widget = QWidget()
             actions_widget.setStyleSheet("background-color: transparent;") 
             actions_layout = QHBoxLayout(actions_widget)
             actions_layout.setContentsMargins(5, 2, 5, 2)
             actions_layout.setSpacing(8)
 
+            # Boton de descargar
             download_button = QPushButton()
             download_button.setIcon(QIcon("download-icon.png"))
             download_button.setIconSize(QSize(35, 35))
@@ -702,6 +842,7 @@ class HistoryScreen(QWidget):
             download_button.clicked.connect(lambda checked, row=r: self.print_record(row))
             actions_layout.addWidget(download_button)
 
+            # Boton de eliminar
             delete_button = QPushButton()
             delete_button.setIcon(QIcon("delete-icon.png"))
             delete_button.setIconSize(QSize(35, 35))
@@ -718,7 +859,7 @@ class HistoryScreen(QWidget):
             delete_button.clicked.connect(lambda checked, row=r: self.delete_record(row))
             actions_layout.addWidget(delete_button)
 
-            self.table.setCellWidget(r, len(header) + 1, actions_widget)
+            self.table.setCellWidget(r, 9, actions_widget)
             self.table.setRowHeight(r, 75)
 
         self.table.resizeColumnsToContents()
@@ -734,16 +875,12 @@ class HistoryScreen(QWidget):
         self.layout.addWidget(self.table)
 
     def delete_record(self, row):
-        # Obtener el nombre del paciente para mostrarlo en el mensaje
-        # Asumiendo que la columna con el nombre es la segunda (índice 1)
-        name_item = self.table.item(row, 1)  # Columna 1 es "Fecha y Hora"
-        patient_info = name_item.text() if name_item else f"Registro #{row+1}"
 
         # Mensaje de confirmación
         msg = QMessageBox(self)
         msg.setIcon(QMessageBox.Icon.Warning)
         msg.setWindowTitle("Confirmar Eliminación")
-        msg.setText(f"¿Está seguro que desea eliminar este registro?\n\n{patient_info}")
+        msg.setText(f"¿Está seguro que desea eliminar este registro?")
         msg.setInformativeText("Esta acción no se puede deshacer.")
 
         font = QFont()
@@ -879,44 +1016,41 @@ class HistoryScreen(QWidget):
         self.welcome = WelcomeScreen()
         self.welcome.resize(self.size())
         self.welcome.move(self.pos())
-        self.welcome.show()
+        if self.isMaximized():
+            self.welcome.showMaximized()
+        else:
+            self.welcome.show()
         QTimer.singleShot(50, self.close)
 
 
     def print_record(self, row):
-        # Get all the data from the row
-        row_data = []
-        for col in range(1, self.table.columnCount() - 1):  # Skip ID and Actions columns
-            item = self.table.item(row, col)
-            if item:
-                row_data.append(item.text())
+        # Extraer datos de las celdas según los nuevos índices de la tabla
+        fecha_hora = self.table.item(row, 0).text()
+        dni = self.table.item(row, 1).text()
+        nombre = self.table.item(row, 2).text()
+        apellido = self.table.item(row, 3).text()
+        edad = self.table.item(row, 4).text()
+        altura = self.table.item(row, 5).text()
+        sexo = self.table.item(row, 6).text()
+        hr = self.table.item(row, 7).text()
+        pwv = self.table.item(row, 8).text()
 
-        # Create a formatted print dialog
-        msg = QMessageBox(self)
-        msg.setIcon(QMessageBox.Icon.Information)
-        msg.setWindowTitle("Guardar Registro")
+        # Obtener observaciones (No visibles en tabla, se buscan en la lista original)
+        observaciones = ""
+        for r in self.all_data:
+            if r[1] == dni: # La columna 1 en el CSV es el DNI
+                observaciones = r[9] # La columna 9 son las observaciones
+                break
 
-        # Format the data nicely
-        fecha_hora = row_data[0] if len(row_data) > 0 else "N/A"
-        nombre = row_data[1] if len(row_data) > 1 else "N/A"
-        edad = row_data[2] if len(row_data) > 2 else "N/A"
-        altura = row_data[3] if len(row_data) > 3 else "N/A"
-        sexo = row_data[4] if len(row_data) > 4 else "N/A"
-        hr = row_data[5] if len(row_data) > 5 else "N/A"
-        pwv = row_data[6] if len(row_data) > 6 else "N/A"
-        observaciones = row_data[7] if len(row_data) > 7 else ""
-
-        # Determine PWV status color
+        # Determinamos el estado para el reporte
         pwv_status = ""
         try:
-            pwv_value = float(pwv)
-            if pwv_value < 7.0:
+            if float(pwv.split()[0]) < 7.0: # .split() por si tiene el " m/s"
                 pwv_status = " (Normal)"
-            else:
+            else: 
                 pwv_status = " (Anormal)"
-        except ValueError:
-            pass
-    
+        except: pass
+
         # Construir el texto del reporte
         report_text = f"""
 
@@ -924,15 +1058,16 @@ Fecha y Hora: {fecha_hora}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 DATOS DEL PACIENTE:
-  • Nombre: {nombre}
-  • Edad: {edad} años
-  • Altura: {altura} cm
+  • Nombre y Apellido: {nombre} {apellido}
+  • DNI: {dni}
+  • Edad: {edad}
+  • Altura: {altura}
   • Sexo: {sexo}
 
   
 RESULTADOS DE LA MEDICIÓN:
-  • Frecuencia Cardíaca: {hr} bpm
-  • PWV (Velocidad de Onda de Pulso): {pwv} m/s{pwv_status}
+  • HR: {hr} bpm
+  • PWV: {pwv} m/s{pwv_status}
 
 """
         # Agregar observaciones solo si existen
@@ -946,8 +1081,18 @@ OBSERVACIONES:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         """
 
+        msg = QMessageBox(self) 
+        msg.setIcon(QMessageBox.Icon.Information)
+        msg.setWindowTitle("Previsualización de Reporte")
+        
+        # Estilo Stiffio: Fondo blanco y texto negro para legibilidad
+        msg.setStyleSheet("""
+            QMessageBox { background-color: white; }
+            QLabel { color: black; background-color: transparent; }
+        """)
+
         msg.setText(report_text)
-        msg.setInformativeText("Este reporte se puede exportar como archivo pdf.")
+    
 
         font = QFont()
         font.setFamily("Courier New")
@@ -987,7 +1132,6 @@ OBSERVACIONES:
 
         msg.exec()
 
-        #
         if msg.clickedButton() == print_btn:
             self.save_pdf(report_text)
 
@@ -1051,12 +1195,13 @@ OBSERVACIONES:
                 pass
 
         if not filtered_data:
-            QMessageBox.information(
-                self,
-                "Sin resultados",
-                "No hay registros en el rango de fechas seleccionado.\nPor favor seleccione otro rango."
-            )
-            return  # No cerrar el diálogo, permite seleccionar otro rango
+            msg = QMessageBox(self)
+            msg.setIcon(QMessageBox.Icon.Information)
+            msg.setWindowTitle("Sin resultados")
+            msg.setText("No hay registros en el rango de fechas seleccionado.")
+            msg.setStyleSheet("QMessageBox { background-color: white; } QLabel { color: black; }")
+            msg.exec()
+            return
 
         # Eliminar tabla actual solo si hay resultados
         if hasattr(self, 'table'):
@@ -1064,10 +1209,7 @@ OBSERVACIONES:
             self.table.deleteLater()
 
         # Mostrar datos filtrados
-        self.show_table(
-            ["Fecha y Hora", "Nombre", "Edad", "Altura (cm)", "Sexo", "HR (bpm)", "PWV (m/s)", "Observaciones"],
-            filtered_data
-        )
+        self.show_table(filtered_data)
 
         dialog.accept()
 
@@ -1165,15 +1307,12 @@ class MainScreen(QMainWindow):
 
         top_layout.addStretch()
 
-        # Botón de guardar medición
-        self.save_button = QPushButton("Guardar Medición")
-        self.save_button.clicked.connect(self.save_measurement)
-
-        # Botón Nuevo Paciente
-        self.new_patient_button = QPushButton("Nuevo Paciente")
-        self.new_patient_button.setStyleSheet("""
+        # Botón Salir 
+        self.exit_button = QPushButton("Salir")
+        self.exit_button.setFixedWidth(160)
+        self.exit_button.setStyleSheet("""
             QPushButton {
-                background-color: #F44336;  /* Rojo */
+                background-color: #F44336;
                 color: white;
                 font-size: 12pt;
                 padding: 10px 20px;
@@ -1186,10 +1325,41 @@ class MainScreen(QMainWindow):
         """)
 
         # Conectar acción del botón
-        self.new_patient_button.clicked.connect(self.back_to_patient_data)
+        self.exit_button.clicked.connect(self.go_back) 
+        top_layout.addWidget(self.exit_button, alignment=Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop)
 
-        top_layout.addSpacing(50)
+
+        # Espaciado entre botones
+        top_layout.addSpacing(5)
+
+
+        # Botón de guardar medición
+        # self.save_button = QPushButton("Guardar Medición")
+        # self.save_button.clicked.connect(self.save_measurement)
+
+        # Botón Nuevo Paciente
+        self.new_patient_button = QPushButton("Nuevo Paciente")
+        self.new_patient_button.setFixedWidth(160)
+        self.new_patient_button.setStyleSheet("""
+            QPushButton {
+                background-color: #424242;
+                color: white;
+                font-size: 12pt;
+                padding: 10px 20px;
+                border-radius: 5px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #616161;
+            }
+        """)
+
+        # Conectar acción del botón
+        self.new_patient_button.clicked.connect(self.back_to_patient_data)
+        top_layout.addSpacing(20)
         top_layout.addWidget(self.new_patient_button, alignment=Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop)
+        
+        # Añadimos la fila completa al layout de la columna izquierda
         self.left_layout.addLayout(top_layout)
 
 
@@ -1200,37 +1370,47 @@ class MainScreen(QMainWindow):
         self.patient_data_frame.setStyleSheet("""
             background-color: #1c1c1c;
             border-radius: 5px;
-            padding: 10px;
+            padding: 3px;
         """)
         self.patient_data_layout = QVBoxLayout()
+        self.patient_data_layout.setContentsMargins(15, 10, 15, 10) # Márgenes pequeños (L, T, R, B)
+        self.patient_data_layout.setSpacing(2) # Espaciado mínimo entre etiquetas
         self.patient_data_frame.setLayout(self.patient_data_layout)
         self.patient_data_frame.setFixedSize(500, 290)
         self.left_layout.addWidget(self.patient_data_frame)
-
+        
         title_label = QLabel("Datos del paciente") # Título
-        title_label.setStyleSheet("color: white; font-size: 20pt; font-weight: bold;")
+        title_label.setStyleSheet("color: white; font-size: 18pt; font-weight: bold;")
         title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.patient_data_layout.addWidget(title_label)
+        self.patient_data_layout.addSpacing(5)
 
 
-        # Nombre
-        self.name_label = QLabel(f"<b>Nombre:</b> {self.patient_data['nombre']}")
-        self.name_label.setStyleSheet("color: white; font-size: 16pt;")
+        # Nombre y Apellido
+        full_name = f"{self.patient_data.get('nombre', '')} {self.patient_data.get('apellido', '')}"
+        self.name_label = QLabel(f"<b>Nombre y Apellido:</b> {full_name}")
+        self.name_label.setStyleSheet("color: white; font-size: 14pt;")
         self.patient_data_layout.addWidget(self.name_label)
+
+        # DNI
+        dni_val = self.patient_data.get('dni', 'N/A')
+        self.dni_label = QLabel(f"<b>DNI:</b> {dni_val}")
+        self.dni_label.setStyleSheet("color: white; font-size: 14pt;")
+        self.patient_data_layout.addWidget(self.dni_label)
 
         # Edad
         self.age_label = QLabel(f"<b>Edad:</b> {self.patient_data['edad']}")
-        self.age_label.setStyleSheet("color: white; font-size: 16pt;")
+        self.age_label.setStyleSheet("color: white; font-size: 14pt;")
         self.patient_data_layout.addWidget(self.age_label)
 
         # Altura
         self.height_label = QLabel(f"<b>Altura:</b> {self.patient_data['altura']} cm")
-        self.height_label.setStyleSheet("color: white; font-size: 16pt;")
+        self.height_label.setStyleSheet("color: white; font-size: 14pt;")
         self.patient_data_layout.addWidget(self.height_label)
 
         # Sexo
         self.sex_label = QLabel(f"<b>Sexo:</b> {self.patient_data['sexo']}")
-        self.sex_label.setStyleSheet("color: white; font-size: 16pt;")
+        self.sex_label.setStyleSheet("color: white; font-size: 14pt;")
         self.patient_data_layout.addWidget(self.sex_label)
 
 
@@ -1454,12 +1634,131 @@ class MainScreen(QMainWindow):
 
 
     # Funcionalidad -------------------------------------------------------------------------------
+    
+    # Volver a la ventana de inicio
+    def go_back(self):
+        # Popup de advertencia
+        msg = QMessageBox(self)
+        msg.setIcon(QMessageBox.Icon.Warning)
+        msg.setWindowTitle("Confirmar Salida")
+        msg.setText("¿Desea salir de la medición actual?")
+        msg.setInformativeText("Se perderán los datos que no hayan sido guardados.")
+        font = QFont()
+        font.setPointSize(14)
+        msg.setFont(font)
+
+        # Botones personalizados para el popup
+        si_button = msg.addButton("Salir", QMessageBox.ButtonRole.YesRole)
+        no_button = msg.addButton("Cancelar", QMessageBox.ButtonRole.NoRole)
+
+        si_button.setStyleSheet("""
+            QPushButton {
+                background-color: #F44336; color: white; font-size: 12pt;
+                padding: 10px 20px; border-radius: 5px;
+            }
+            QPushButton:hover { background-color: #D32F2F; }
+        """)
+        no_button.setStyleSheet("""
+            QPushButton {
+                background-color: #424242; color: white; font-size: 12pt;
+                padding: 10px 20px; border-radius: 5px;
+            }
+            QPushButton:hover { background-color: #616161; }
+        """)
+
+        msg.exec()
+
+        # Si el usuario confirma, volvemos al inicio
+        if msg.clickedButton() == si_button:
+            from __main__ import WelcomeScreen
+            self.welcome_screen = WelcomeScreen()
+            self.welcome_screen.resize(self.size())
+            self.welcome_screen.move(self.pos())
+            if self.isMaximized():
+                self.welcome_screen.showMaximized()
+            else:
+                self.welcome_screen.show()
+            QTimer.singleShot(50, self.close)
+
+
+    '''
+    Esta funcion no tiene el popup
+
+    def go_back(self):
+        from __main__ import WelcomeScreen
+        self.welcome_screen = WelcomeScreen()
+
+        # Mantener tamaño y posición de la ventana actual
+        self.welcome_screen.resize(self.size())
+        self.welcome_screen.move(self.pos())
+        if self.isMaximized():
+            self.welcome_screen.showMaximized()
+        else:
+            self.welcome_screen.show()
+
+        # Cerrar la ventana actual después de mostrar la nueva
+        QTimer.singleShot(50, self.close)
+    '''
+
 
     # Realizar una medición con nuevo paciente
     def back_to_patient_data(self):
+        # Popup de advertencia
+        msg = QMessageBox(self)
+        msg.setIcon(QMessageBox.Icon.Warning)
+        msg.setWindowTitle("Nuevo Paciente")
+        msg.setText("¿Desea iniciar una medición con un nuevo paciente?")
+        msg.setInformativeText("Se perderán los datos de la medición actual.")
+        
+        font = QFont()
+        font.setPointSize(14)
+        msg.setFont(font)
 
-        # Limpiamos el buffer y el valor de PWV del backend
-        # para que el nuevo paciente comience de cero.
+
+        # Botones personalizados para el popup
+        si_button = msg.addButton("Salir", QMessageBox.ButtonRole.YesRole)
+        no_button = msg.addButton("Cancelar", QMessageBox.ButtonRole.NoRole)
+
+        si_button.setStyleSheet("""
+            QPushButton {
+                background-color: #F44336; color: white; font-size: 12pt;
+                padding: 10px 20px; border-radius: 5px; 
+            }
+            QPushButton:hover { background-color: #D32F2F; }
+        """)
+        no_button.setStyleSheet("""
+            QPushButton {
+                background-color: #424242; color: white; font-size: 12pt;
+                padding: 10px 20px; border-radius: 5px;
+            }
+            QPushButton:hover { background-color: #616161; }
+        """)
+
+        msg.exec()
+
+        if msg.clickedButton() == si_button:
+            # Limpiamos buffers antes de irnos
+            processor.pwv_buffer.clear()
+            processor.pwv = None
+
+            from __main__ import PatientDataScreen
+            self.patient_data_window = PatientDataScreen()
+            self.patient_data_window.resize(self.size())
+            self.patient_data_window.move(self.pos())
+            if self.isMaximized():
+                self.patient_data_window.showMaximized()
+            else:
+                self.patient_data_window.show()
+            QTimer.singleShot(50, self.close)
+
+
+    '''
+    Esta funcion no tiene el popup
+
+
+    def back_to_patient_data(self):
+
+        # Limpiamos el buffer y el valor de PWV del backend para que el nuevo paciente comience de cero.
         processor.pwv_buffer.clear()
         processor.pwv = None
 
@@ -1476,6 +1775,8 @@ class MainScreen(QMainWindow):
 
         # Cerrar la ventana actual después de mostrar la nueva
         QTimer.singleShot(50, self.close)
+    '''
+    
 
     # Iniciar medición
     def toggle_measurement(self):
@@ -1660,9 +1961,11 @@ class MainScreen(QMainWindow):
     def save_measurement(self):
         filename = "mediciones_pwv.csv"
 
-        # 1. Obtener los valores actuales
+        # Datos del paciente
         # (Usamos .get() para evitar errores si una clave no existe)
         nombre = self.patient_data.get('nombre', 'N/A')
+        apellido = self.patient_data.get('apellido', 'N/A')
+        dni = self.patient_data.get('dni', 'N/A')
         edad = self.patient_data.get('edad', 'N/A')
         altura = self.patient_data.get('altura', 'N/A')
         sexo = self.patient_data.get('sexo', 'N/A')
@@ -1672,23 +1975,23 @@ class MainScreen(QMainWindow):
         pwv_val = processor.get_metrics().get('pwv')
         hr_val = ComunicacionMax.hr_avg # HR del .ino
 
-        # 2. Validar que tengamos datos
+        # Validar que tengamos datos
         if pwv_val is None or hr_val is None:
             QMessageBox.warning(self, "Datos Incompletos",
                                 "No se puede guardar la medición.\n"
                                 "Asegúrese de que la PWV y la HR se estén midiendo.")
             return
 
-        # 3. Formatear los datos
+        # Formatear los datos
         pwv_str = f"{pwv_val:.1f}"
         hr_str = f"{hr_val:.0f}"
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        # 4. Preparar la fila y el encabezado (observaciones al final)
-        header = ["Fecha y Hora", "Nombre", "Edad", "Altura (cm)", "Sexo", "HR (bpm)", "PWV (m/s)", "Observaciones"]
-        data_row = [timestamp, nombre, edad, altura, sexo, hr_str, pwv_str, observaciones]
+        # Encabezado
+        header = ["Fecha y Hora", "DNI", "Nombre", "Apellido", "Edad", "Altura (cm)", "Sexo", "HR (bpm)", "PWV (m/s)", "Observaciones"]
+        data_row = [timestamp, dni,  nombre, apellido, edad, altura, sexo, hr_str, pwv_str, observaciones]
 
-        # 5. Escribir en el archivo CSV
+        # Escribir en el archivo CSV
         try:
             # Revisar si el archivo ya existe para no escribir el encabezado cada vez
             file_exists = os.path.isfile(filename)

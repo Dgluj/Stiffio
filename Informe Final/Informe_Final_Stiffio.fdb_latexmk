@@ -1,14 +1,14 @@
 # Fdb version 4
-["bibtex Informe_Final_Stiffio"] 1770904453.88334 "Informe_Final_Stiffio.aux" "Informe_Final_Stiffio.bbl" "Informe_Final_Stiffio" 1770904535.5738 0
+["bibtex Informe_Final_Stiffio"] 1770904453.88334 "Informe_Final_Stiffio.aux" "Informe_Final_Stiffio.bbl" "Informe_Final_Stiffio" 1770930839.81117 0
   "./Referencias.bib" 1769363952 11690 c63a351dd5190f4c7d0c3b37ef52cc63 ""
   "C:/Users/Victoria/AppData/Local/Programs/MiKTeX/bibtex/bst/ieeetran/IEEEtran.bst" 1440622569 57748 7c8250ecf02814ce6ddc0cdbb63df1dd ""
-  "Informe_Final_Stiffio.aux" 1770904534 14291 d746937708445655914df1cea6c0e821 "pdflatex"
+  "Informe_Final_Stiffio.aux" 1770930838 14291 d746937708445655914df1cea6c0e821 "pdflatex"
   (generated)
   "Informe_Final_Stiffio.bbl"
   "Informe_Final_Stiffio.blg"
   (rewritten before read)
-["pdflatex"] 1770904531.11493 "c:/Users/Victoria/Desktop/Stiffio/Informe Final/Informe_Final_Stiffio.tex" "Informe_Final_Stiffio.pdf" "Informe_Final_Stiffio" 1770904535.57458 0
-  "Anexos.tex" 1770904530 6586 f37f4bcc19d77673089e0944dd33102f ""
+["pdflatex"] 1770930835.99428 "c:/Users/Victoria/Desktop/Stiffio/Informe Final/Informe_Final_Stiffio.tex" "Informe_Final_Stiffio.pdf" "Informe_Final_Stiffio" 1770930839.81173 0
+  "Anexos.tex" 1770904559 6586 f37f4bcc19d77673089e0944dd33102f ""
   "C:/Users/Victoria/AppData/Local/MiKTeX/fonts/map/pdftex/pdftex.map" 1770469986 80909 eab91d9745dd2edfd62a31d53cd5fe15 ""
   "C:/Users/Victoria/AppData/Local/MiKTeX/fonts/pk/ljfour/jknappen/ec/dpi600/tcrm1200.pk" 1764283696 14064 cecd351ef737e658d42647c59951b176 ""
   "C:/Users/Victoria/AppData/Local/MiKTeX/miktex/data/le/pdftex/pdflatex.fmt" 1764272159 24226504 7e52af0141d4fd449edb407ade7c0806 ""
@@ -116,12 +116,12 @@
   "C:/Users/Victoria/AppData/Local/Programs/MiKTeX/tex/latex/xcolor/svgnam.def" 1700127522 4705 ec4d2f4b7125d5a5145cc9aabae1d54b ""
   "C:/Users/Victoria/AppData/Local/Programs/MiKTeX/tex/latex/xcolor/xcolor.sty" 1700127522 55487 80a65caedd3722f4c20a14a69e785d8f ""
   "C:/Users/Victoria/AppData/Local/Programs/MiKTeX/tex/latex/xkeyval/xkeyval.sty" 1656236919 4937 4ce600ce9bd4ec84d0250eb6892fcf4f ""
-  "Informe_Final_Stiffio.aux" 1770904534 14291 d746937708445655914df1cea6c0e821 "pdflatex"
+  "Informe_Final_Stiffio.aux" 1770930838 14291 d746937708445655914df1cea6c0e821 "pdflatex"
   "Informe_Final_Stiffio.bbl" 1770904454 6888 c670d8e25968fb96f340b47ad4a71bdd "bibtex Informe_Final_Stiffio"
-  "Informe_Final_Stiffio.out" 1770904534 6708 3f790f5f3dd3c7bbeb326b87163e0c73 "pdflatex"
-  "Informe_Final_Stiffio.tex" 1770904530 62726 920b43aa6d0a7918c842b9767ff56595 ""
-  "Informe_Final_Stiffio.toc" 1770904534 3692 07e52b97a63c3d61bacaedd0f3215384 "pdflatex"
-  "c:/Users/Victoria/Desktop/Stiffio/Informe Final/Informe_Final_Stiffio.tex" 1770904530 62726 920b43aa6d0a7918c842b9767ff56595 ""
+  "Informe_Final_Stiffio.out" 1770930838 6708 3f790f5f3dd3c7bbeb326b87163e0c73 "pdflatex"
+  "Informe_Final_Stiffio.tex" 1770930834 62728 2c63fe9db387da8825839306654cbb48 ""
+  "Informe_Final_Stiffio.toc" 1770930838 3692 07e52b97a63c3d61bacaedd0f3215384 "pdflatex"
+  "c:/Users/Victoria/Desktop/Stiffio/Informe Final/Informe_Final_Stiffio.tex" 1770930834 62728 2c63fe9db387da8825839306654cbb48 ""
   "images/Arterias.jpg" 1769363952 113015 1e4c62310f1e00f84ba57bf38d104561 ""
   "images/Bateria.png" 1770865520 362422 189f06bcb372617007fabe12a3ab8d15 ""
   "images/Caja 1.png" 1770862690 172222 3c1eb58cd690197c97b8ce4449b37c3a ""
