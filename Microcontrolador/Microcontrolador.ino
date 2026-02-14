@@ -8,8 +8,7 @@
 #include <WiFi.h>
 #include <WebSocketsServer.h>
 #include "MAX30105.h"
-#include "heartRate.h"  // Algoritmo SparkFun para detección de latidos S2
-#include "heartRateDual.h"  // Detector adaptativo para S1 (carótida)
+#include <math.h>
 #include "bitmaps.h" // Imagenes
 
 
@@ -187,12 +186,28 @@ void TaskSensores(void *pvParameters) {
   unsigned long baseTime = 0;
   const unsigned long TIEMPO_ESTABILIZACION = 10000;
 
-  // Detección PWV/HR
-  float lastValS1 = 0; float lastValS2 = 0;
-  int idxPeakS1 = -1;
-  int idxPeakS2 = -1;
-  long lastBeatTime_sparkfun = 0;
-  unsigned long timePeakS1 = 0;
+  // Detección de picos locales (reemplaza checkForBeat/checkForBeatS1)
+  const unsigned long REFRACT_MS = 300;
+  const unsigned long PTT_MIN_MS = 20;
+  const unsigned long PTT_MAX_MS = 200;
+  const int THRESH_WINDOW_SAMPLES = 800; // ~2 s a 400 SPS
+
+  static float thrWinS1[THRESH_WINDOW_SAMPLES] = {0};
+  static float thrWinS2[THRESH_WINDOW_SAMPLES] = {0};
+  int thrIdx = 0;
+  int thrCount = 0;
+  float thrSumS1 = 0.0f, thrSumSqS1 = 0.0f;
+  float thrSumS2 = 0.0f, thrSumSqS2 = 0.0f;
+
+  int peakPriming = 0;
+  float s1_prev2 = 0.0f, s1_prev1 = 0.0f;
+  float s2_prev2 = 0.0f, s2_prev1 = 0.0f;
+  unsigned long prev1Time = 0;
+
+  unsigned long lastPeakTimeS1 = 0;
+  unsigned long lastPeakTimeS2 = 0;
+  unsigned long lastProxPeakForHR = 0;
+  unsigned long pendingProxPeakTime = 0;
   bool waitingForS2 = false;
 
   // Hardware Check
@@ -309,62 +324,143 @@ void TaskSensores(void *pvParameters) {
             float valFinal1 = sum1 / MA_SIZE;
             float valFinal2 = sum2 / MA_SIZE;
 
-            float deltaS1 = valFinal1 - lastValS1; lastValS1 = valFinal1;
-            float deltaS2 = valFinal2 - lastValS2; lastValS2 = valFinal2;
+            // 5. Threshold adaptativo: mean + 0.5 * std (ventana móvil ~2 s)
+            if (thrCount < THRESH_WINDOW_SAMPLES) {
+              thrWinS1[thrIdx] = valFinal1;
+              thrWinS2[thrIdx] = valFinal2;
+              thrSumS1 += valFinal1;
+              thrSumSqS1 += valFinal1 * valFinal1;
+              thrSumS2 += valFinal2;
+              thrSumSqS2 += valFinal2 * valFinal2;
+              thrCount++;
+            } else {
+              float oldS1 = thrWinS1[thrIdx];
+              float oldS2 = thrWinS2[thrIdx];
+              thrSumS1 -= oldS1;
+              thrSumSqS1 -= oldS1 * oldS1;
+              thrSumS2 -= oldS2;
+              thrSumSqS2 -= oldS2 * oldS2;
+
+              thrWinS1[thrIdx] = valFinal1;
+              thrWinS2[thrIdx] = valFinal2;
+              thrSumS1 += valFinal1;
+              thrSumSqS1 += valFinal1 * valFinal1;
+              thrSumS2 += valFinal2;
+              thrSumSqS2 += valFinal2 * valFinal2;
+            }
+            thrIdx = (thrIdx + 1) % THRESH_WINDOW_SAMPLES;
+
+            float thresholdS1 = 0.0f;
+            float thresholdS2 = 0.0f;
+            if (thrCount > 0) {
+              float meanS1 = thrSumS1 / (float)thrCount;
+              float meanS2 = thrSumS2 / (float)thrCount;
+              float varS1 = (thrSumSqS1 / (float)thrCount) - (meanS1 * meanS1);
+              float varS2 = (thrSumSqS2 / (float)thrCount) - (meanS2 * meanS2);
+              if (varS1 < 0.0f) varS1 = 0.0f;
+              if (varS2 < 0.0f) varS2 = 0.0f;
+              thresholdS1 = meanS1 + (0.5f * sqrtf(varS1));
+              thresholdS2 = meanS2 + (0.5f * sqrtf(varS2));
+            }
+
+            // 6. Detector explícito de máximos locales sobre señal filtrada
+            bool peakS1 = false;
+            bool peakS2 = false;
+            unsigned long peakTimeS1 = 0;
+            unsigned long peakTimeS2 = 0;
+
+            if (peakPriming >= 2) {
+              if ((s1_prev2 < s1_prev1) && (s1_prev1 > valFinal1) && (s1_prev1 > thresholdS1)) {
+                if ((prev1Time - lastPeakTimeS1) > REFRACT_MS) {
+                  peakS1 = true;
+                  peakTimeS1 = prev1Time;
+                  lastPeakTimeS1 = prev1Time;
+                }
+              }
+
+              if ((s2_prev2 < s2_prev1) && (s2_prev1 > valFinal2) && (s2_prev1 > thresholdS2)) {
+                if ((prev1Time - lastPeakTimeS2) > REFRACT_MS) {
+                  peakS2 = true;
+                  peakTimeS2 = prev1Time;
+                  lastPeakTimeS2 = prev1Time;
+                }
+              }
+            }
+
+            if (peakPriming == 0) {
+              s1_prev1 = valFinal1;
+              s2_prev1 = valFinal2;
+              prev1Time = sampleTimestamp;
+              peakPriming = 1;
+            } else {
+              s1_prev2 = s1_prev1;
+              s2_prev2 = s2_prev1;
+              s1_prev1 = valFinal1;
+              s2_prev1 = valFinal2;
+              prev1Time = sampleTimestamp;
+              if (peakPriming < 2) peakPriming = 2;
+            }
             
             // --- ALGORITMOS HR / PWV ---
             if (faseMedicion == 2) {
-               // Detección S1
-               if (checkForBeatS1(valFinal1) == true) {
-                  idxPeakS1 = writeHead;
+               // HR desde picos proximales
+               if (peakS1) {
+                  if (lastProxPeakForHR > 0) {
+                    long delta = peakTimeS1 - lastProxPeakForHR;
+                    float beatsPerMinute = 60.0 / (delta / 1000.0);
+
+                    if (beatsPerMinute > 40 && beatsPerMinute < 200) {
+                        bpmBuffer_global[bpmIdx_global] = (int)beatsPerMinute;
+                        bpmIdx_global = (bpmIdx_global + 1) % AVG_SIZE;
+                        if (validSamplesBPM_global < AVG_SIZE) validSamplesBPM_global++;
+
+                        if (validSamplesBPM_global >= 5) {
+                            long total = 0;
+                            int count = (validSamplesBPM_global < AVG_SIZE) ? validSamplesBPM_global : AVG_SIZE;
+                            for (int i = 0; i < count; i++) total += bpmBuffer_global[i];
+                            bpmMostrado = total / count;
+                        }
+                    }
+                  }
+                  lastProxPeakForHR = peakTimeS1;
+
+                  // Inicia ventana de búsqueda distal para PTT
+                  pendingProxPeakTime = peakTimeS1;
                   waitingForS2 = true;
                }
-               // Detección S2 & HR
-               if (checkForBeat(valFinal2) == true) {
-                  long delta = sampleTimestamp - lastBeatTime_sparkfun;
-                  lastBeatTime_sparkfun = sampleTimestamp;
-                  float beatsPerMinute = 60.0 / (delta / 1000.0);
 
-                  if (beatsPerMinute > 40 && beatsPerMinute < 200) {
-                      bpmBuffer_global[bpmIdx_global] = (int)beatsPerMinute;
-                      bpmIdx_global = (bpmIdx_global + 1) % AVG_SIZE;
-                      if (validSamplesBPM_global < AVG_SIZE) validSamplesBPM_global++;
+               // Cálculo PTT/PWV: primer pico distal válido luego del proximal
+               if (waitingForS2) {
+                  if (peakS2) {
+                    long transitTime = peakTimeS2 - pendingProxPeakTime;
 
-                      if (validSamplesBPM_global >= 5) {
-                          long total = 0;
-                          int count = (validSamplesBPM_global < AVG_SIZE) ? validSamplesBPM_global : AVG_SIZE;
-                          for (int i = 0; i < count; i++) total += bpmBuffer_global[i];
-                          bpmMostrado = total / count;
+                    if (transitTime > (long)PTT_MIN_MS && transitTime < (long)PTT_MAX_MS) {
+                      int alturaCalc = (pacienteAltura > 0) ? pacienteAltura : 170;
+                      float distMeters = (alturaCalc * 0.436) / 100.0;
+                      float instantPWV = distMeters / (transitTime / 1000.0);
+
+                      if (instantPWV > 3.0 && instantPWV < 50.0) {
+                        pwvBuffer_global[pwvIdx_global] = instantPWV;
+                        pwvIdx_global = (pwvIdx_global + 1) % AVG_SIZE;
+                        if (validSamplesPWV_global < AVG_SIZE) validSamplesPWV_global++;
+
+                        if (validSamplesPWV_global >= 2) {
+                          float totalPWV = 0;
+                          int count = (validSamplesPWV_global < AVG_SIZE) ? validSamplesPWV_global : AVG_SIZE;
+                          for (int i = 0; i < count; i++) totalPWV += pwvBuffer_global[i];
+                          pwvMostrado = totalPWV / count;
+                        }
                       }
-                      idxPeakS2 = writeHead;
+                      waitingForS2 = false;
+                    } else if (transitTime >= (long)PTT_MAX_MS) {
+                      waitingForS2 = false;
+                    }
                   }
-               }
-               
-               // Cálculo PWV
-               if (waitingForS2 && idxPeakS1 >= 0 && idxPeakS2 >= 0) {
-                   unsigned long timeS1 = buffer_time[idxPeakS1];
-                   unsigned long timeS2 = buffer_time[idxPeakS2];
-                   long transitTime = timeS2 - timeS1;
-                   waitingForS2 = false;
 
-                   if (transitTime > 20 && transitTime < 400) {
-                       int alturaCalc = (pacienteAltura > 0) ? pacienteAltura : 170;
-                       float distMeters = (alturaCalc * 0.436) / 100.0;
-                       float instantPWV = distMeters / (transitTime / 1000.0);
-
-                       if (instantPWV > 3.0 && instantPWV < 50.0) {
-                           pwvBuffer_global[pwvIdx_global] = instantPWV;
-                           pwvIdx_global = (pwvIdx_global + 1) % AVG_SIZE;
-                           if (validSamplesPWV_global < AVG_SIZE) validSamplesPWV_global++;
-
-                           if (validSamplesPWV_global >= 2) {
-                               float totalPWV = 0;
-                               int count = (validSamplesPWV_global < AVG_SIZE) ? validSamplesPWV_global : AVG_SIZE;
-                               for (int i = 0; i < count; i++) totalPWV += pwvBuffer_global[i];
-                               pwvMostrado = totalPWV / count;
-                           }
-                       }
-                   }
+                  // Timeout de la ventana distal
+                  if (waitingForS2 && ((sampleTimestamp - pendingProxPeakTime) > PTT_MAX_MS)) {
+                    waitingForS2 = false;
+                  }
                }
             } // Fin Fase 2
 
@@ -406,6 +502,11 @@ void TaskSensores(void *pvParameters) {
                 }
                 bpmMostrado = 0; pwvMostrado = 0.0;
                 validSamplesBPM_global = 0; validSamplesPWV_global = 0;
+                waitingForS2 = false;
+                pendingProxPeakTime = 0;
+                lastProxPeakForHR = 0;
+                lastPeakTimeS1 = 0;
+                lastPeakTimeS2 = 0;
               }
             }
 
@@ -420,6 +521,16 @@ void TaskSensores(void *pvParameters) {
               s1_hp = 0; s2_hp = 0;
               lastVal1_centered = 0; lastVal2_centered = 0;
               bpmMostrado = 0; pwvMostrado = 0.0;
+              waitingForS2 = false;
+              pendingProxPeakTime = 0;
+              lastProxPeakForHR = 0;
+              lastPeakTimeS1 = 0;
+              lastPeakTimeS2 = 0;
+              peakPriming = 0;
+              thrIdx = 0;
+              thrCount = 0;
+              thrSumS1 = 0.0f; thrSumSqS1 = 0.0f;
+              thrSumS2 = 0.0f; thrSumSqS2 = 0.0f;
               sensorProx.nextSample(); sensorDist.nextSample();
             }
           }
