@@ -27,8 +27,7 @@ bool wifiConectado = false;
 // Pantalla Touch
 #define TOUCH_CS   15
 #define TOUCH_IRQ  27
-#define BUZZER_PIN 33
-//#define LCD_LED_PIN 13
+#define BUZZER_PIN 13
 
 // Sensores MAX30102
 #define SDA1 21
@@ -1109,22 +1108,37 @@ void actualizarMedicion() {
       tft.setTextColor(COLOR_TEXTO, COLOR_FONDO);
       tft.drawString("PWV", centroX, 80, 4);
       tft.setTextColor(TFT_GREEN, COLOR_FONDO);
+      tft.setTextPadding(240);
       if (localPWV > 0) {
+        // Si hay dato
         tft.drawString(String(localPWV, 1), centroX - 30, 150, 7);
+        tft.setTextPadding(0);
         tft.setTextColor(COLOR_TEXTO, COLOR_FONDO);
         tft.drawString("m/s", centroX + 70, 160, 4); 
       } else {
+        // Si no hay dato
         tft.drawString("---", centroX, 150, 7);
+        tft.setTextPadding(0);
       }
 
       // HR
       int yHR = 220;
       tft.setSwapBytes(true);
-      tft.pushImage(centroX - 80, yHR - 12, 24, 24, (const uint16_t*)epd_bitmap_ImgCorazon);
+      tft.pushImage(centroX - 72, yHR - 12, 24, 24, (const uint16_t*)epd_bitmap_ImgCorazon); // Imagen corazon
       tft.setSwapBytes(false);
       tft.setTextColor(COLOR_TEXTO, COLOR_FONDO);
-      if (localBPM > 0) tft.drawString(String(localBPM) + "  BPM", centroX + 10, yHR, 4);
-      else tft.drawString("---", centroX + 10, yHR, 4);
+      tft.setTextPadding(96); // Ancho de limpieza seguro
+      int xTexto = centroX + 10; 
+      if (localBPM > 0) {
+         // Si hay dato
+         tft.drawString(String(localBPM) + " BPM", xTexto, yHR, 4);
+      } else {
+         // Si no hay dato
+         tft.drawString("---", centroX, yHR, 4);
+      }
+      
+      tft.setTextPadding(0); // Apagar padding
+      
   }
 
   // VISUALIZACIÓN MODO CURVAS ---------------------------------------------------------------------
@@ -1187,17 +1201,23 @@ void actualizarMedicion() {
       // Datos numéricos 
       int yInfo = 280; 
       
+      // PWV
       tft.setTextDatum(ML_DATUM); 
       tft.setTextColor(COLOR_TEXTO, COLOR_FONDO);
       tft.drawString("PWV = ", 100, yInfo, 4);
+      tft.setTextPadding(120);
       if(localPWV > 0) tft.drawString(String(localPWV, 1) + " m/s", 180, yInfo, 4);
       else tft.drawString("--- m/s", 180, yInfo, 4);
+      tft.setTextPadding(0);
 
+      // HR
       tft.setSwapBytes(true);
       tft.pushImage(288, yInfo - 12, 24, 24, (const uint16_t*)epd_bitmap_ImgCorazon);
       tft.setSwapBytes(false);
+      tft.setTextPadding(58);
       if(localBPM > 0) tft.drawString(String(localBPM), 318, yInfo, 4);
-      else tft.drawString("---", 318, yInfo, 4);
+      else tft.drawString("---", 325, yInfo, 4);
+      tft.setTextPadding(0);
     }
 }
 
