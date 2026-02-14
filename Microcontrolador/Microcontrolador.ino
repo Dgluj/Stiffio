@@ -202,7 +202,7 @@ void TaskSensores(void *pvParameters) {
       sensorProx.check();
       sensorDist.check(); 
       
-      if (sensorProx.available()) {
+      if (sensorProx.available() && sensorDist.available()) {
         // Timestamp EXACTO cuando llega la muestra
         unsigned long sampleTimestamp = millis();
         
@@ -1000,10 +1000,10 @@ void actualizarMedicion() {
 // MAIN SETUP & LOOP
 // ==================================================================================================================================================================
 bool iniciarSensores() {
-  Wire.begin(SDA1, SCL1, 400000); Wire1.begin(SDA2, SCL2, 400000);
-  Wire.setClock(400000); Wire1.setClock(400000);
-  if (!sensorProx.begin(Wire, I2C_SPEED_FAST)) return false;
-  if (!sensorDist.begin(Wire1, I2C_SPEED_FAST)) return false;
+  Wire.begin(SDA1, SCL1, 100000);Wire1.begin(SDA2, SCL2, 100000);
+  Wire.setClock(100000); Wire1.setClock(100000);
+  if (!sensorProx.begin(Wire, I2C_SPEED_STANDARD)) return false;
+  if (!sensorDist.begin(Wire1, I2C_SPEED_STANDARD)) return false;
   sensorProx.setup(30, 8, 2, 400, 411, 4096);  // Carótida: brightness 30 (antes 20)
   sensorDist.setup(30, 8, 2, 400, 411, 4096);
   return true;
