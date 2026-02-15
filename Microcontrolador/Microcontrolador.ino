@@ -90,14 +90,6 @@ float bufMA1_global[4] = {0};
 float bufMA2_global[4] = {0};
 int idxMA_global = 0;
 
-const int AVG_SIZE = 10;
-int bpmBuffer_global[10] = {0}; 
-int bpmIdx_global = 0;
-int validSamplesBPM_global = 0;
-float pwvBuffer_global[10] = {0.0}; 
-int pwvIdx_global = 0;
-int validSamplesPWV_global = 0;
-
 // Variables para HPF anti-deriva
 float lastVal1_centered = 0;
 float lastVal2_centered = 0;
@@ -213,8 +205,8 @@ void calcularEscalaRobusta(const float* data, int n, float& baseline, float& hal
 float calcularMediana(const float* data, int n) {
   if (n <= 0) return 0.0f;
 
-  float temp[10];
-  if (n > 10) n = 10;
+  float temp[32];
+  if (n > 32) n = 32;
 
   for (int i = 0; i < n; i++) {
     temp[i] = data[i];
@@ -255,13 +247,14 @@ void TaskSensores(void *pvParameters) {
   const unsigned long TIEMPO_ESTABILIZACION = 10000;
 
   // Detección de picos locales (reemplaza checkForBeat/checkForBeatS1)
-  const unsigned long REFRACT_MS = 300;
-  const unsigned long RR_MIN_MS = 300;
-  const unsigned long RR_MAX_MS = 1500;
-  const unsigned long PTT_MIN_MS = 30;
+  const unsigned long REFRACT_MS = 370;
+  const unsigned long RR_MIN_MS = 460;
+  const unsigned long RR_MAX_MS = 1200;
+  const unsigned long PTT_MIN_MS = 50;
   const unsigned long PTT_MAX_MS = 300;
   const int THRESH_WINDOW_SAMPLES = 800; // ~2 s a 400 SPS
-  const int MEDIAN_WINDOW = 10;
+  const int RR_WINDOW = 15;
+  const int PTT_WINDOW = 10;
 
   static float thrWinS1[THRESH_WINDOW_SAMPLES] = {0};
   static float thrWinS2[THRESH_WINDOW_SAMPLES] = {0};
@@ -281,11 +274,11 @@ void TaskSensores(void *pvParameters) {
   unsigned long pendingProxPeakTime = 0;
   bool waitingForS2 = false;
 
-  float rrWindow[MEDIAN_WINDOW] = {0};
+  float rrWindow[RR_WINDOW] = {0};
   int rrIdx = 0;
   int rrCount = 0;
 
-  float pttWindow[MEDIAN_WINDOW] = {0};
+  float pttWindow[PTT_WINDOW] = {0};
   int pttIdx = 0;
   int pttCount = 0;
 
@@ -498,12 +491,12 @@ void TaskSensores(void *pvParameters) {
                   long delta = peakTimeS2 - lastDistPeakForHR;
                   if (delta > (long)RR_MIN_MS && delta < (long)RR_MAX_MS) {
                     rrWindow[rrIdx] = (float)delta;
-                    rrIdx = (rrIdx + 1) % MEDIAN_WINDOW;
-                    if (rrCount < MEDIAN_WINDOW) rrCount++;
+                    rrIdx = (rrIdx + 1) % RR_WINDOW;
+                    if (rrCount < RR_WINDOW) rrCount++;
                     conteoRRValidos = rrCount;
 
-                    if (rrCount >= MEDIAN_WINDOW) {
-                      float medianRR = calcularMediana(rrWindow, MEDIAN_WINDOW);
+                    if (rrCount >= RR_WINDOW) {
+                      float medianRR = calcularMediana(rrWindow, RR_WINDOW);
                       if (medianRR > 0.0f) {
                         float beatsPerMinute = 60000.0f / medianRR;
                         if (beatsPerMinute > 40.0f && beatsPerMinute < 200.0f) {
@@ -530,12 +523,12 @@ void TaskSensores(void *pvParameters) {
 
                   if (transitTime > (long)PTT_MIN_MS && transitTime < (long)PTT_MAX_MS) {
                     pttWindow[pttIdx] = (float)transitTime;
-                    pttIdx = (pttIdx + 1) % MEDIAN_WINDOW;
-                    if (pttCount < MEDIAN_WINDOW) pttCount++;
+                    pttIdx = (pttIdx + 1) % PTT_WINDOW;
+                    if (pttCount < PTT_WINDOW) pttCount++;
                     conteoPTTValidos = pttCount;
 
-                    if (pttCount >= MEDIAN_WINDOW) {
-                      float medianPTT = calcularMediana(pttWindow, MEDIAN_WINDOW);
+                    if (pttCount >= PTT_WINDOW) {
+                      float medianPTT = calcularMediana(pttWindow, PTT_WINDOW);
                       if (medianPTT > 0.0f) {
                         int alturaCalc = (pacienteAltura > 0) ? pacienteAltura : 170;
                         float distMeters = (alturaCalc * 0.436f) / 100.0f;
@@ -613,7 +606,6 @@ void TaskSensores(void *pvParameters) {
                   portEXIT_CRITICAL(&bufferMux);
                 }
                 bpmMostrado = 0; pwvMostrado = 0.0;
-                validSamplesBPM_global = 0; validSamplesPWV_global = 0;
                 waitingForS2 = false;
                 pendingProxPeakTime = 0;
                 lastDistPeakForHR = 0;
@@ -623,12 +615,13 @@ void TaskSensores(void *pvParameters) {
                 pttIdx = 0; pttCount = 0;
                 conteoRRValidos = 0;
                 conteoPTTValidos = 0;
-                for (int i = 0; i < MEDIAN_WINDOW; i++) { rrWindow[i] = 0.0f; pttWindow[i] = 0.0f; }
+                for (int i = 0; i < RR_WINDOW; i++) rrWindow[i] = 0.0f;
+                for (int i = 0; i < PTT_WINDOW; i++) pttWindow[i] = 0.0f;
               }
             }
             else if (faseMedicion == 2) {
-              int rrProgress = (rrCount * 100) / MEDIAN_WINDOW;
-              int pttProgress = (pttCount * 100) / MEDIAN_WINDOW;
+              int rrProgress = (rrCount * 100) / RR_WINDOW;
+              int pttProgress = (pttCount * 100) / PTT_WINDOW;
               porcentajeCalculando = (rrProgress + pttProgress) / 2;
               if (porcentajeCalculando > 100) porcentajeCalculando = 100;
 
@@ -659,7 +652,8 @@ void TaskSensores(void *pvParameters) {
               pttIdx = 0; pttCount = 0;
               conteoRRValidos = 0;
               conteoPTTValidos = 0;
-              for (int i = 0; i < MEDIAN_WINDOW; i++) { rrWindow[i] = 0.0f; pttWindow[i] = 0.0f; }
+              for (int i = 0; i < RR_WINDOW; i++) rrWindow[i] = 0.0f;
+              for (int i = 0; i < PTT_WINDOW; i++) pttWindow[i] = 0.0f;
               peakPriming = 0;
               thrIdx = 0;
               thrCount = 0;
@@ -1273,12 +1267,12 @@ void actualizarMedicion() {
     if (fillW > 2) graphSprite.fillRect(barX + 1, barY + 1, fillW - 2, barH - 2, TFT_GREEN);
 
     if (localConteoRR < 0) localConteoRR = 0;
-    if (localConteoRR > 10) localConteoRR = 10;
+    if (localConteoRR > 15) localConteoRR = 15;
     if (localConteoPTT < 0) localConteoPTT = 0;
     if (localConteoPTT > 10) localConteoPTT = 10;
     graphSprite.setTextColor(COLOR_TEXTO);
     graphSprite.setTextDatum(MC_DATUM);
-    graphSprite.drawString("RR " + String(localConteoRR) + "/10   PTT " + String(localConteoPTT) + "/10", GRAPH_W/2, barY + 34, 2);
+    graphSprite.drawString("RR " + String(localConteoRR) + "/15   PTT " + String(localConteoPTT) + "/10", GRAPH_W/2, barY + 34, 2);
 
     graphSprite.pushSprite(11, 51);
     return;
