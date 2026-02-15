@@ -167,6 +167,32 @@ bool verificarConexionI2C(TwoWire &wirePort) {
     return (wirePort.endTransmission() == 0);
 }
 
+float calcularMediana(const float* data, int n) {
+  if (n <= 0) return 0.0f;
+
+  float temp[10];
+  if (n > 10) n = 10;
+
+  for (int i = 0; i < n; i++) {
+    temp[i] = data[i];
+  }
+
+  for (int i = 1; i < n; i++) {
+    float key = temp[i];
+    int j = i - 1;
+    while (j >= 0 && temp[j] > key) {
+      temp[j + 1] = temp[j];
+      j--;
+    }
+    temp[j + 1] = key;
+  }
+
+  if ((n % 2) == 1) {
+    return temp[n / 2];
+  }
+  return 0.5f * (temp[(n / 2) - 1] + temp[n / 2]);
+}
+
 
 void TaskSensores(void *pvParameters) {
 
@@ -187,9 +213,12 @@ void TaskSensores(void *pvParameters) {
 
   // Detección de picos locales (reemplaza checkForBeat/checkForBeatS1)
   const unsigned long REFRACT_MS = 300;
+  const unsigned long RR_MIN_MS = 300;
+  const unsigned long RR_MAX_MS = 1500;
   const unsigned long PTT_MIN_MS = 20;
   const unsigned long PTT_MAX_MS = 200;
   const int THRESH_WINDOW_SAMPLES = 800; // ~2 s a 400 SPS
+  const int MEDIAN_WINDOW = 10;
 
   static float thrWinS1[THRESH_WINDOW_SAMPLES] = {0};
   static float thrWinS2[THRESH_WINDOW_SAMPLES] = {0};
@@ -208,6 +237,14 @@ void TaskSensores(void *pvParameters) {
   unsigned long lastDistPeakForHR = 0;
   unsigned long pendingProxPeakTime = 0;
   bool waitingForS2 = false;
+
+  float rrWindow[MEDIAN_WINDOW] = {0};
+  int rrIdx = 0;
+  int rrCount = 0;
+
+  float pttWindow[MEDIAN_WINDOW] = {0};
+  int pttIdx = 0;
+  int pttCount = 0;
 
   // Hardware Check
   unsigned long lastHardwareCheck = 0;
@@ -406,65 +443,64 @@ void TaskSensores(void *pvParameters) {
               if (peakS2) {
                 if (lastDistPeakForHR > 0) {
                   long delta = peakTimeS2 - lastDistPeakForHR;
-                    float beatsPerMinute = 60.0 / (delta / 1000.0);
+                  if (delta > (long)RR_MIN_MS && delta < (long)RR_MAX_MS) {
+                    rrWindow[rrIdx] = (float)delta;
+                    rrIdx = (rrIdx + 1) % MEDIAN_WINDOW;
+                    if (rrCount < MEDIAN_WINDOW) rrCount++;
 
-                    if (beatsPerMinute > 40 && beatsPerMinute < 200) {
-                        bpmBuffer_global[bpmIdx_global] = (int)beatsPerMinute;
-                        bpmIdx_global = (bpmIdx_global + 1) % AVG_SIZE;
-                        if (validSamplesBPM_global < AVG_SIZE) validSamplesBPM_global++;
-
-                        if (validSamplesBPM_global >= 5) {
-                            long total = 0;
-                            int count = (validSamplesBPM_global < AVG_SIZE) ? validSamplesBPM_global : AVG_SIZE;
-                            for (int i = 0; i < count; i++) total += bpmBuffer_global[i];
-                            bpmMostrado = total / count;
-                        }
-                    }
-                  }
-                    lastDistPeakForHR = peakTimeS2;
-
-                  }
-
-                  // PTT desde proximal -> distal
-                  if (peakS1) {
-                  // Inicia ventana de búsqueda distal para PTT
-                  pendingProxPeakTime = peakTimeS1;
-                  waitingForS2 = true;
-               }
-
-               // Cálculo PTT/PWV: primer pico distal válido luego del proximal
-               if (waitingForS2) {
-                  if (peakS2) {
-                    long transitTime = peakTimeS2 - pendingProxPeakTime;
-
-                    if (transitTime > (long)PTT_MIN_MS && transitTime < (long)PTT_MAX_MS) {
-                      int alturaCalc = (pacienteAltura > 0) ? pacienteAltura : 170;
-                      float distMeters = (alturaCalc * 0.436) / 100.0;
-                      float instantPWV = distMeters / (transitTime / 1000.0);
-
-                      if (instantPWV > 3.0 && instantPWV < 50.0) {
-                        pwvBuffer_global[pwvIdx_global] = instantPWV;
-                        pwvIdx_global = (pwvIdx_global + 1) % AVG_SIZE;
-                        if (validSamplesPWV_global < AVG_SIZE) validSamplesPWV_global++;
-
-                        if (validSamplesPWV_global >= 2) {
-                          float totalPWV = 0;
-                          int count = (validSamplesPWV_global < AVG_SIZE) ? validSamplesPWV_global : AVG_SIZE;
-                          for (int i = 0; i < count; i++) totalPWV += pwvBuffer_global[i];
-                          pwvMostrado = totalPWV / count;
+                    if (rrCount >= MEDIAN_WINDOW) {
+                      float medianRR = calcularMediana(rrWindow, MEDIAN_WINDOW);
+                      if (medianRR > 0.0f) {
+                        float beatsPerMinute = 60000.0f / medianRR;
+                        if (beatsPerMinute > 40.0f && beatsPerMinute < 200.0f) {
+                          bpmMostrado = (int)(beatsPerMinute + 0.5f);
                         }
                       }
-                      waitingForS2 = false;
-                    } else if (transitTime >= (long)PTT_MAX_MS) {
-                      waitingForS2 = false;
                     }
                   }
+                }
+                lastDistPeakForHR = peakTimeS2;
+              }
 
-                  // Timeout de la ventana distal
-                  if (waitingForS2 && ((sampleTimestamp - pendingProxPeakTime) > PTT_MAX_MS)) {
+              // PTT desde proximal -> distal
+              if (peakS1) {
+                // Inicia ventana de búsqueda distal para PTT
+                pendingProxPeakTime = peakTimeS1;
+                waitingForS2 = true;
+              }
+
+              // Cálculo PTT/PWV: primer pico distal válido luego del proximal
+              if (waitingForS2) {
+                if (peakS2) {
+                  long transitTime = peakTimeS2 - pendingProxPeakTime;
+
+                  if (transitTime > (long)PTT_MIN_MS && transitTime < (long)PTT_MAX_MS) {
+                    pttWindow[pttIdx] = (float)transitTime;
+                    pttIdx = (pttIdx + 1) % MEDIAN_WINDOW;
+                    if (pttCount < MEDIAN_WINDOW) pttCount++;
+
+                    if (pttCount >= MEDIAN_WINDOW) {
+                      float medianPTT = calcularMediana(pttWindow, MEDIAN_WINDOW);
+                      if (medianPTT > 0.0f) {
+                        int alturaCalc = (pacienteAltura > 0) ? pacienteAltura : 170;
+                        float distMeters = (alturaCalc * 0.436f) / 100.0f;
+                        float pwvCalc = distMeters / (medianPTT / 1000.0f);
+                        if (pwvCalc > 3.0f && pwvCalc < 50.0f) {
+                          pwvMostrado = pwvCalc;
+                        }
+                      }
+                    }
+                    waitingForS2 = false;
+                  } else if (transitTime >= (long)PTT_MAX_MS) {
                     waitingForS2 = false;
                   }
-               }
+                }
+
+                // Timeout de la ventana distal
+                if (waitingForS2 && ((sampleTimestamp - pendingProxPeakTime) > PTT_MAX_MS)) {
+                  waitingForS2 = false;
+                }
+              }
             } // Fin Fase 2
 
             // --- SALIDA DE DATOS ---
@@ -510,6 +546,9 @@ void TaskSensores(void *pvParameters) {
                 lastDistPeakForHR = 0;
                 lastPeakTimeS1 = 0;
                 lastPeakTimeS2 = 0;
+                rrIdx = 0; rrCount = 0;
+                pttIdx = 0; pttCount = 0;
+                for (int i = 0; i < MEDIAN_WINDOW; i++) { rrWindow[i] = 0.0f; pttWindow[i] = 0.0f; }
               }
             }
 
@@ -529,6 +568,9 @@ void TaskSensores(void *pvParameters) {
               lastDistPeakForHR = 0;
               lastPeakTimeS1 = 0;
               lastPeakTimeS2 = 0;
+              rrIdx = 0; rrCount = 0;
+              pttIdx = 0; pttCount = 0;
+              for (int i = 0; i < MEDIAN_WINDOW; i++) { rrWindow[i] = 0.0f; pttWindow[i] = 0.0f; }
               peakPriming = 0;
               thrIdx = 0;
               thrCount = 0;
