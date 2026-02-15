@@ -31,7 +31,13 @@ import ComunicacionMax
 
 from PyQt6.QtPrintSupport import QPrinter
 
-
+def resource_path(relative_path):
+    """Obtiene la ruta correcta tanto en desarrollo como en ejecutable"""
+    try:
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
 # =================================================================================================
 # Ventana de Inicio
 # =================================================================================================
@@ -50,10 +56,10 @@ class WelcomeScreen(QWidget):
 
 
         # Logo -----------------------------------------------------------
-        logo_path = "Logo invertido.png"
+        logo_path = resource_path("Logo invertido.png")
         if os.path.exists(logo_path):
             logo_label = QLabel()
-            pixmap = QPixmap(logo_path)
+            pixmap = QPixmap(resource_path(logo_path))
             pixmap = pixmap.scaled(700, 250, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation) # Tamaño
             logo_label.setPixmap(pixmap)
             logo_label.setAlignment(Qt.AlignmentFlag.AlignCenter) # Posición
@@ -109,7 +115,6 @@ class WelcomeScreen(QWidget):
 
     # Funcionalidad -------------------------------------------------------------------------------
     def open_patient_data_window(self):
-        from __main__ import PatientDataScreen
         self.patient_data_window = PatientDataScreen()
 
         # Mantener tamaño y posición de la ventana actual
@@ -124,7 +129,7 @@ class WelcomeScreen(QWidget):
         QTimer.singleShot(50, self.close)
 
     def open_history(self):
-        from __main__ import HistoryScreen
+        
         self.history_window = HistoryScreen()
 
         self.history_window.resize(self.size())
@@ -155,10 +160,10 @@ class PatientDataScreen(QWidget):
 
 
         # Logo -----------------------------------------------------------
-        logo_path = "Logo invertido.png"
+        logo_path = resource_path("Logo invertido.png")
         if os.path.exists(logo_path):
             logo_label = QLabel()
-            pixmap = QPixmap(logo_path)
+            pixmap = QPixmap(resource_path(logo_path))
             pixmap = pixmap.scaled(100,50, Qt.AspectRatioMode.KeepAspectRatio,
                                    Qt.TransformationMode.SmoothTransformation)  # Tamaño
             logo_label.setPixmap(pixmap)
@@ -357,7 +362,7 @@ class PatientDataScreen(QWidget):
 
     # Volver a la ventana de inicio
     def go_back(self):
-        from __main__ import WelcomeScreen
+        
         self.welcome_screen = WelcomeScreen()
 
         # Mantener tamaño y posición de la ventana actual
@@ -492,7 +497,7 @@ class PatientDataScreen(QWidget):
         }
 
         try:
-            from __main__ import MainScreen
+            
             self.main_window = MainScreen(patient_data)
 
             # Mantener tamaño y posición de la ventana actual
@@ -520,12 +525,12 @@ class PatientDataScreen(QWidget):
 # =================================================================================================
 class HistoryScreen(QWidget):
     def save_pdf(self, report_text):
-        file_path, _ = QFileDialog.getSaveFileName(
+        file_path, _ = resource_path(QFileDialog.getSaveFileName(
             self,
             "Guardar reporte como PDF",
             "",
             "PDF (*.pdf)"
-        )
+        ))
 
         if not file_path:
             return
@@ -611,10 +616,10 @@ class HistoryScreen(QWidget):
         self.layout = QVBoxLayout()
         self.setLayout(self.layout)
 
-        logo_path = "Logo invertido.png"
+        logo_path = resource_path("Logo invertido.png")
         if os.path.exists(logo_path):
             logo_label = QLabel()
-            pixmap = QPixmap(logo_path)
+            pixmap = QPixmap(resource_path(logo_path))
             pixmap = pixmap.scaled(200, 100, Qt.AspectRatioMode.KeepAspectRatio,
                                    Qt.TransformationMode.SmoothTransformation)
             logo_label.setPixmap(pixmap)
@@ -690,7 +695,7 @@ class HistoryScreen(QWidget):
 
 
     def load_data(self):
-        filename = "datos_stiffio.csv" 
+        filename = resource_path("datos_stiffio.csv") 
         self.all_data = [] # Inicializamos para evitar el AttributeError
 
         # Si el archivo NO existe, lo creamos con el formato correcto y datos de prueba
@@ -827,7 +832,7 @@ class HistoryScreen(QWidget):
 
             # Boton de descargar
             download_button = QPushButton()
-            download_button.setIcon(QIcon("download-icon.png"))
+            download_button.setIcon(QIcon(resource_path("download-icon.png")))
             download_button.setIconSize(QSize(35, 35))
             download_button.setFixedSize(50, 50)
             download_button.setStyleSheet("""
@@ -844,7 +849,7 @@ class HistoryScreen(QWidget):
 
             # Boton de eliminar
             delete_button = QPushButton()
-            delete_button.setIcon(QIcon("delete-icon.png"))
+            delete_button.setIcon(QIcon(resource_path("delete-icon.png")))
             delete_button.setIconSize(QSize(35, 35))
             delete_button.setFixedSize(50, 50)
             delete_button.setStyleSheet("""
@@ -925,7 +930,7 @@ class HistoryScreen(QWidget):
             self.perform_deletion(row)
 
     def perform_deletion(self, row):
-        filename = "mediciones_pwv.csv"
+        filename = resource_path("mediciones_pwv.csv")
 
         try:
             # Leer el archivo CSV completo
@@ -1012,7 +1017,7 @@ class HistoryScreen(QWidget):
             self.table.setRowHidden(row, not should_show)
 
     def go_back(self):
-        from __main__ import WelcomeScreen
+       
         self.welcome = WelcomeScreen()
         self.welcome.resize(self.size())
         self.welcome.move(self.pos())
@@ -1296,10 +1301,10 @@ class MainScreen(QMainWindow):
         top_layout = QHBoxLayout()
 
         # Logo
-        logo_path = "Logo invertido.png"
+        logo_path = resource_path("Logo invertido.png")
         if os.path.exists(logo_path):
             self.logo_label = QLabel()
-            pixmap = QPixmap(logo_path)
+            pixmap = QPixmap(resource_path(logo_path))
             pixmap = pixmap.scaled(115, 55, Qt.AspectRatioMode.KeepAspectRatio,
                                 Qt.TransformationMode.SmoothTransformation)
             self.logo_label.setPixmap(pixmap)
@@ -1670,7 +1675,7 @@ class MainScreen(QMainWindow):
 
         # Si el usuario confirma, volvemos al inicio
         if msg.clickedButton() == si_button:
-            from __main__ import WelcomeScreen
+           
             self.welcome_screen = WelcomeScreen()
             self.welcome_screen.resize(self.size())
             self.welcome_screen.move(self.pos())
@@ -1679,7 +1684,6 @@ class MainScreen(QMainWindow):
             else:
                 self.welcome_screen.show()
             QTimer.singleShot(50, self.close)
-
 
     '''
     Esta funcion no tiene el popup
@@ -1741,7 +1745,7 @@ class MainScreen(QMainWindow):
             processor.pwv_buffer.clear()
             processor.pwv = None
 
-            from __main__ import PatientDataScreen
+           
             self.patient_data_window = PatientDataScreen()
             self.patient_data_window.resize(self.size())
             self.patient_data_window.move(self.pos())
@@ -1959,7 +1963,7 @@ class MainScreen(QMainWindow):
 
     # Guardar medición
     def save_measurement(self):
-        filename = "mediciones_pwv.csv"
+        filename = resource_path("mediciones_pwv.csv")
 
         # Datos del paciente
         # (Usamos .get() para evitar errores si una clave no existe)
