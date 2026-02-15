@@ -205,7 +205,7 @@ void TaskSensores(void *pvParameters) {
 
   unsigned long lastPeakTimeS1 = 0;
   unsigned long lastPeakTimeS2 = 0;
-  unsigned long lastProxPeakForHR = 0;
+  unsigned long lastDistPeakForHR = 0;
   unsigned long pendingProxPeakTime = 0;
   bool waitingForS2 = false;
 
@@ -402,10 +402,10 @@ void TaskSensores(void *pvParameters) {
             
             // --- ALGORITMOS HR / PWV ---
             if (faseMedicion == 2) {
-               // HR desde picos proximales
-               if (peakS1) {
-                  if (lastProxPeakForHR > 0) {
-                    long delta = peakTimeS1 - lastProxPeakForHR;
+              // HR desde picos distales (S2)
+              if (peakS2) {
+                if (lastDistPeakForHR > 0) {
+                  long delta = peakTimeS2 - lastDistPeakForHR;
                     float beatsPerMinute = 60.0 / (delta / 1000.0);
 
                     if (beatsPerMinute > 40 && beatsPerMinute < 200) {
@@ -421,8 +421,12 @@ void TaskSensores(void *pvParameters) {
                         }
                     }
                   }
-                  lastProxPeakForHR = peakTimeS1;
+                    lastDistPeakForHR = peakTimeS2;
 
+                  }
+
+                  // PTT desde proximal -> distal
+                  if (peakS1) {
                   // Inicia ventana de búsqueda distal para PTT
                   pendingProxPeakTime = peakTimeS1;
                   waitingForS2 = true;
@@ -503,7 +507,7 @@ void TaskSensores(void *pvParameters) {
                 validSamplesBPM_global = 0; validSamplesPWV_global = 0;
                 waitingForS2 = false;
                 pendingProxPeakTime = 0;
-                lastProxPeakForHR = 0;
+                lastDistPeakForHR = 0;
                 lastPeakTimeS1 = 0;
                 lastPeakTimeS2 = 0;
               }
@@ -522,7 +526,7 @@ void TaskSensores(void *pvParameters) {
               bpmMostrado = 0; pwvMostrado = 0.0;
               waitingForS2 = false;
               pendingProxPeakTime = 0;
-              lastProxPeakForHR = 0;
+              lastDistPeakForHR = 0;
               lastPeakTimeS1 = 0;
               lastPeakTimeS2 = 0;
               peakPriming = 0;
