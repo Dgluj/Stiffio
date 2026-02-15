@@ -9,6 +9,7 @@
 #include <WebSocketsServer.h>
 #include "MAX30105.h"
 #include <math.h>
+#include <stdlib.h>
 #include "bitmaps.h" // Imagenes
 
 
@@ -54,6 +55,12 @@ volatile int porcentajeEstabilizacion = 0;
 volatile int porcentajeCalculando = 0;
 volatile int conteoRRValidos = 0;
 volatile int conteoPTTValidos = 0;
+
+volatile float visBaselineS1 = 0.0f;
+volatile float visBaselineS2 = 0.0f;
+volatile float visHalfRangeS1 = 50.0f;
+volatile float visHalfRangeS2 = 50.0f;
+volatile bool visEscalaFijada = false;
 
 volatile bool s1ok = false;
 volatile bool s2ok = false;
@@ -170,6 +177,39 @@ bool verificarConexionI2C(TwoWire &wirePort) {
     return (wirePort.endTransmission() == 0);
 }
 
+int compararFloatAsc(const void* a, const void* b) {
+  float fa = *(const float*)a;
+  float fb = *(const float*)b;
+  if (fa < fb) return -1;
+  if (fa > fb) return 1;
+  return 0;
+}
+
+void calcularEscalaRobusta(const float* data, int n, float& baseline, float& halfRange) {
+  baseline = 0.0f;
+  halfRange = 50.0f;
+  if (n < 20) return;
+
+  static float sorted[1024];
+  if (n > 1024) n = 1024;
+  for (int i = 0; i < n; i++) sorted[i] = data[i];
+
+  qsort(sorted, n, sizeof(float), compararFloatAsc);
+
+  int idx10 = (int)(0.10f * (n - 1));
+  int idx90 = (int)(0.90f * (n - 1));
+  float p10 = sorted[idx10];
+  float p90 = sorted[idx90];
+
+  if ((n % 2) == 1) baseline = sorted[n / 2];
+  else baseline = 0.5f * (sorted[(n / 2) - 1] + sorted[n / 2]);
+
+  float robustSpan = p90 - p10;
+  if (robustSpan < 20.0f) robustSpan = 20.0f;
+  halfRange = 0.60f * robustSpan; // margen visual de ~20% sobre P10-P90
+  if (halfRange < 12.0f) halfRange = 12.0f;
+}
+
 float calcularMediana(const float* data, int n) {
   if (n <= 0) return 0.0f;
 
@@ -212,7 +252,7 @@ void TaskSensores(void *pvParameters) {
   // Tiempo
   unsigned long startContactTime = 0;
   unsigned long baseTime = 0;
-  const unsigned long TIEMPO_ESTABILIZACION = 5000;
+  const unsigned long TIEMPO_ESTABILIZACION = 10000;
 
   // Detección de picos locales (reemplaza checkForBeat/checkForBeatS1)
   const unsigned long REFRACT_MS = 300;
@@ -248,6 +288,10 @@ void TaskSensores(void *pvParameters) {
   float pttWindow[MEDIAN_WINDOW] = {0};
   int pttIdx = 0;
   int pttCount = 0;
+
+  static float calibS1[1024] = {0};
+  static float calibS2[1024] = {0};
+  int calibCount = 0;
 
   // Hardware Check
   unsigned long lastHardwareCheck = 0;
@@ -362,6 +406,12 @@ void TaskSensores(void *pvParameters) {
             for (int i = 0; i < MA_SIZE; i++) { sum1 += bufMA1_global[i]; sum2 += bufMA2_global[i]; }
             float valFinal1 = sum1 / MA_SIZE;
             float valFinal2 = sum2 / MA_SIZE;
+
+            if (faseMedicion == 1 && calibCount < 1024) {
+              calibS1[calibCount] = valFinal1;
+              calibS2[calibCount] = valFinal2;
+              calibCount++;
+            }
 
             // 5. Threshold adaptativo: mean + 0.5 * std (ventana móvil ~2 s)
             if (thrCount < THRESH_WINDOW_SAMPLES) {
@@ -532,11 +582,28 @@ void TaskSensores(void *pvParameters) {
             if (faseMedicion == 0) {
               faseMedicion = 1;
               startContactTime = millis();
+              calibCount = 0;
+              portENTER_CRITICAL(&bufferMux);
+              visEscalaFijada = false;
+              visBaselineS1 = 0.0f; visBaselineS2 = 0.0f;
+              visHalfRangeS1 = 50.0f; visHalfRangeS2 = 50.0f;
+              portEXIT_CRITICAL(&bufferMux);
             }
             else if (faseMedicion == 1) {
               unsigned long transcurrido = millis() - startContactTime;
               porcentajeEstabilizacion = (transcurrido * 100) / TIEMPO_ESTABILIZACION;
               if (transcurrido >= TIEMPO_ESTABILIZACION) {
+                float baseS1 = 0.0f, baseS2 = 0.0f;
+                float halfS1 = 50.0f, halfS2 = 50.0f;
+                calcularEscalaRobusta(calibS1, calibCount, baseS1, halfS1);
+                calcularEscalaRobusta(calibS2, calibCount, baseS2, halfS2);
+
+                portENTER_CRITICAL(&bufferMux);
+                visBaselineS1 = baseS1; visBaselineS2 = baseS2;
+                visHalfRangeS1 = halfS1; visHalfRangeS2 = halfS2;
+                visEscalaFijada = true;
+                portEXIT_CRITICAL(&bufferMux);
+
                 faseMedicion = 2; baseTime = millis();
                 porcentajeCalculando = 0;
                 if (modoActual == MODO_TEST_RAPIDO) {
@@ -598,6 +665,12 @@ void TaskSensores(void *pvParameters) {
               thrCount = 0;
               thrSumS1 = 0.0f; thrSumSqS1 = 0.0f;
               thrSumS2 = 0.0f; thrSumSqS2 = 0.0f;
+              calibCount = 0;
+              portENTER_CRITICAL(&bufferMux);
+              visEscalaFijada = false;
+              visBaselineS1 = 0.0f; visBaselineS2 = 0.0f;
+              visHalfRangeS1 = 50.0f; visHalfRangeS2 = 50.0f;
+              portEXIT_CRITICAL(&bufferMux);
               sensorProx.nextSample(); sensorDist.nextSample();
             }
           }
@@ -610,6 +683,12 @@ void TaskSensores(void *pvParameters) {
         porcentajeCalculando = 0;
         conteoRRValidos = 0;
         conteoPTTValidos = 0;
+        calibCount = 0;
+        portENTER_CRITICAL(&bufferMux);
+        visEscalaFijada = false;
+        visBaselineS1 = 0.0f; visBaselineS2 = 0.0f;
+        visHalfRangeS1 = 50.0f; visHalfRangeS2 = 50.0f;
+        portEXIT_CRITICAL(&bufferMux);
       }
     } else {
       vTaskDelay(10);
@@ -1030,6 +1109,11 @@ void actualizarMedicion() {
   int localConteoPTT = conteoPTTValidos;
   int localBPM = bpmMostrado;                            // BPM
   float localPWV = pwvMostrado;                          // PWV
+  float localBaseS1 = visBaselineS1;
+  float localBaseS2 = visBaselineS2;
+  float localHalfS1 = visHalfRangeS1;
+  float localHalfS2 = visHalfRangeS2;
+  bool localEscalaFijada = visEscalaFijada;
 
   // Copiar los buffers para graficar (Protección con Mutex)
   portENTER_CRITICAL(&bufferMux); 
@@ -1159,7 +1243,7 @@ void actualizarMedicion() {
     return;
   }
  
-  // CALIBRANDO (5s fijos) -----------------------------------------------------------------------
+  // CALIBRANDO (10s fijos) ----------------------------------------------------------------------
   if (localFase == 1) {
     graphSprite.fillSprite(COLOR_FONDO); 
     graphSprite.setTextDatum(MC_DATUM); 
@@ -1253,16 +1337,21 @@ void actualizarMedicion() {
       tft.setTextColor(COLOR_S1, COLOR_FONDO); tft.drawString("Sensor Proximal (1)  ", 15, 25, 2);  
       tft.setTextColor(COLOR_S2, COLOR_FONDO); tft.drawString("Sensor Distal (2)    ", 165, 25, 2);
       
-      // 1. Calcular Escala (Min/Max)
-      float minV = -50, maxV = 50;
-      for(int i=0; i<BUFFER_SIZE; i+=5) { 
-        if(localBuf1[i] < minV) minV = localBuf1[i]; 
-        if(localBuf1[i] > maxV) maxV = localBuf1[i];
-      }
-      if((maxV - minV) < 100) { float mid = (maxV + minV) / 2; maxV = mid + 50; minV = mid - 50; }
-      
+      // 1. Escalas Y fijas por canal (calculadas en calibración)
+      float baseS1 = localEscalaFijada ? localBaseS1 : 0.0f;
+      float baseS2 = localEscalaFijada ? localBaseS2 : 0.0f;
+      float halfS1 = localEscalaFijada ? localHalfS1 : 50.0f;
+      float halfS2 = localEscalaFijada ? localHalfS2 : 50.0f;
+      if (halfS1 < 1.0f) halfS1 = 50.0f;
+      if (halfS2 < 1.0f) halfS2 = 50.0f;
+
+      int margenSuperior = 28;
+      int margenInferior = GRAPH_H - 38;
+      float yCenter = (margenSuperior + margenInferior) * 0.5f;
+      float yHalf = (margenInferior - margenSuperior) * 0.5f;
+
       // 2. Dibujar Grilla y Ejes
-      graphSprite.drawFastHLine(0, GRAPH_H/2, GRAPH_W, TFT_DARKGREY); 
+      graphSprite.drawFastHLine(0, (int)yCenter, GRAPH_W, TFT_DARKGREY);
       float xStep = (float)GRAPH_W / (float)BUFFER_SIZE; 
       graphSprite.setTextDatum(TC_DATUM); graphSprite.setTextColor(TFT_DARKGREY);
 
@@ -1285,13 +1374,15 @@ void actualizarMedicion() {
             }
         }
         
-        int margenSuperior = 28;
-        int margenInferior = GRAPH_H - 38;
+        float n1A = (localBuf1[idx] - baseS1) / halfS1;
+        float n1B = (localBuf1[nextIdx] - baseS1) / halfS1;
+        float n2A = (localBuf2[idx] - baseS2) / halfS2;
+        float n2B = (localBuf2[nextIdx] - baseS2) / halfS2;
 
-        int y1A = map((long)localBuf1[idx], (long)minV, (long)maxV, margenInferior, margenSuperior);
-        int y1B = map((long)localBuf1[nextIdx], (long)minV, (long)maxV, margenInferior, margenSuperior);
-        int y2A = map((long)localBuf2[idx], (long)minV, (long)maxV, margenInferior, margenSuperior);
-        int y2B = map((long)localBuf2[nextIdx], (long)minV, (long)maxV, margenInferior, margenSuperior);
+        int y1A = (int)(yCenter - (n1A * yHalf));
+        int y1B = (int)(yCenter - (n1B * yHalf));
+        int y2A = (int)(yCenter - (n2A * yHalf));
+        int y2B = (int)(yCenter - (n2B * yHalf));
         
         graphSprite.drawLine(x1, constrain(y1A,0,GRAPH_H), x2, constrain(y1B,0,GRAPH_H), COLOR_S1);
         graphSprite.drawLine(x1, constrain(y2A,0,GRAPH_H), x2, constrain(y2B,0,GRAPH_H), COLOR_S2); 
