@@ -70,7 +70,7 @@ volatile int pacienteAltura = 0; // Se llenará desde la PC en modo estudio clí
 enum ModoOperacion { MODO_TEST_RAPIDO, MODO_ESTUDIO_CLINICO };
 ModoOperacion modoActual = MODO_TEST_RAPIDO;
 // MODO DE VISUALIZACIÓN:  1 = Métricas , 0 = Curvas 
-int modoVisualizacion = 1;
+int modoVisualizacion = 0;
 
 portMUX_TYPE bufferMux = portMUX_INITIALIZER_UNLOCKED;
 
