@@ -49,8 +49,11 @@ volatile int writeHead = 0;
 
 // Control
 volatile bool medicionActiva = false;
-volatile int faseMedicion = 0; // 0=Esperando, 1=Estabilizando, 2=Midiendo
+volatile int faseMedicion = 0; // 0=Esperando, 1=Calibrando, 2=Calculando, 3=Midiendo
 volatile int porcentajeEstabilizacion = 0;
+volatile int porcentajeCalculando = 0;
+volatile int conteoRRValidos = 0;
+volatile int conteoPTTValidos = 0;
 
 volatile bool s1ok = false;
 volatile bool s2ok = false;
@@ -203,20 +206,20 @@ void TaskSensores(void *pvParameters) {
   const float ALPHA_LP = 0.75;
   const float ALPHA_DC = 0.97;
   const float ALPHA_HP_S1 = 0.97;
-  const float ALPHA_HP_S2 = 0.95;
+  const float ALPHA_HP_S2 = 0.97;
   const long SENSOR_THRESHOLD = 50000;
 
   // Tiempo
   unsigned long startContactTime = 0;
   unsigned long baseTime = 0;
-  const unsigned long TIEMPO_ESTABILIZACION = 10000;
+  const unsigned long TIEMPO_ESTABILIZACION = 5000;
 
   // Detección de picos locales (reemplaza checkForBeat/checkForBeatS1)
   const unsigned long REFRACT_MS = 300;
   const unsigned long RR_MIN_MS = 300;
   const unsigned long RR_MAX_MS = 1500;
-  const unsigned long PTT_MIN_MS = 20;
-  const unsigned long PTT_MAX_MS = 200;
+  const unsigned long PTT_MIN_MS = 30;
+  const unsigned long PTT_MAX_MS = 300;
   const int THRESH_WINDOW_SAMPLES = 800; // ~2 s a 400 SPS
   const int MEDIAN_WINDOW = 10;
 
@@ -438,7 +441,7 @@ void TaskSensores(void *pvParameters) {
             }
             
             // --- ALGORITMOS HR / PWV ---
-            if (faseMedicion == 2) {
+            if (faseMedicion >= 2) {
               // HR desde picos distales (S2)
               if (peakS2) {
                 if (lastDistPeakForHR > 0) {
@@ -447,6 +450,7 @@ void TaskSensores(void *pvParameters) {
                     rrWindow[rrIdx] = (float)delta;
                     rrIdx = (rrIdx + 1) % MEDIAN_WINDOW;
                     if (rrCount < MEDIAN_WINDOW) rrCount++;
+                    conteoRRValidos = rrCount;
 
                     if (rrCount >= MEDIAN_WINDOW) {
                       float medianRR = calcularMediana(rrWindow, MEDIAN_WINDOW);
@@ -478,6 +482,7 @@ void TaskSensores(void *pvParameters) {
                     pttWindow[pttIdx] = (float)transitTime;
                     pttIdx = (pttIdx + 1) % MEDIAN_WINDOW;
                     if (pttCount < MEDIAN_WINDOW) pttCount++;
+                    conteoPTTValidos = pttCount;
 
                     if (pttCount >= MEDIAN_WINDOW) {
                       float medianPTT = calcularMediana(pttWindow, MEDIAN_WINDOW);
@@ -505,7 +510,7 @@ void TaskSensores(void *pvParameters) {
 
             // --- SALIDA DE DATOS ---
             if (modoActual == MODO_TEST_RAPIDO) {
-              if (faseMedicion == 2) {
+              if (faseMedicion >= 2) {
                 unsigned long tiempoRelativo = sampleTimestamp - baseTime;
                 portENTER_CRITICAL(&bufferMux);
                 buffer_s1[writeHead] = valFinal1;
@@ -533,6 +538,7 @@ void TaskSensores(void *pvParameters) {
               porcentajeEstabilizacion = (transcurrido * 100) / TIEMPO_ESTABILIZACION;
               if (transcurrido >= TIEMPO_ESTABILIZACION) {
                 faseMedicion = 2; baseTime = millis();
+                porcentajeCalculando = 0;
                 if (modoActual == MODO_TEST_RAPIDO) {
                   portENTER_CRITICAL(&bufferMux);
                   writeHead = 0;
@@ -548,7 +554,20 @@ void TaskSensores(void *pvParameters) {
                 lastPeakTimeS2 = 0;
                 rrIdx = 0; rrCount = 0;
                 pttIdx = 0; pttCount = 0;
+                conteoRRValidos = 0;
+                conteoPTTValidos = 0;
                 for (int i = 0; i < MEDIAN_WINDOW; i++) { rrWindow[i] = 0.0f; pttWindow[i] = 0.0f; }
+              }
+            }
+            else if (faseMedicion == 2) {
+              int rrProgress = (rrCount * 100) / MEDIAN_WINDOW;
+              int pttProgress = (pttCount * 100) / MEDIAN_WINDOW;
+              porcentajeCalculando = (rrProgress + pttProgress) / 2;
+              if (porcentajeCalculando > 100) porcentajeCalculando = 100;
+
+              if (bpmMostrado > 0 && pwvMostrado > 0.0f) {
+                porcentajeCalculando = 100;
+                faseMedicion = 3;
               }
             }
 
@@ -559,6 +578,7 @@ void TaskSensores(void *pvParameters) {
             }
             if (faseMedicion != 0) {
               faseMedicion = 0; porcentajeEstabilizacion = 0;
+              porcentajeCalculando = 0;
               s1_lp = 0; s1_dc = 0; s2_lp = 0; s2_dc = 0;
               s1_hp = 0; s2_hp = 0;
               lastVal1_centered = 0; lastVal2_centered = 0;
@@ -570,6 +590,8 @@ void TaskSensores(void *pvParameters) {
               lastPeakTimeS2 = 0;
               rrIdx = 0; rrCount = 0;
               pttIdx = 0; pttCount = 0;
+              conteoRRValidos = 0;
+              conteoPTTValidos = 0;
               for (int i = 0; i < MEDIAN_WINDOW; i++) { rrWindow[i] = 0.0f; pttWindow[i] = 0.0f; }
               peakPriming = 0;
               thrIdx = 0;
@@ -585,6 +607,9 @@ void TaskSensores(void *pvParameters) {
         // Si hay desconexión física, reseteamos la lógica para que al volver empiece de 0
         faseMedicion = 0;
         porcentajeEstabilizacion = 0;
+        porcentajeCalculando = 0;
+        conteoRRValidos = 0;
+        conteoPTTValidos = 0;
       }
     } else {
       vTaskDelay(10);
@@ -1000,12 +1025,15 @@ void actualizarMedicion() {
   static unsigned long ultimoSonido = 0;                 // Memoria del cronómetro de alarma
   int localHead;                                         // Indica donde empezar a leer
   int localPorcentaje = porcentajeEstabilizacion;        // Porcentaje barra
+  int localPorcentajeCalculando = porcentajeCalculando;  // Porcentaje barra cálculo
+  int localConteoRR = conteoRRValidos;
+  int localConteoPTT = conteoPTTValidos;
   int localBPM = bpmMostrado;                            // BPM
   float localPWV = pwvMostrado;                          // PWV
 
   // Copiar los buffers para graficar (Protección con Mutex)
   portENTER_CRITICAL(&bufferMux); 
-  if (localFase == 2) {
+  if (localFase >= 2) {
     memcpy(localBuf1, (const void*)buffer_s1, sizeof(buffer_s1));
     memcpy(localBuf2, (const void*)buffer_s2, sizeof(buffer_s2));
     memcpy(localTime, (const void*)buffer_time, sizeof(buffer_time));
@@ -1131,17 +1159,44 @@ void actualizarMedicion() {
     return;
   }
  
-  // CALCULANDO -----------------------------------------------------------------------------------
+  // CALIBRANDO (5s fijos) -----------------------------------------------------------------------
   if (localFase == 1) {
     graphSprite.fillSprite(COLOR_FONDO); 
     graphSprite.setTextDatum(MC_DATUM); 
     graphSprite.setTextColor(COLOR_TEXTO);
-    graphSprite.drawString("CALCULANDO ...", GRAPH_W/2, GRAPH_H/2 - 20, 4);
+    graphSprite.drawString("CALIBRANDO ...", GRAPH_W/2, GRAPH_H/2 - 20, 4);
     int barW = 200; int barH = 20; int barX = (GRAPH_W - barW)/2;  int barY = GRAPH_H/2 + 10;
     graphSprite.drawRect(barX, barY, barW, barH, TFT_BLACK);   // Barra de progreso
     int fillW = (barW * localPorcentaje) / 100;
-    graphSprite.fillRect(barX+1, barY+1, fillW-2, barH-2, TFT_GREEN);
+    if (fillW > 2) graphSprite.fillRect(barX+1, barY+1, fillW-2, barH-2, TFT_GREEN);
     graphSprite.pushSprite(11, 51); 
+    return;
+  }
+
+  // CALCULANDO (tiempo variable hasta HR+PWV válidos) ------------------------------------------
+  if (localFase == 2) {
+    graphSprite.fillSprite(COLOR_FONDO);
+    graphSprite.setTextDatum(MC_DATUM);
+    graphSprite.setTextColor(COLOR_TEXTO);
+    graphSprite.drawString("CALCULANDO ...", GRAPH_W/2, GRAPH_H/2 - 20, 4);
+
+    int barW = 200; int barH = 20; int barX = (GRAPH_W - barW)/2;  int barY = GRAPH_H/2 + 10;
+    graphSprite.drawRect(barX, barY, barW, barH, TFT_BLACK);
+
+    if (localPorcentajeCalculando < 0) localPorcentajeCalculando = 0;
+    if (localPorcentajeCalculando > 100) localPorcentajeCalculando = 100;
+    int fillW = (barW * localPorcentajeCalculando) / 100;
+    if (fillW > 2) graphSprite.fillRect(barX + 1, barY + 1, fillW - 2, barH - 2, TFT_GREEN);
+
+    if (localConteoRR < 0) localConteoRR = 0;
+    if (localConteoRR > 10) localConteoRR = 10;
+    if (localConteoPTT < 0) localConteoPTT = 0;
+    if (localConteoPTT > 10) localConteoPTT = 10;
+    graphSprite.setTextColor(COLOR_TEXTO);
+    graphSprite.setTextDatum(MC_DATUM);
+    graphSprite.drawString("RR " + String(localConteoRR) + "/10   PTT " + String(localConteoPTT) + "/10", GRAPH_W/2, barY + 34, 2);
+
+    graphSprite.pushSprite(11, 51);
     return;
   }
 
@@ -1356,6 +1411,7 @@ void loop() {
          modoActual = MODO_TEST_RAPIDO;
          edadInput = ""; 
          alturaInput = "";
+         modoVisualizacion = 0; // Reset modo visualización a curvas
          dibujarTecladoEdad();
       }
       // MODO ESTUDIO CLÍNICO
