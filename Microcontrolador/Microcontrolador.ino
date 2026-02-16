@@ -237,8 +237,8 @@ void TaskSensores(void *pvParameters) {
   float s1_hp = 0, s2_hp = 0;
   const float ALPHA_LP = 0.75;
   const float ALPHA_DC = 0.97;
-  const float ALPHA_HP_S1 = 0.97;
-  const float ALPHA_HP_S2 = 0.97;
+  const float ALPHA_HP_S1 = 0.95;
+  const float ALPHA_HP_S2 = 0.95;
   const long SENSOR_THRESHOLD = 50000;
 
   // Tiempo
@@ -251,10 +251,10 @@ void TaskSensores(void *pvParameters) {
   const unsigned long RR_MIN_MS = 460;
   const unsigned long RR_MAX_MS = 1200;
   const unsigned long PTT_MIN_MS = 50;
-  const unsigned long PTT_MAX_MS = 300;
+  const unsigned long PTT_MAX_MS = 290;
   const int THRESH_WINDOW_SAMPLES = 800; // ~2 s a 400 SPS
   const int RR_WINDOW = 15;
-  const int PTT_WINDOW = 10;
+  const int PTT_WINDOW = 11;
 
   static float thrWinS1[THRESH_WINDOW_SAMPLES] = {0};
   static float thrWinS2[THRESH_WINDOW_SAMPLES] = {0};
@@ -442,7 +442,7 @@ void TaskSensores(void *pvParameters) {
               if (varS1 < 0.0f) varS1 = 0.0f;
               if (varS2 < 0.0f) varS2 = 0.0f;
               thresholdS1 = meanS1 + (0.5f * sqrtf(varS1));
-              thresholdS2 = meanS2 + (0.5f * sqrtf(varS2));
+              thresholdS2 = meanS2 + (0.40f * sqrtf(varS2));
             }
 
             // 6. Detector explícito de máximos locales sobre señal filtrada
@@ -487,13 +487,16 @@ void TaskSensores(void *pvParameters) {
             if (faseMedicion >= 2) {
               // HR desde picos distales (S2)
               if (peakS2) {
+                bool rrValido = false;
+                long delta = 0;
                 if (lastDistPeakForHR > 0) {
-                  long delta = peakTimeS2 - lastDistPeakForHR;
+                  delta = peakTimeS2 - lastDistPeakForHR;
                   if (delta > (long)RR_MIN_MS && delta < (long)RR_MAX_MS) {
                     rrWindow[rrIdx] = (float)delta;
                     rrIdx = (rrIdx + 1) % RR_WINDOW;
                     if (rrCount < RR_WINDOW) rrCount++;
                     conteoRRValidos = rrCount;
+                    rrValido = true;
 
                     if (rrCount >= RR_WINDOW) {
                       float medianRR = calcularMediana(rrWindow, RR_WINDOW);
@@ -505,6 +508,13 @@ void TaskSensores(void *pvParameters) {
                       }
                     }
                   }
+                  if (rrValido) {
+                    Serial.printf("[RR ] %ld ms\\n", delta);
+                  } else {
+                    Serial.printf("[RR ] -- (delta=%ld)\\n", delta);
+                  }
+                } else {
+                  Serial.println("[RR ] -- (primer pico S2)");
                 }
                 lastDistPeakForHR = peakTimeS2;
               }
@@ -514,6 +524,7 @@ void TaskSensores(void *pvParameters) {
                 // Inicia ventana de búsqueda distal para PTT
                 pendingProxPeakTime = peakTimeS1;
                 waitingForS2 = true;
+                Serial.println("[PTT] -- (S1 detectado, esperando S2)");
               }
 
               // Cálculo PTT/PWV: primer pico distal válido luego del proximal
@@ -533,19 +544,26 @@ void TaskSensores(void *pvParameters) {
                         int alturaCalc = (pacienteAltura > 0) ? pacienteAltura : 170;
                         float distMeters = (alturaCalc * 0.436f) / 100.0f;
                         float pwvCalc = distMeters / (medianPTT / 1000.0f);
-                        if (pwvCalc > 3.0f && pwvCalc < 50.0f) {
+                        if (pwvCalc > 2.0f && pwvCalc < 50.0f) {
                           pwvMostrado = pwvCalc;
                         }
                       }
                     }
+                    Serial.printf("[PTT] %ld ms\\n", transitTime);
                     waitingForS2 = false;
+                  } else if (transitTime <= (long)PTT_MIN_MS) {
+                    Serial.printf("[PTT] -- (muy corto=%ld)\\n", transitTime);
                   } else if (transitTime >= (long)PTT_MAX_MS) {
+                    Serial.printf("[PTT] -- (fuera max=%ld)\\n", transitTime);
                     waitingForS2 = false;
+                  } else {
+                    Serial.printf("[PTT] -- (invalido=%ld)\\n", transitTime);
                   }
                 }
 
                 // Timeout de la ventana distal
                 if (waitingForS2 && ((sampleTimestamp - pendingProxPeakTime) > PTT_MAX_MS)) {
+                  Serial.println("[PTT] -- (timeout esperando S2)");
                   waitingForS2 = false;
                 }
               }
@@ -1269,10 +1287,10 @@ void actualizarMedicion() {
     if (localConteoRR < 0) localConteoRR = 0;
     if (localConteoRR > 15) localConteoRR = 15;
     if (localConteoPTT < 0) localConteoPTT = 0;
-    if (localConteoPTT > 10) localConteoPTT = 10;
+    if (localConteoPTT > 11) localConteoPTT = 11;
     graphSprite.setTextColor(COLOR_TEXTO);
     graphSprite.setTextDatum(MC_DATUM);
-    graphSprite.drawString("RR " + String(localConteoRR) + "/15   PTT " + String(localConteoPTT) + "/10", GRAPH_W/2, barY + 34, 2);
+    graphSprite.drawString("RR " + String(localConteoRR) + "/15   PTT " + String(localConteoPTT) + "/11", GRAPH_W/2, barY + 34, 2);
 
     graphSprite.pushSprite(11, 51);
     return;
