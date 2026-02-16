@@ -249,10 +249,10 @@ void TaskSensores(void *pvParameters) {
   // Detección de picos locales (reemplaza checkForBeat/checkForBeatS1)
   const unsigned long REFRACT_MS = 370;
   const unsigned long RR_MIN_MS = 460;
-  const unsigned long RR_MAX_MS = 1200;
-  const unsigned long PTT_MIN_MS = 50;
-  const unsigned long PTT_MAX_MS = 290;
-  const int THRESH_WINDOW_SAMPLES = 800; // ~2 s a 400 SPS
+  const unsigned long RR_MAX_MS = 1700; // permite bradicardia
+  // const unsigned long PTT_MIN_MS = 50;
+  // const unsigned long PTT_MAX_MS = 290;
+  const int THRESH_WINDOW_SAMPLES = 200; // ~2 s a 400 SPS
   const int RR_WINDOW = 15;
   const int PTT_WINDOW = 11;
 
@@ -487,16 +487,13 @@ void TaskSensores(void *pvParameters) {
             if (faseMedicion >= 2) {
               // HR desde picos distales (S2)
               if (peakS2) {
-                bool rrValido = false;
-                long delta = 0;
                 if (lastDistPeakForHR > 0) {
-                  delta = peakTimeS2 - lastDistPeakForHR;
+                  long delta = peakTimeS2 - lastDistPeakForHR;
                   if (delta > (long)RR_MIN_MS && delta < (long)RR_MAX_MS) {
                     rrWindow[rrIdx] = (float)delta;
                     rrIdx = (rrIdx + 1) % RR_WINDOW;
                     if (rrCount < RR_WINDOW) rrCount++;
                     conteoRRValidos = rrCount;
-                    rrValido = true;
 
                     if (rrCount >= RR_WINDOW) {
                       float medianRR = calcularMediana(rrWindow, RR_WINDOW);
@@ -508,13 +505,6 @@ void TaskSensores(void *pvParameters) {
                       }
                     }
                   }
-                  if (rrValido) {
-                    Serial.printf("[RR ] %ld ms\\n", delta);
-                  } else {
-                    Serial.printf("[RR ] -- (delta=%ld)\\n", delta);
-                  }
-                } else {
-                  Serial.println("[RR ] -- (primer pico S2)");
                 }
                 lastDistPeakForHR = peakTimeS2;
               }
@@ -524,48 +514,30 @@ void TaskSensores(void *pvParameters) {
                 // Inicia ventana de búsqueda distal para PTT
                 pendingProxPeakTime = peakTimeS1;
                 waitingForS2 = true;
-                Serial.println("[PTT] -- (S1 detectado, esperando S2)");
               }
 
               // Cálculo PTT/PWV: primer pico distal válido luego del proximal
-              if (waitingForS2) {
-                if (peakS2) {
-                  long transitTime = peakTimeS2 - pendingProxPeakTime;
+              if (waitingForS2 && peakS2) {
+                long transitTime = peakTimeS2 - pendingProxPeakTime;
+                if (transitTime > 0) {
+                  pttWindow[pttIdx] = (float)transitTime;
+                  pttIdx = (pttIdx + 1) % PTT_WINDOW;
+                  if (pttCount < PTT_WINDOW) pttCount++;
+                  conteoPTTValidos = pttCount;
 
-                  if (transitTime > (long)PTT_MIN_MS && transitTime < (long)PTT_MAX_MS) {
-                    pttWindow[pttIdx] = (float)transitTime;
-                    pttIdx = (pttIdx + 1) % PTT_WINDOW;
-                    if (pttCount < PTT_WINDOW) pttCount++;
-                    conteoPTTValidos = pttCount;
-
-                    if (pttCount >= PTT_WINDOW) {
-                      float medianPTT = calcularMediana(pttWindow, PTT_WINDOW);
-                      if (medianPTT > 0.0f) {
-                        int alturaCalc = (pacienteAltura > 0) ? pacienteAltura : 170;
-                        float distMeters = (alturaCalc * 0.436f) / 100.0f;
-                        float pwvCalc = distMeters / (medianPTT / 1000.0f);
-                        if (pwvCalc > 2.0f && pwvCalc < 50.0f) {
-                          pwvMostrado = pwvCalc;
-                        }
+                  if (pttCount >= PTT_WINDOW) {
+                    float medianPTT = calcularMediana(pttWindow, PTT_WINDOW);
+                    if (medianPTT > 0.0f) {
+                      int alturaCalc = (pacienteAltura > 0) ? pacienteAltura : 170;
+                      float distMeters = (alturaCalc * 0.436f) / 100.0f;
+                      float pwvCalc = distMeters / (medianPTT / 1000.0f);
+                      if (pwvCalc > 2.0f && pwvCalc < 50.0f) {
+                        pwvMostrado = pwvCalc;
                       }
                     }
-                    Serial.printf("[PTT] %ld ms\\n", transitTime);
-                    waitingForS2 = false;
-                  } else if (transitTime <= (long)PTT_MIN_MS) {
-                    Serial.printf("[PTT] -- (muy corto=%ld)\\n", transitTime);
-                  } else if (transitTime >= (long)PTT_MAX_MS) {
-                    Serial.printf("[PTT] -- (fuera max=%ld)\\n", transitTime);
-                    waitingForS2 = false;
-                  } else {
-                    Serial.printf("[PTT] -- (invalido=%ld)\\n", transitTime);
                   }
                 }
-
-                // Timeout de la ventana distal
-                if (waitingForS2 && ((sampleTimestamp - pendingProxPeakTime) > PTT_MAX_MS)) {
-                  Serial.println("[PTT] -- (timeout esperando S2)");
-                  waitingForS2 = false;
-                }
+                waitingForS2 = false;
               }
             } // Fin Fase 2
 
@@ -746,8 +718,6 @@ void iniciarWiFi() {
   // WIFI CONECTADO
   if (WiFi.status() == WL_CONNECTED) {
     wifiConectado = true;
-    IPAddress ip = WiFi.localIP();
-    Serial.println("\nWiFi Conectado! IP: " + ip.toString());
     webSocket.begin();
     webSocket.onEvent(webSocketEvent);
   } 
@@ -1455,8 +1425,6 @@ void iniciarSensores() {
 
 
 void setup() {
-  Serial.begin(115200);
-
   // Inicializar buzzer
   pinMode(BUZZER_PIN, OUTPUT); 
 
