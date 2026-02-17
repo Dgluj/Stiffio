@@ -18,8 +18,8 @@
 // ==============================================================================================
 
 // Wi-Fi  ===============================================================
-const char* ssid = "Di Toro1 2.4GHz";     // WiFi 
-const char* password = "ditoro3080";   // Contraseña
+const char* ssid = "Gavilan GLJ 2.4";     // WiFi 
+const char* password = "a1b1c1d1e1";   // Contraseña
 WebSocketsServer webSocket(81);
 bool wifiConectado = false;
 
@@ -252,9 +252,9 @@ void TaskSensores(void *pvParameters) {
   const unsigned long RR_MAX_MS = 1700; // permite bradicardia
   // const unsigned long PTT_MIN_MS = 50;
   // const unsigned long PTT_MAX_MS = 290;
-  const int THRESH_WINDOW_SAMPLES = 200; // ~4s a 50 SPS (bajar a 100 para mayor sensibilidad)
+  const int THRESH_WINDOW_SAMPLES = 100; // ~2s a 50 SPS
   const int RR_WINDOW = 15;
-  const int PTT_WINDOW = 11;
+  const int PTT_WINDOW = 15;
 
   static float thrWinS1[THRESH_WINDOW_SAMPLES] = {0};
   static float thrWinS2[THRESH_WINDOW_SAMPLES] = {0};
@@ -531,7 +531,7 @@ void TaskSensores(void *pvParameters) {
                       int alturaCalc = (pacienteAltura > 0) ? pacienteAltura : 170;
                       float distMeters = (alturaCalc * 0.436f) / 100.0f;
                       float pwvCalc = distMeters / (medianPTT / 1000.0f);
-                      if (pwvCalc > 2.0f && pwvCalc < 50.0f) {
+                      if (pwvCalc > 1.0f && pwvCalc < 20.0f) {
                         pwvMostrado = pwvCalc;
                       }
                     }
@@ -1257,10 +1257,10 @@ void actualizarMedicion() {
     if (localConteoRR < 0) localConteoRR = 0;
     if (localConteoRR > 15) localConteoRR = 15;
     if (localConteoPTT < 0) localConteoPTT = 0;
-    if (localConteoPTT > 11) localConteoPTT = 11;
+    if (localConteoPTT > 15) localConteoPTT = 15;
     graphSprite.setTextColor(COLOR_TEXTO);
     graphSprite.setTextDatum(MC_DATUM);
-    graphSprite.drawString("RR " + String(localConteoRR) + "/15   PTT " + String(localConteoPTT) + "/11", GRAPH_W/2, barY + 34, 2);
+    graphSprite.drawString("RR " + String(localConteoRR) + "/15   PTT " + String(localConteoPTT) + "/15", GRAPH_W/2, barY + 34, 2);
 
     graphSprite.pushSprite(11, 51);
     return;
