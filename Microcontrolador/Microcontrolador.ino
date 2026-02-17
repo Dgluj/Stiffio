@@ -718,6 +718,8 @@ void iniciarWiFi() {
   // WIFI CONECTADO
   if (WiFi.status() == WL_CONNECTED) {
     wifiConectado = true;
+    IPAddress ip = WiFi.localIP();
+    Serial.println("/nWifi Conectado! IP: " + ip.toString());
     webSocket.begin();
     webSocket.onEvent(webSocketEvent);
   } 
@@ -1425,6 +1427,8 @@ void iniciarSensores() {
 
 
 void setup() {
+  Serial.begin(115200);
+
   // Inicializar buzzer
   pinMode(BUZZER_PIN, OUTPUT); 
 
