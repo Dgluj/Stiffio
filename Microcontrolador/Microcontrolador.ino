@@ -246,13 +246,13 @@ void TaskSensores(void *pvParameters) {
   unsigned long baseTime = 0;
   const unsigned long TIEMPO_ESTABILIZACION = 10000;
 
-  // Detección de picos locales (reemplaza checkForBeat/checkForBeatS1)
+  // Detección de picos locales
   const unsigned long REFRACT_MS = 370;
   const unsigned long RR_MIN_MS = 460;
   const unsigned long RR_MAX_MS = 1700; // permite bradicardia
   // const unsigned long PTT_MIN_MS = 50;
   // const unsigned long PTT_MAX_MS = 290;
-  const int THRESH_WINDOW_SAMPLES = 200; // ~2 s a 400 SPS
+  const int THRESH_WINDOW_SAMPLES = 200; // ~4s a 50 SPS (bajar a 100 para mayor sensibilidad)
   const int RR_WINDOW = 15;
   const int PTT_WINDOW = 11;
 
