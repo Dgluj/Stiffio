@@ -119,9 +119,9 @@ bool pausaS1conectado = true;
 bool pausaS2conectado = true;
 
 // GLOBALES PARA TASKSENSORES (evitar stack overflow)
-const int MA_SIZE = 3;
-float bufMA1_global[3] = {0};
-float bufMA2_global[3] = {0};
+const int MA_SIZE = 2;
+float bufMA1_global[2] = {0};
+float bufMA2_global[2] = {0};
 int idxMA_global = 0;
 
 // Variables para HPF anti-deriva
@@ -156,7 +156,7 @@ int btnY1 = 85; int btnY2 = 185;
 #define GRAPH_X 11   // 10 (del marco) + 1 de margen
 #define GRAPH_Y 51   // 50 (del marco) + 1 de margen
 unsigned long lastDrawTime = 0;
-const unsigned long DRAW_INTERVAL = 40; 
+const unsigned long DRAW_INTERVAL = 20; 
 
 // Encabezado de pantalla de medicin
 const int HEADER_ICON_Y = 5;
@@ -593,7 +593,9 @@ void TaskSensores(void *pvParameters) {
               thresholdS2 = meanS2 - (0.40f * sqrtf(varS2));
             }
 
-            // 6. Detector explcito de pies de onda (mnimos locales) sobre seal filtrada
+            // 6. Detector de pie por mnimo local (derivada de negativa a positiva).
+            // El mximo de derivada positiva puede ser ms preciso en limpio, pero en ruido
+            // requiere suavizado extra de derivada; aqu se mantiene mnimo local por robustez.
             bool footS1 = false;
             bool footS2 = false;
             unsigned long footTimeS1 = 0;
