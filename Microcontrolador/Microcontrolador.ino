@@ -1220,6 +1220,36 @@ void dibujarPantallaFalloWiFi() {
   dibujarBotonVolver(); 
 }
 
+void dibujarPantallaErrorMedicion() {
+  tft.fillScreen(COLOR_FONDO);
+  tft.setTextColor(COLOR_TEXTO);
+
+  // Icono advertencia
+  int iconoW = 60; int iconoX = (480 - iconoW) / 2; int iconoY = 45;
+
+  // Mensaje
+  tft.setSwapBytes(true);
+  tft.pushImage(iconoX, iconoY, 60, 60, (const uint16_t*)epd_bitmap_IconoAdvertencia);
+  tft.setSwapBytes(false);
+  tft.setTextDatum(MC_DATUM);
+  tft.drawString("ERROR DE MEDICION", 240, 135, 4);
+  tft.setTextSize(1);
+  tft.drawString("Por favor, repita la medicion.", 240, 170, 2);
+
+  // Botn reintentar
+  tft.fillRoundRect(170, 200, 140, 45, 22, COLOR_BOTON);
+  tft.setTextColor(COLOR_TEXTO);
+  tft.drawString("REINTENTAR", 240, 222, 2);
+}
+
+bool errorMedicionBloqueanteActivo() {
+  bool activo = false;
+  portENTER_CRITICAL(&bufferMux);
+  activo = (faseMedicion == 2) && medicionFinalizada && (!pwvResultadoValido || !hrResultadoValido);
+  portEXIT_CRITICAL(&bufferMux);
+  return activo;
+}
+
 
 
 void actualizarDisplayEdad() {
@@ -1339,6 +1369,7 @@ void actualizarMedicion() {
   unsigned long localTime[BUFFER_SIZE];                  // Timestamp
   int localFase = 0;                                     // Estado del sistema
   static int faseAnterior = -1; 
+  static bool pantallaErrorMedicionVisible = false;
   static unsigned long ultimoSonido = 0;                 // Memoria del cronmetro de alarma
   int localHead = 0;                                     // Indica donde empezar a leer
   int localPorcentaje = 0;                               // Porcentaje barra
@@ -1419,11 +1450,28 @@ void actualizarMedicion() {
     portEXIT_CRITICAL(&bufferMux);
   }
 
+  bool localErrorMedicion = (localFase == 2) && localPwvFinalizado && (!localPwvValido || !localHrValido);
+  if (localErrorMedicion) {
+    if (!pantallaErrorMedicionVisible) {
+      dibujarPantallaErrorMedicion();
+      pantallaErrorMedicionVisible = true;
+    }
+    return;
+  }
+
+  if (pantallaErrorMedicionVisible) {
+    pantallaErrorMedicionVisible = false;
+    dibujarPantallaMedicion();
+  }
+
   // Limpiar pantalla si cambia la fase
   if (localFase != faseAnterior) {
       tft.fillRect(0, 0, 380, 50, COLOR_FONDO);   // Borra las leyendas
       tft.fillRect(0, 48, 480, 185, COLOR_FONDO);  // Borra grfico  
       tft.fillRect(80, 260, 280, 40, COLOR_FONDO);  // Borra resultados
+      if (mostrarBotonPausaEnHeader()) {
+        dibujarBotonPausa();
+      }
       faseAnterior = localFase;    
   }
 
@@ -1555,15 +1603,6 @@ void actualizarMedicion() {
   if (localFase == 2) {
     graphSprite.fillSprite(COLOR_FONDO);
     graphSprite.setTextDatum(MC_DATUM);
-    if (localPwvFinalizado && (!localPwvValido || !localHrValido)) {
-      graphSprite.setTextColor(COLOR_BOTON_ACCION);
-      graphSprite.drawString("REINTENTAR MEDICION", GRAPH_W/2, GRAPH_H/2 - 10, 4);
-      graphSprite.setTextColor(COLOR_TEXTO);
-      graphSprite.drawString("Presione SALIR para nueva toma", GRAPH_W/2, GRAPH_H/2 + 24, 2);
-      graphSprite.pushSprite(11, 51);
-      return;
-    }
-
     graphSprite.setTextColor(COLOR_TEXTO);
     graphSprite.drawString("CALCULANDO ...", GRAPH_W/2, GRAPH_H/2 - 20, 4);
 
@@ -2013,9 +2052,33 @@ void loop() {
 
     // PANTALLA MEDICIN ----------------------------------------------------------------
     else if (pantallaActual == PANTALLA_MEDICION_RAPIDA) {
-          
+          if (errorMedicionBloqueanteActivo()) {
+              // Botn REINTENTAR (misma ubicacin que error de conexin)
+              if (x > 170 && x < 310 && y > 190 && y < 245) {
+                  sonarPitido();
+                  graficoPausado = false;
+                  portENTER_CRITICAL(&bufferMux);
+                  faseMedicion = 0;
+                  porcentajeEstabilizacion = 0;
+                  porcentajeCalculando = 0;
+                  conteoRRValidos = 0;
+                  conteoPTTValidos = 0;
+                  bpmMostrado = 0;
+                  pwvMostrado = 0.0f;
+                  medicionFinalizada = false;
+                  pwvResultadoValido = false;
+                  hrResultadoValido = false;
+                  resetearBuffersPWVSolicitado = true;
+                  portEXIT_CRITICAL(&bufferMux);
+
+                  dibujarPantallaMedicion();
+                  actualizarMedicion();
+                  delay(250);
+              }
+          }
+
           // Cambio de Modo Visualizacin
-          if (y < 45) {
+          else if (y < 45) {
               // Botn PAUSA/REANUDAR
               if (mostrarBotonPausaEnHeader() && x >= BTN_PAUSA_X && x <= (BTN_PAUSA_X + BTN_PAUSA_W) && y >= BTN_PAUSA_Y && y <= (BTN_PAUSA_Y + BTN_PAUSA_H)) {
                 sonarPitido();
