@@ -1,5 +1,5 @@
-﻿// ==============================================================================================
-// LIBRERÃAS
+// ==============================================================================================
+// LIBRERAS
 // ==============================================================================================
 #include <SPI.h>
 #include <TFT_eSPI.h>
@@ -14,12 +14,12 @@
 
 
 // ==============================================================================================
-// CONFIGURACIÃ“N
+// CONFIGURACIN
 // ==============================================================================================
 
 // Wi-Fi  ===============================================================
 const char* ssid = "Gavilan GLJ 2.4";     // WiFi 
-const char* password = "a1b1c1d1e1";   // ContraseÃ±a
+const char* password = "a1b1c1d1e1";   // Contrasea
 WebSocketsServer webSocket(81);
 bool wifiConectado = false;
 
@@ -42,7 +42,7 @@ bool wifiConectado = false;
 // ======================================================================
 #define BUFFER_SIZE 320 
 
-// Datos de seÃ±al
+// Datos de seal
 volatile float buffer_s1[BUFFER_SIZE];
 volatile float buffer_s2[BUFFER_SIZE];
 volatile unsigned long buffer_time[BUFFER_SIZE]; 
@@ -66,7 +66,7 @@ volatile bool s1ok = false;
 volatile bool s2ok = false;
 volatile bool s1_conectado = true;
 volatile bool s2_conectado = true;
-const uint8_t SENSOR_I2C_ADDR = 0x57; // DirecciÃ³n del MAX30102
+const uint8_t SENSOR_I2C_ADDR = 0x57; // Direccin del MAX30102
 
 // Resultados
 volatile int bpmMostrado = 0; 
@@ -77,19 +77,19 @@ volatile bool hrResultadoValido = false;
 
 // Paciente (Datos que vienen de UI local o de PC)
 volatile int pacienteEdad = 0;
-volatile int pacienteAltura = 0; // Se llenarÃ¡ desde la PC en modo estudio clÃ­nico
+volatile int pacienteAltura = 0; // Se llenar desde la PC en modo estudio clnico
 
-// MODO DE OPERACIÃ“N
+// MODO DE OPERACIN
 enum ModoOperacion { MODO_TEST_RAPIDO, MODO_ESTUDIO_CLINICO };
 ModoOperacion modoActual = MODO_TEST_RAPIDO;
-// MODO DE VISUALIZACIÃ“N:  1 = MÃ©tricas , 0 = Curvas 
+// MODO DE VISUALIZACIN:  1 = Mtricas , 0 = Curvas 
 int modoVisualizacion = 0;
 bool graficoPausado = false;
 volatile bool resetearBuffersPWVSolicitado = false;
 
 portMUX_TYPE bufferMux = portMUX_INITIALIZER_UNLOCKED;
 
-// Ventanas de cÃƒÂ¡lculo
+// Ventanas de clculo
 const int RR_WINDOW_SIZE = 15;
 const int PTT_BUFFER_SIZE = 25;
 
@@ -150,15 +150,15 @@ int btnW = 300; int btnH = 70;
 int btnX = (480 - btnW) / 2;
 int btnY1 = 85; int btnY2 = 185; 
 
-// GrÃ¡fico
-#define GRAPH_W 458  // 460 - 2 pÃ­xeles de bordes
-#define GRAPH_H 178  // 180 - 2 pÃ­xeles de bordes
+// Grfico
+#define GRAPH_W 458  // 460 - 2 pxeles de bordes
+#define GRAPH_H 178  // 180 - 2 pxeles de bordes
 #define GRAPH_X 11   // 10 (del marco) + 1 de margen
 #define GRAPH_Y 51   // 50 (del marco) + 1 de margen
 unsigned long lastDrawTime = 0;
 const unsigned long DRAW_INTERVAL = 40; 
 
-// Encabezado de pantalla de mediciÃƒÂ³n
+// Encabezado de pantalla de medicin
 const int HEADER_ICON_Y = 5;
 const int BTN_METRICAS_X = 340;
 const int BTN_CURVAS_X = 380;
@@ -170,11 +170,11 @@ const int BTN_PAUSA_H = 28;
 
 
 // ======================================================================
-// WEBSOCKET EVENTS (RECEPCIÃ“N DE DATOS DESDE PC)
+// WEBSOCKET EVENTS (RECEPCIN DE DATOS DESDE PC)
 // ======================================================================
 void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length) {
     if(type == WStype_TEXT) {
-        // Parseo MANUAL simple para evitar librerÃ­as pesadas (JSON)
+        // Parseo MANUAL simple para evitar libreras pesadas (JSON)
         // Esperamos formato: {"h":175,"a":30}
         String texto = String((char*)payload);
         
@@ -206,7 +206,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
 }
 
 // ======================================================================
-// CORE 0: MOTOR MATEMÃTICO + ENVÃO WEBSOCKET
+// CORE 0: MOTOR MATEMTICO + ENVO WEBSOCKET
 // ======================================================================
 void enviarPaqueteEstudio(bool c1, bool c2, bool s1, bool s2, float p, float d, int hr, float pwv) {
   if (modoActual != MODO_ESTUDIO_CLINICO) return;
@@ -382,7 +382,7 @@ void TaskSensores(void *pvParameters) {
   unsigned long baseTime = 0;
   const unsigned long TIEMPO_ESTABILIZACION = 10000;
 
-  // DetecciÃ³n de picos locales
+  // Deteccin de picos locales
   const unsigned long REFRACT_MS = 370;
   const unsigned long RR_MIN_MS = 460;
   const unsigned long RR_MAX_MS = 1700; // permite bradicardia
@@ -443,7 +443,7 @@ void TaskSensores(void *pvParameters) {
         webSocket.loop();
       }
 
-      // --- BLOQUE 1: VERIFICACIÃ“N DE HARDWARE ---
+      // --- BLOQUE 1: VERIFICACIN DE HARDWARE ---
       if (millis() - lastHardwareCheck > CHECK_INTERVAL) {
         lastHardwareCheck = millis();
 
@@ -451,24 +451,24 @@ void TaskSensores(void *pvParameters) {
         bool s1_fisico = verificarConexionI2C(Wire);
         
         if (!s1_conectado && s1_fisico) {
-          // Se acaba de reconectar fÃ­sicamente. Intentamos revivirlo:
+          // Se acaba de reconectar fsicamente. Intentamos revivirlo:
           
-          // 1. Reiniciamos el BUS Wire por si quedÃ³ "tonto"
+          // 1. Reiniciamos el BUS Wire por si qued "tonto"
           Wire.begin(SDA1, SCL1, 100000); 
           delay(10); 
 
-          // 2. Intentamos inicializar la librerÃ­a
+          // 2. Intentamos inicializar la librera
           if (sensorProx.begin(Wire, I2C_SPEED_STANDARD)) {
               sensorProx.softReset(); // Reset de software para limpiar registros basura
               delay(10);
               sensorProx.setup(30, 8, 2, 400, 411, 4096);
-              s1_conectado = true; // Ã‰XITO: Ahora sÃ­ lo marcamos como conectado
+              s1_conectado = true; // XITO: Ahora s lo marcamos como conectado
           } else {
-              s1_conectado = false; // FallÃ³ el handshake lÃ³gico, seguimos intentando
+              s1_conectado = false; // Fall el handshake lgico, seguimos intentando
           }
         } 
         else if (s1_conectado && !s1_fisico) {
-           s1_conectado = false; // Se desconectÃ³
+           s1_conectado = false; // Se desconect
         }
 
 
@@ -480,7 +480,7 @@ void TaskSensores(void *pvParameters) {
           Wire1.begin(SDA2, SCL2, 100000);
           delay(10);
 
-          // 2. Inicializamos librerÃ­a
+          // 2. Inicializamos librera
           if (sensorDist.begin(Wire1, I2C_SPEED_STANDARD)) {
               sensorDist.softReset();
               delay(10);
@@ -515,7 +515,7 @@ void TaskSensores(void *pvParameters) {
           s2ok = currentS2;
 
           if (currentS1 && currentS2) {
-            // --- PROCESAMIENTO DE SEÃ‘AL ---
+            // --- PROCESAMIENTO DE SEAL ---
             
             // 1. Low-Pass
             if (s1_lp == 0) s1_lp = ir1; if (s2_lp == 0) s2_lp = ir2;
@@ -536,7 +536,7 @@ void TaskSensores(void *pvParameters) {
             lastVal1_centered = val1_centered;
             lastVal2_centered = val2_centered;
 
-            // 4. Media MÃ³vil
+            // 4. Media Mvil
             bufMA1_global[idxMA_global] = s1_hp;
             bufMA2_global[idxMA_global] = s2_hp;
             idxMA_global = (idxMA_global + 1) % MA_SIZE;
@@ -552,7 +552,7 @@ void TaskSensores(void *pvParameters) {
               calibCount++;
             }
 
-            // 5. Threshold adaptativo: mean + 0.5 * std (ventana mÃ³vil ~2 s)
+            // 5. Threshold adaptativo: mean + 0.5 * std (ventana mvil ~2 s)
             if (thrCount < THRESH_WINDOW_SAMPLES) {
               thrWinS1[thrIdx] = valFinal1;
               thrWinS2[thrIdx] = valFinal2;
@@ -591,7 +591,7 @@ void TaskSensores(void *pvParameters) {
               thresholdS2 = meanS2 + (0.40f * sqrtf(varS2));
             }
 
-            // 6. Detector explÃ­cito de mÃ¡ximos locales sobre seÃ±al filtrada
+            // 6. Detector explcito de mximos locales sobre seal filtrada
             bool peakS1 = false;
             bool peakS2 = false;
             unsigned long peakTimeS1 = 0;
@@ -681,12 +681,12 @@ void TaskSensores(void *pvParameters) {
 
               // PTT desde proximal -> distal
               if (!medicionFinalizada && peakS1) {
-                // Inicia ventana de bÃºsqueda distal para PTT
+                // Inicia ventana de bsqueda distal para PTT
                 pendingProxPeakTime = peakTimeS1;
                 waitingForS2 = true;
               }
 
-              // CÃ¡lculo PTT/PWV: primer pico distal vÃ¡lido luego del proximal
+              // Clculo PTT/PWV: primer pico distal vlido luego del proximal
               if (!medicionFinalizada && waitingForS2 && peakS2) {
                 long transitTime = peakTimeS2 - pendingProxPeakTime;
                 if (transitTime > 0) {
@@ -744,7 +744,7 @@ void TaskSensores(void *pvParameters) {
               );
             }
 
-            // --- MÃQUINA DE ESTADOS ---
+            // --- MQUINA DE ESTADOS ---
             if (faseMedicion == 0) {
               faseMedicion = 1;
               startContactTime = millis();
@@ -860,7 +860,7 @@ void TaskSensores(void *pvParameters) {
         }
       } else {
         // --- CABLES DESCONECTADOS ---
-        // Si hay desconexiÃ³n fÃ­sica, reseteamos la lÃ³gica para que al volver empiece de 0
+        // Si hay desconexin fsica, reseteamos la lgica para que al volver empiece de 0
         s1ok = false;
         s2ok = false;
         faseMedicion = 0;
@@ -926,12 +926,12 @@ void iniciarWiFi() {
   delay(1000); 
   WiFi.begin(ssid, password);
 
-  // Bucle de conexiÃ³n
+  // Bucle de conexin
   int intentos = 0;
   int maxIntentos = 20;
   while (WiFi.status() != WL_CONNECTED && intentos < maxIntentos) {
     delay(500);
-    // AnimaciÃ³n de la barra
+    // Animacin de la barra
     int progreso = map(intentos, 0, maxIntentos, 0, barW - 4);
     tft.fillRect(barX + 2, barY + 2, progreso, barH - 4, TFT_GREEN);
     intentos++;
@@ -946,7 +946,7 @@ void iniciarWiFi() {
     webSocket.onEvent(webSocketEvent);
   } 
   
-  // ERROR DE CONEXIÃ“N
+  // ERROR DE CONEXIN
   else {
     wifiConectado = false;
   }
@@ -954,7 +954,7 @@ void iniciarWiFi() {
 
 
 // ==================================================================================================================================================================
-// INTERFAZ GRÃFICA
+// INTERFAZ GRFICA
 // ==================================================================================================================================================================
 // ------------------------------------------------------------------------------------
 // PALETA DE COLORES
@@ -1013,7 +1013,7 @@ void dibujarBotonVolver() {
 void dibujarBotonSiguiente(bool activo) {
   int circX = 430, circY = 275, r = 22;
   
-  // Decidir el color del boton segÃºn el estado: "true" (verde) o "false" (gris)
+  // Decidir el color del boton segn el estado: "true" (verde) o "false" (gris)
   uint16_t colorFondo = activo ? COLOR_BOTON_SIGUIENTE : COLOR_BOTON;
   tft.fillCircle(circX, circY, r, colorFondo);
   tft.fillTriangle(circX+11, circY, circX-2, circY-7, circX-2, circY+7, COLOR_FLECHA);
@@ -1051,23 +1051,23 @@ void mostrarAlertaValorInvalido(String titulo, String mensaje) {
   tft.setSwapBytes(true);
   tft.pushImage(iconoX, iconoY, 60, 60, (const uint16_t*)epd_bitmap_IconoAdvertencia);
   tft.setSwapBytes(false);
-  // TÃ­tulo
+  // Ttulo
   tft.setTextDatum(MC_DATUM);
   tft.setTextColor(COLOR_TEXTO);
   tft.drawString(titulo, 230, py + 95, 4);      
   tft.drawString(titulo, 230 + 1, py + 95, 4);  // Negrita
   // Mensaje del error
   tft.setTextColor(COLOR_TEXTO);
-  tft.drawString("Por favor ingrese un valor", 230, py + 125, 2); // RenglÃ³n 1: Frase fija
-  tft.drawString(mensaje, 230, py + 145, 2);                      // RenglÃ³n 2: Rango vÃ¡lido
+  tft.drawString("Por favor ingrese un valor", 230, py + 125, 2); // Rengln 1: Frase fija
+  tft.drawString(mensaje, 230, py + 145, 2);                      // Rengln 2: Rango vlido
 
-  // BotÃ³n OK
+  // Botn OK
   int okW = 120, okH = 35; int okX = 230 - (okW / 2); int okY = py + 165;
   tft.fillRoundRect(okX, okY, okW, okH, 5, COLOR_BOTON);
   tft.setTextColor(COLOR_TEXTO);
   tft.drawString("OK", 230, okY + 15, 2);
 
-  // El cÃ³digo se queda atrapado aquÃ­ hasta que el usuario toque el botÃ³n de OK
+  // El cdigo se queda atrapado aqu hasta que el usuario toque el botn de OK
   bool esperando = true;
   while (esperando) {
     if (touch.touched()) {
@@ -1082,7 +1082,7 @@ void mostrarAlertaValorInvalido(String titulo, String mensaje) {
       }
     }
 
-    yield(); // Evita que el ESP32 crea que se colgÃ³
+    yield(); // Evita que el ESP32 crea que se colg
   }
 }
 
@@ -1103,16 +1103,16 @@ bool confirmarSalir() {
   int btnW = 120, btnH = 40;
   int cancelX = 85,  btnY = 175;
   int salirX = 255;
-  // BotÃ³n CANCELAR
+  // Botn CANCELAR
   tft.fillRoundRect(cancelX, btnY, btnW, btnH, 8, TFT_LIGHTGREY);
   tft.setTextColor(COLOR_TEXTO);
   tft.drawString("CANCELAR", cancelX + btnW/2, btnY + btnH/2, 2);
-  // BotÃ³n SALIR
+  // Botn SALIR
   tft.fillRoundRect(salirX, btnY, btnW, btnH, 8, COLOR_BOTON_ACCION);
   tft.setTextColor(TFT_WHITE);
   tft.drawString("SALIR", salirX + btnW/2, btnY + btnH/2, 2);
 
-  // El cÃ³digo se queda atrapado aquÃ­ hasta que el usuario toque un botÃ³n
+  // El cdigo se queda atrapado aqu hasta que el usuario toque un botn
   delay(300); 
   while (true) {
     if (touch.touched()) {
@@ -1146,12 +1146,12 @@ void dibujarMenuPrincipal() {
   tft.setTextColor(COLOR_TEXTO);
   tft.drawString("Seleccione modo de uso", 240, 40, 4);
   
-  // BotÃ³n TEST RÃPIDO
+  // Botn TEST RPIDO
   tft.fillRoundRect(btnX, btnY1, btnW, btnH, 35, COLOR_BOTON_ACCION2);
   tft.setTextColor(COLOR_TEXTO_BOTON_ACCION);
   tft.drawString("TEST RAPIDO", 240, btnY1 + 36, 4);
   
-  // BotÃ³n ESTUDIO CLÃNICO
+  // Botn ESTUDIO CLNICO
   tft.fillRoundRect(btnX, btnY2, btnW, btnH, 35,  COLOR_BOTON_ACCION); 
   tft.setTextColor(COLOR_TEXTO_BOTON_ACCION);
   tft.drawString("ESTUDIO CLINICO", 240, btnY2 + 36, 4);
@@ -1171,7 +1171,7 @@ void dibujarPantallaPC() {
   tft.setSwapBytes(true);
   tft.pushImage(180, 100, 120, 120, (const uint16_t*)epd_bitmap_IconoCompu);
   tft.setSwapBytes(false);
-  // BotÃ³n Salir
+  // Botn Salir
   tft.fillRoundRect(380, 255, 80, 40, 20, COLOR_BOTON_ACCION);
   tft.setTextDatum(MC_DATUM); 
   tft.setTextColor(COLOR_TEXTO_BOTON_ACCION, COLOR_BOTON_ACCION);
@@ -1196,13 +1196,13 @@ void dibujarPantallaFalloWiFi() {
   tft.setTextDatum(MC_DATUM);
   tft.drawString("ERROR DE CONEXION", 240, 135, 4);
   tft.setTextSize(1); 
-  tft.drawString("Por favor, revise su conexion a la red.", 240, 170, 2); // Texto mÃ¡s pequeÃ±o
+  tft.drawString("Por favor, revise su conexion a la red.", 240, 170, 2); // Texto ms pequeo
 
-  // BotÃ³n reintentar
+  // Botn reintentar
   tft.fillRoundRect(170, 200, 140, 45, 22, COLOR_BOTON); 
   tft.setTextColor(COLOR_TEXTO);
   tft.drawString("REINTENTAR", 240, 222, 2);
-  // BotÃ³n volver
+  // Botn volver
   dibujarBotonVolver(); 
 }
 
@@ -1224,7 +1224,7 @@ void dibujarTecladoEdad() {
   // Actualizar valor en pantalla
   actualizarDisplayEdad(); 
   
-  // Teclado NumÃ©rico
+  // Teclado Numrico
   int tstartX = 180; int tstartY = 140; int tgapX = 55; int tgapY = 45; 
   for (int i = 0; i < 11; i++) {
     int row = i / 3; int col = i % 3;
@@ -1264,7 +1264,7 @@ void dibujarTecladoAltura() {
   // Actualizar valor en pantalla
   actualizarDisplayAltura();
   
-  // Teclado NumÃ©rico
+  // Teclado Numrico
   int tstartX = 180; int tstartY = 140; int tgapX = 55; int tgapY = 45; 
   for (int i = 0; i < 11; i++) {
     int row = i / 3; int col = i % 3;
@@ -1294,7 +1294,7 @@ void dibujarPantallaMedicion() {
   tft.pushImage(BTN_METRICAS_X, HEADER_ICON_Y, BTN_ICON_SIZE, BTN_ICON_SIZE, (const uint16_t*)epd_bitmap_IconoMetricas);
   tft.pushImage(BTN_CURVAS_X, HEADER_ICON_Y, BTN_ICON_SIZE, BTN_ICON_SIZE, (const uint16_t*)epd_bitmap_IconoCurvas);
 
-  // Indicador de selecciÃ³n
+  // Indicador de seleccin
   if (modoVisualizacion == 1) {
       tft.drawRect(BTN_METRICAS_X - 2, HEADER_ICON_Y - 2, BTN_ICON_SIZE + 4, BTN_ICON_SIZE + 4, COLOR_BOTON_ACCION);
       tft.drawRect(BTN_METRICAS_X - 1, HEADER_ICON_Y - 1, BTN_ICON_SIZE + 2, BTN_ICON_SIZE + 2, COLOR_BOTON_ACCION);
@@ -1303,13 +1303,13 @@ void dibujarPantallaMedicion() {
       tft.drawRect(BTN_CURVAS_X - 1, HEADER_ICON_Y - 1, BTN_ICON_SIZE + 2, BTN_ICON_SIZE + 2, COLOR_BOTON_ACCION);
   }
 
-  // BotÃ³n PAUSA/REANUDAR
+  // Botn PAUSA/REANUDAR
   dibujarBotonPausa();
 
-  // BotÃ³n Volver
+  // Botn Volver
   dibujarBotonVolver();
 
-  // BotÃ³n Salir
+  // Botn Salir
   tft.fillRoundRect(380, 255, 80, 40, 20, COLOR_BOTON_ACCION);
   tft.setTextDatum(MC_DATUM);
   tft.setTextColor(COLOR_TEXTO_BOTON_ACCION, COLOR_BOTON_ACCION);
@@ -1323,10 +1323,10 @@ void actualizarMedicion() {
   unsigned long localTime[BUFFER_SIZE];                  // Timestamp
   int localFase = 0;                                     // Estado del sistema
   static int faseAnterior = -1; 
-  static unsigned long ultimoSonido = 0;                 // Memoria del cronÃ³metro de alarma
+  static unsigned long ultimoSonido = 0;                 // Memoria del cronmetro de alarma
   int localHead = 0;                                     // Indica donde empezar a leer
   int localPorcentaje = 0;                               // Porcentaje barra
-  int localPorcentajeCalculando = 0;                     // Porcentaje barra cÃ¡lculo
+  int localPorcentajeCalculando = 0;                     // Porcentaje barra clculo
   int localConteoRR = 0;
   int localConteoPTT = 0;
   int localBPM = 0;                                      // BPM
@@ -1392,7 +1392,7 @@ void actualizarMedicion() {
     localS1Conectado = s1_conectado;
     localS2Conectado = s2_conectado;
 
-    // Copiar los buffers para graficar (ProtecciÃ³n con Mutex)
+    // Copiar los buffers para graficar (Proteccin con Mutex)
     portENTER_CRITICAL(&bufferMux);
     if (localFase >= 2) {
       memcpy(localBuf1, (const void*)buffer_s1, sizeof(buffer_s1));
@@ -1406,14 +1406,14 @@ void actualizarMedicion() {
   // Limpiar pantalla si cambia la fase
   if (localFase != faseAnterior) {
       tft.fillRect(0, 0, 380, 50, COLOR_FONDO);   // Borra las leyendas
-      tft.fillRect(0, 48, 480, 185, COLOR_FONDO);  // Borra grÃ¡fico  
+      tft.fillRect(0, 48, 480, 185, COLOR_FONDO);  // Borra grfico  
       tft.fillRect(80, 260, 280, 40, COLOR_FONDO);  // Borra resultados
       faseAnterior = localFase;    
   }
 
   // ==========================================================================================
   // ESTADO DE ERROR / ESPERA (Fase 0)
-  // AquÃ­ es donde distinguimos entre "Desconectado" y "No Colocado"
+  // Aqu es donde distinguimos entre "Desconectado" y "No Colocado"
   // ==========================================================================================
   if (localFase == 0) {
     graphSprite.fillSprite(COLOR_FONDO); 
@@ -1423,17 +1423,17 @@ void actualizarMedicion() {
     int yMsg1 = yCentro + 10;
     int yMsg2 = yCentro + 50;
 
-    // Dibujar Icono de Advertencia (comÃºn para ambos casos)
+    // Dibujar Icono de Advertencia (comn para ambos casos)
     graphSprite.setSwapBytes(true);
     graphSprite.pushImage((GRAPH_W - 60) / 2, yIcono, 60, 60, (const uint16_t*)epd_bitmap_IconoAdvertencia); 
     graphSprite.setSwapBytes(false);
 
     // -----------------------------------------------------------------------
-    // PRIORIDAD 1: DESCONEXIÃ“N FÃSICA (Cables sueltos)
+    // PRIORIDAD 1: DESCONEXIN FSICA (Cables sueltos)
     // -----------------------------------------------------------------------
     if (!localS1Conectado || !localS2Conectado) {
         
-        // Alarma Sonora RÃPIDA (Beep-Beep constante)
+        // Alarma Sonora RPIDA (Beep-Beep constante)
         if (millis() - ultimoSonido > 200) { 
             // Genera un pitido corto manual sin bloquear mucho tiempo
             digitalWrite(BUZZER_PIN, HIGH);
@@ -1481,7 +1481,7 @@ void actualizarMedicion() {
     else {
         // Alarma LENTA (Recordatorio cada 4 seg)
         if (millis() - ultimoSonido > 4000) { 
-            sonarAlerta(); // Tu funciÃ³n de doble pitido
+            sonarAlerta(); // Tu funcin de doble pitido
             ultimoSonido = millis();
         }
 
@@ -1535,7 +1535,7 @@ void actualizarMedicion() {
     return;
   }
 
-  // CALCULANDO (tiempo variable hasta HR+PWV vÃ¡lidos) ------------------------------------------
+  // CALCULANDO (tiempo variable hasta HR+PWV vlidos) ------------------------------------------
   if (localFase == 2) {
     graphSprite.fillSprite(COLOR_FONDO);
     graphSprite.setTextDatum(MC_DATUM);
@@ -1562,7 +1562,7 @@ void actualizarMedicion() {
     return;
   }
 
-  // VISUALIZACIÃ“N MODO MÃ‰TRICAS -----------------------------------------------------------------
+  // VISUALIZACIN MODO MTRICAS -----------------------------------------------------------------
   if (modoVisualizacion == 1) {
       int centroX = 240;
       tft.setTextDatum(MC_DATUM);
@@ -1611,18 +1611,18 @@ void actualizarMedicion() {
       
   }
 
-  // VISUALIZACIÃ“N MODO CURVAS ---------------------------------------------------------------------
+  // VISUALIZACIN MODO CURVAS ---------------------------------------------------------------------
   else {
       graphSprite.fillSprite(COLOR_FONDO);  // Limpiar sprite
 
-      // Recuadro para grÃ¡fico
+      // Recuadro para grfico
       tft.drawRect(10, 50, 460, 180, TFT_BLACK); 
       // Referencias sensores
       tft.setTextDatum(ML_DATUM); 
       tft.setTextColor(COLOR_S1, COLOR_FONDO); tft.drawString("Sensor Proximal (1)  ", 15, 25, 2);  
       tft.setTextColor(COLOR_S2, COLOR_FONDO); tft.drawString("Sensor Distal (2)    ", 165, 25, 2);
       
-      // 1. Escalas Y fijas por canal (calculadas en calibraciÃ³n)
+      // 1. Escalas Y fijas por canal (calculadas en calibracin)
       float baseS1 = localEscalaFijada ? localBaseS1 : 0.0f;
       float baseS2 = localEscalaFijada ? localBaseS2 : 0.0f;
       float halfS1 = localEscalaFijada ? localHalfS1 : 50.0f;
@@ -1640,7 +1640,7 @@ void actualizarMedicion() {
       float xStep = (float)GRAPH_W / (float)BUFFER_SIZE; 
       graphSprite.setTextDatum(TC_DATUM); graphSprite.setTextColor(TFT_DARKGREY);
 
-      // 3. Bucle de Dibujado de LÃ­neas
+      // 3. Bucle de Dibujado de Lneas
       for (int i = 0; i < BUFFER_SIZE - 1; i++) {
         int idx = (localHead + i) % BUFFER_SIZE; 
         int nextIdx = (localHead + i + 1) % BUFFER_SIZE;
@@ -1675,7 +1675,7 @@ void actualizarMedicion() {
       
       graphSprite.pushSprite(11, 51); 
 
-      // Datos numÃ©ricos 
+      // Datos numricos 
       int yInfo = 280; 
       
       // PWV
@@ -1770,7 +1770,7 @@ void setup() {
   // -----------------------------------------------------------------------------------
 
   // Inicializar sensores (no bloquea si no los detecta)
-  // TaskSensores se encargarÃ¡ de intentar reconectarlos luego.
+  // TaskSensores se encargar de intentar reconectarlos luego.
   iniciarSensores(); 
   delay(1000);
   xTaskCreatePinnedToCore(TaskSensores,"SensorTask",10000,NULL,1,NULL,0);
@@ -1790,17 +1790,17 @@ void loop() {
     // PANTALLA PRINCIPAL --------------------------------------------------------------
     if (pantallaActual == MENU) {
 
-      // MODO TEST RÃPIDO
+      // MODO TEST RPIDO
       if (x > btnX && x < btnX + btnW && y > btnY1 && y < btnY1 + btnH) {
          sonarPitido(); 
          modoActual = MODO_TEST_RAPIDO;
          edadInput = ""; 
          alturaInput = "";
-         modoVisualizacion = 0; // Reset modo visualizaciÃ³n a curvas
+         modoVisualizacion = 0; // Reset modo visualizacin a curvas
          resetearSnapshotPWVyPausa();
          dibujarTecladoEdad();
       }
-      // MODO ESTUDIO CLÃNICO
+      // MODO ESTUDIO CLNICO
       else if (x > btnX && x < btnX + btnW && y > btnY2 && y < btnY2 + btnH) {
         sonarPitido();
         modoActual = MODO_ESTUDIO_CLINICO;
@@ -1816,7 +1816,7 @@ void loop() {
             dibujarPantallaPC();
             resetearSnapshotPWVyPausa();
              
-            // Reiniciar lÃ³gica y buffers para esperar a la PC
+            // Reiniciar lgica y buffers para esperar a la PC
             portENTER_CRITICAL(&bufferMux);
             faseMedicion = 0; s1ok=false; s2ok=false;
             pacienteAltura = 0; // Reset altura, la PC debe mandarla
@@ -1834,7 +1834,7 @@ void loop() {
     }
 
 
-    // PANTALLA CONEXIÃ“N PC -------------------------------------------------------------
+    // PANTALLA CONEXIN PC -------------------------------------------------------------
     else if (pantallaActual == PANTALLA_PC_ESPERA) {
       // Boton salir
       if (x > 380 && x < 460 && y > 255 && y < 295) {
@@ -1843,7 +1843,7 @@ void loop() {
         // Confirmar salida
         // SALIR
         if (confirmarSalir()) {  
-            medicionActiva = false;  // Detiene el envÃ­o de datos
+            medicionActiva = false;  // Detiene el envo de datos
             resetearSnapshotPWVyPausa();
             pantallaActual = MENU;
             dibujarMenuPrincipal();
@@ -1872,7 +1872,7 @@ void loop() {
           }
       }
       
-      // BotÃ³n VOLVER
+      // Botn VOLVER
       else if (x > 28 && x < 72 && y > 253 && y < 297) {
           sonarPitido();
           pantallaActual = MENU;
@@ -1915,7 +1915,7 @@ void loop() {
        if (edadInput.length() > 0 && (x-430)*(x-430)+(y-275)*(y-275) <= 900) {
           int val = edadInput.toInt();
           
-          // RANGO VÃLIDO
+          // RANGO VLIDO
           if (val >= 10 && val <= 100) {  
              sonarPitido(); 
              pacienteEdad = val; 
@@ -1923,7 +1923,7 @@ void loop() {
              delay(300);
           } 
           
-          // RANGO INVÃLIDO
+          // RANGO INVLIDO
           else {   
              sonarAlerta();
              mostrarAlertaValorInvalido("EDAD INVALIDA", "entre 10 y 100 anos");;
@@ -1963,7 +1963,7 @@ void loop() {
           int val = alturaInput.toInt();
           
           if (val >= 120 && val <= 220) {
-             // RANGO VÃLIDO
+             // RANGO VLIDO
              sonarPitido(); 
              pacienteAltura = val; 
              resetearSnapshotPWVyPausa();
@@ -1975,7 +1975,7 @@ void loop() {
           } 
           
           else {
-             // RANGO INVÃLIDO
+             // RANGO INVLIDO
              sonarAlerta();
              mostrarAlertaValorInvalido("ALTURA INVALIDA", "entre 120 y 220 cm");
              dibujarTecladoAltura(); // Redibujar la pantalla para limpiar el popup
@@ -1985,12 +1985,12 @@ void loop() {
     
 
 
-    // PANTALLA MEDICIÃ“N ----------------------------------------------------------------
+    // PANTALLA MEDICIN ----------------------------------------------------------------
     else if (pantallaActual == PANTALLA_MEDICION_RAPIDA) {
           
-          // Cambio de Modo VisualizaciÃ³n
+          // Cambio de Modo Visualizacin
           if (y < 45) {
-              // BotÃ³n PAUSA/REANUDAR
+              // Botn PAUSA/REANUDAR
               if (x >= BTN_PAUSA_X && x <= (BTN_PAUSA_X + BTN_PAUSA_W) && y >= BTN_PAUSA_Y && y <= (BTN_PAUSA_Y + BTN_PAUSA_H)) {
                 sonarPitido();
                 graficoPausado = !graficoPausado;
@@ -2001,7 +2001,7 @@ void loop() {
                 actualizarMedicion();
                 delay(200);
               }
-              // Icono MÃ©tricas
+              // Icono Mtricas
               else if (x >= BTN_METRICAS_X && x <= (BTN_METRICAS_X + BTN_ICON_SIZE)) {
                 if (modoVisualizacion != 1) {
                     sonarPitido();
@@ -2023,7 +2023,7 @@ void loop() {
               }
           }
 
-          // BotÃ³n salir
+          // Botn salir
           else if (x > 360 && y > 260) {
               sonarPitido();
               
@@ -2043,7 +2043,7 @@ void loop() {
               }
           }
 
-          // BotÃ³n volver
+          // Botn volver
           else if (x < 100 && y > 250) {
             sonarPitido();
             medicionActiva = false;
@@ -2058,7 +2058,7 @@ void loop() {
     }
   }
 
-  // ActualizaciÃ³n contÃ­nua del grÃ¡fico (si estamos midiendo)
+  // Actualizacin contnua del grfico (si estamos midiendo)
   if (modoActual == MODO_TEST_RAPIDO && medicionActiva && pantallaActual == PANTALLA_MEDICION_RAPIDA && !graficoPausado) {
     if (millis() - lastDrawTime >= DRAW_INTERVAL) {
       lastDrawTime = millis();
