@@ -119,9 +119,9 @@ bool pausaS1conectado = true;
 bool pausaS2conectado = true;
 
 // GLOBALES PARA TASKSENSORES (evitar stack overflow)
-const int MA_SIZE = 4;
-float bufMA1_global[4] = {0};
-float bufMA2_global[4] = {0};
+const int MA_SIZE = 3;
+float bufMA1_global[3] = {0};
+float bufMA2_global[3] = {0};
 int idxMA_global = 0;
 
 // Variables para HPF anti-deriva
@@ -371,10 +371,10 @@ void TaskSensores(void *pvParameters) {
   float s1_lp = 0, s1_dc = 0;
   float s2_lp = 0, s2_dc = 0;
   float s1_hp = 0, s2_hp = 0;
-  const float ALPHA_LP = 0.75;
-  const float ALPHA_DC = 0.97;
-  const float ALPHA_HP_S1 = 0.95;
-  const float ALPHA_HP_S2 = 0.95;
+  const float ALPHA_LP = 0.8660;
+  const float ALPHA_DC = 0.9849;
+  const float ALPHA_HP_S1 = 0.9747;
+  const float ALPHA_HP_S2 = 0.9747;
   const long SENSOR_THRESHOLD = 50000;
 
   // Tiempo
@@ -388,7 +388,7 @@ void TaskSensores(void *pvParameters) {
   const unsigned long RR_MAX_MS = 1700; // permite bradicardia
   // const unsigned long PTT_MIN_MS = 50;
   // const unsigned long PTT_MAX_MS = 290;
-  const int THRESH_WINDOW_SAMPLES = 100; // ~2s a 50 SPS
+  const int THRESH_WINDOW_SAMPLES = 200; // ~2s a 100 SPS
 
   static float thrWinS1[THRESH_WINDOW_SAMPLES] = {0};
   static float thrWinS2[THRESH_WINDOW_SAMPLES] = {0};
@@ -454,14 +454,14 @@ void TaskSensores(void *pvParameters) {
           // Se acaba de reconectar fsicamente. Intentamos revivirlo:
           
           // 1. Reiniciamos el BUS Wire por si qued "tonto"
-          Wire.begin(SDA1, SCL1, 100000); 
+          Wire.begin(SDA1, SCL1, 200000); 
           delay(10); 
 
           // 2. Intentamos inicializar la librera
-          if (sensorProx.begin(Wire, I2C_SPEED_STANDARD)) {
+          if (sensorProx.begin(Wire, 200000)) {
               sensorProx.softReset(); // Reset de software para limpiar registros basura
               delay(10);
-              sensorProx.setup(30, 8, 2, 400, 411, 4096);
+              sensorProx.setup(30, 4, 2, 400, 411, 4096);
               s1_conectado = true; // XITO: Ahora s lo marcamos como conectado
           } else {
               s1_conectado = false; // Fall el handshake lgico, seguimos intentando
@@ -477,14 +477,14 @@ void TaskSensores(void *pvParameters) {
         
         if (!s2_conectado && s2_fisico) {
           // 1. Reiniciamos el BUS Wire1
-          Wire1.begin(SDA2, SCL2, 100000);
+          Wire1.begin(SDA2, SCL2, 200000);
           delay(10);
 
           // 2. Inicializamos librera
-          if (sensorDist.begin(Wire1, I2C_SPEED_STANDARD)) {
+          if (sensorDist.begin(Wire1, 200000)) {
               sensorDist.softReset();
               delay(10);
-              sensorDist.setup(30, 8, 2, 400, 411, 4096);
+              sensorDist.setup(30, 4, 2, 400, 411, 4096);
               s2_conectado = true;
           } else {
               s2_conectado = false;
@@ -1782,22 +1782,22 @@ void actualizarMedicion() {
 // ==================================================================================================================================================================
 void iniciarSensores() {
   // Inicializamos los buses
-  Wire.begin(SDA1, SCL1, 100000); 
-  Wire1.begin(SDA2, SCL2, 100000);
-  Wire.setClock(100000); 
-  Wire1.setClock(100000);
+  Wire.begin(SDA1, SCL1, 200000); 
+  Wire1.begin(SDA2, SCL2, 200000);
+  Wire.setClock(200000); 
+  Wire1.setClock(200000);
 
   // Intentamos iniciar Sensor 1
-  if (sensorProx.begin(Wire, I2C_SPEED_STANDARD)) {
-      sensorProx.setup(30, 8, 2, 400, 411, 4096);
+  if (sensorProx.begin(Wire, 200000)) {
+      sensorProx.setup(30, 4, 2, 400, 411, 4096);
       s1_conectado = true;
   } else {
       s1_conectado = false; // Marcamos como desconectado desde el inicio
   }
 
   // Intentamos iniciar Sensor 2
-  if (sensorDist.begin(Wire1, I2C_SPEED_STANDARD)) {
-      sensorDist.setup(30, 8, 2, 400, 411, 4096);
+  if (sensorDist.begin(Wire1, 200000)) {
+      sensorDist.setup(30, 4, 2, 400, 411, 4096);
       s2_conectado = true;
   } else {
       s2_conectado = false; // Marcamos como desconectado desde el inicio
