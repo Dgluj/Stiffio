@@ -1242,6 +1242,8 @@ void dibujarPantallaErrorMedicion() {
   tft.fillRoundRect(170, 200, 140, 45, 22, COLOR_BOTON);
   tft.setTextColor(COLOR_TEXTO);
   tft.drawString("REINTENTAR", 240, 222, 2);
+  // Botn volver
+  dibujarBotonVolver();
 }
 
 bool errorMedicionBloqueanteActivo() {
@@ -2076,6 +2078,18 @@ void loop() {
                   dibujarPantallaMedicion();
                   actualizarMedicion();
                   delay(250);
+              }
+              // Botn volver
+              else if ((x-50)*(x-50)+(y-275)*(y-275) <= 900) {
+                  sonarPitido();
+                  medicionActiva = false;
+                  resetearSnapshotPWVyPausa();
+
+                  // Volver a corregir altura
+                  pantallaActual = PANTALLA_ALTURA;
+                  alturaInput = String(pacienteAltura); // Recordar el dato
+                  dibujarTecladoAltura();
+                  delay(300);
               }
           }
 
