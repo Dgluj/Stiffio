@@ -164,6 +164,42 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
 // ======================================================================
 // CORE 0: MOTOR MATEMÁTICO + ENVÍO WEBSOCKET
 // ======================================================================
+void enviarPaqueteEstudio(bool c1, bool c2, bool s1, bool s2, float p, float d, int hr, float pwv) {
+  if (modoActual != MODO_ESTUDIO_CLINICO) return;
+
+  char hrField[16];
+  char pwvField[24];
+  const char* hrJson = "null";
+  const char* pwvJson = "null";
+
+  if (hr > 0) {
+    snprintf(hrField, sizeof(hrField), "%d", hr);
+    hrJson = hrField;
+  }
+
+  if (pwv > 0.0f) {
+    snprintf(pwvField, sizeof(pwvField), "%.2f", pwv);
+    pwvJson = pwvField;
+  }
+
+  char json[192];
+  snprintf(
+    json,
+    sizeof(json),
+    "{\"c1\":%s,\"c2\":%s,\"s1\":%s,\"s2\":%s,\"p\":%.2f,\"d\":%.2f,\"hr\":%s,\"pwv\":%s}",
+    c1 ? "true" : "false",
+    c2 ? "true" : "false",
+    s1 ? "true" : "false",
+    s2 ? "true" : "false",
+    p,
+    d,
+    hrJson,
+    pwvJson
+  );
+
+  webSocket.broadcastTXT(json);
+}
+
 bool verificarConexionI2C(TwoWire &wirePort) {
     wirePort.beginTransmission(SENSOR_I2C_ADDR);
     return (wirePort.endTransmission() == 0);
@@ -555,10 +591,16 @@ void TaskSensores(void *pvParameters) {
               }
             }
             else if (modoActual == MODO_ESTUDIO_CLINICO) {
-              char json[128];
-              snprintf(json, sizeof(json), "{\"s1\":true,\"s2\":true,\"p\":%.2f,\"d\":%.2f,\"hr\":%d,\"pwv\":%.2f}",
-                       valFinal1, valFinal2, bpmMostrado, pwvMostrado);
-              webSocket.broadcastTXT(json);
+              enviarPaqueteEstudio(
+                s1_conectado,
+                s2_conectado,
+                currentS1,
+                currentS2,
+                valFinal1,
+                valFinal2,
+                bpmMostrado,
+                pwvMostrado
+              );
             }
 
             // --- MÁQUINA DE ESTADOS ---
@@ -624,7 +666,16 @@ void TaskSensores(void *pvParameters) {
           } else {
             // --- SIN DEDOS (Connected but no finger) ---
             if (modoActual == MODO_ESTUDIO_CLINICO) {
-              webSocket.broadcastTXT("{\"s1\":false,\"s2\":false}");
+              enviarPaqueteEstudio(
+                s1_conectado,
+                s2_conectado,
+                currentS1,
+                currentS2,
+                0.0f,
+                0.0f,
+                0,
+                0.0f
+              );
             }
             if (faseMedicion != 0) {
               faseMedicion = 0; porcentajeEstabilizacion = 0;
@@ -662,6 +713,8 @@ void TaskSensores(void *pvParameters) {
       } else {
         // --- CABLES DESCONECTADOS ---
         // Si hay desconexión física, reseteamos la lógica para que al volver empiece de 0
+        s1ok = false;
+        s2ok = false;
         faseMedicion = 0;
         porcentajeEstabilizacion = 0;
         porcentajeCalculando = 0;
@@ -673,6 +726,18 @@ void TaskSensores(void *pvParameters) {
         visBaselineS1 = 0.0f; visBaselineS2 = 0.0f;
         visHalfRangeS1 = 50.0f; visHalfRangeS2 = 50.0f;
         portEXIT_CRITICAL(&bufferMux);
+        if (modoActual == MODO_ESTUDIO_CLINICO) {
+          enviarPaqueteEstudio(
+            s1_conectado,
+            s2_conectado,
+            false,
+            false,
+            0.0f,
+            0.0f,
+            0,
+            0.0f
+          );
+        }
       }
     } else {
       vTaskDelay(10);

@@ -1561,8 +1561,9 @@ class MainScreen(QMainWindow):
         self.graph1.setBackground('k')
         self.graph1.setTitle("Sensor Proximal (Carótida)", color='w', size='12pt')
         self.graph1.showGrid(x=True, y=True)
-        self.graph1.setLabel('left', 'Amplitud (%)')
+        self.graph1.setLabel('left', 'Amplitud Normalizada (%)')
         self.graph1.setLabel('bottom', 'Tiempo (s)')
+        self.graph1.setYRange(-110, 110, padding=0)
         self.right_layout.addWidget(self.graph1)
 
         # Gráfico sensor 2 (distal)
@@ -1570,8 +1571,9 @@ class MainScreen(QMainWindow):
         self.graph2.setBackground('k')
         self.graph2.setTitle("Sensor Distal (Radial)", color='w', size='12pt')
         self.graph2.showGrid(x=True, y=True)
-        self.graph2.setLabel('left', 'Amplitud (%)')
+        self.graph2.setLabel('left', 'Amplitud Normalizada (%)')
         self.graph2.setLabel('bottom', 'Tiempo (s)')
+        self.graph2.setYRange(-110, 110, padding=0)
         self.right_layout.addWidget(self.graph2)
 
         # Curvas de datos
@@ -1742,8 +1744,9 @@ class MainScreen(QMainWindow):
 
         if msg.clickedButton() == si_button:
             # Limpiamos buffers antes de irnos
-            processor.pwv_buffer.clear()
-            processor.pwv = None
+            processor.stop_session()
+            processor.clear_buffers()
+            ComunicacionMax.reset_stream_buffers()
 
            
             self.patient_data_window = PatientDataScreen()
@@ -1789,23 +1792,18 @@ class MainScreen(QMainWindow):
             # BLOQUE NUEVO: ENVIAR DATOS AL ESP32
             # =======================================================
             try:
-                # Recuperamos los datos que vienen del diccionario
                 h_val = int(self.patient_data.get('altura', 170))
                 a_val = int(self.patient_data.get('edad', 30))
-                
-                # Enviamos al ESP32
                 if ComunicacionMax.connected:
                     ComunicacionMax.enviar_datos_paciente(h_val, a_val)
-                    print(f"[FrontEnd] Datos enviados a ESP32: Altura {h_val}, Edad {a_val}")
-                else:
-                    print("[FrontEnd] ESP32 no conectado (Modo Offline o Error)")
-            except Exception as e:
-                print(f"[FrontEnd] Error enviando datos: {e}")
+            except Exception:
+                pass
             # =======================================================
 
             # --- Iniciar medición (Código original tuyo) ---
             self.measuring = True
-            self.start_time = time.time()
+            ComunicacionMax.reset_stream_buffers()
+            processor.start_session()
             self.start_graph_button.setText("Detener Medición")
             self.start_graph_button.setStyleSheet("""
                 QPushButton {
@@ -1820,10 +1818,13 @@ class MainScreen(QMainWindow):
                     background-color: #D32F2F;
                 }
             """)
+            self.hr_esp_label.setText("HR: Calculando...")
+            self.pwv_label.setText("PWV: Calculando...")
             self.start_graph_update() # <--- Esto inicia el Timer
         else:
             # --- Detener medición (Código original tuyo) ---
             self.measuring = False
+            processor.stop_session()
             self.start_graph_button.setText("Iniciar Medición")
             self.start_graph_button.setStyleSheet("""
                 QPushButton {
@@ -1839,6 +1840,12 @@ class MainScreen(QMainWindow):
                 }
             """)
             self.stop_graph_update()
+            self.curve1.setData([], [])
+            self.curve2.setData([], [])
+            self.prox_alert_label.setVisible(False)
+            self.dist_alert_label.setVisible(False)
+            self.hr_esp_label.setText("HR: -- bpm")
+            self.pwv_label.setText("PWV: -- m/s")
 
     # Arranca el gráfico
     def start_graph_update(self):
@@ -1850,118 +1857,87 @@ class MainScreen(QMainWindow):
     def stop_graph_update(self):
         if hasattr(self, 'timer'):
             self.timer.stop()
+    def _show_sensor_alert(self, label, sensor_name, connected_ok, skin_ok, bg_color):
+        if not connected_ok:
+            label.setText(f"{sensor_name} DESCONECTADO")
+            label.setStyleSheet(f"""
+                background-color: {bg_color};
+                color: white;
+                font-size: 18pt;
+                font-weight: bold;
+                border-radius: 10px;
+            """)
+            label.setVisible(True)
+        elif not skin_ok:
+            label.setText("REVISAR SENSOR")
+            label.setStyleSheet(f"""
+                background-color: {bg_color};
+                color: white;
+                font-size: 22pt;
+                font-weight: bold;
+                border-radius: 10px;
+            """)
+            label.setVisible(True)
+        else:
+            label.setVisible(False)
 
-
-    # Actualiza el gráfico
+    # Actualiza el grafico
     def update_plot(self):
         if not self.measuring:
             return
 
-        # Leer señales desde ComunicacionMax
-        y1 = list(ComunicacionMax.proximal_data_raw)
-        y2 = list(ComunicacionMax.distal_data_raw)
-
-        # Verificar estado de sensores
-        s1_ok = ComunicacionMax.sensor1_ok
-        s2_ok = ComunicacionMax.sensor2_ok
-
-        # Actualizar visibilidad de alertas
-        self.prox_alert_label.setVisible(not s1_ok)
-        self.dist_alert_label.setVisible(not s2_ok)
-
-        # Eje temporal
-        n = len(y1)
-        elapsed_time = time.time() - self.start_time
-        t_end = elapsed_time
-        t_start = max(0, t_end - 6)
-        t = np.linspace(t_start, t_end, n)
-
-        # Si algún sensor no está apoyado, vaciar gráficos y poner métricas en "--"
-        if not (s1_ok and s2_ok):
-            self.curve1.setData([])
-            self.curve2.setData([])
-            self.hr_esp_label.setText("HR: -- bpm")
-            self.pwv_label.setText("PWV: -- m/s")
-            return
-        elif not s1_ok:
-            self.curve1.setData([])
-            self.curve2.setData(y2)  # Solo distal
-            self.hr_esp_label.setText("HR: -- bpm")
-            self.pwv_label.setText("PWV: -- m/s")
-            return
-        elif not s2_ok:
-            self.curve1.setData(y1)  # Solo proximal
-            self.curve2.setData([])
-            self.hr_esp_label.setText("HR: -- bpm")
-            self.pwv_label.setText("PWV: -- m/s")
-            return
-
-
-        # Actualizar gráficos
-        if s1_ok:
-            self.curve1.setData(t, y1)
-            self.graph1.setXRange(t_start, t_end)
-            # self.graph1.setYRange(-110, 110)
-            self.graph1.enableAutoRange(axis='y')
-        else:
-            self.curve1.setData([])
-
-
-        if s2_ok:
-            self.curve2.setData(t, y2)
-            self.graph2.setXRange(t_start, t_end)
-            # self.graph2.setYRange(-110, 110)
-            self.graph2.enableAutoRange(axis='y')
-        else:
-            self.curve2.setData([])
-
-
-        # Actualizar HR promedio si está disponible
-        hr_remoto = ComunicacionMax.remote_hr
-
-        if hr_remoto > 0:
-            self.hr_esp_label.setText(f"HR: {hr_remoto} bpm")
-        else:
-            self.hr_esp_label.setText("HR: -- bpm")
-
-        '''
-        if ComunicacionMax.hr_avg is not None:
-            self.hr_esp_label.setText(f"HR: {ComunicacionMax.hr_avg:.0f} bpm")
-        else:
-            self.hr_esp_label.setText("HR: -- bpm")
-        '''
-
-        # Calcular y actualizar la PWV
-        pwv_remoto = ComunicacionMax.remote_pwv
-
-        if pwv_remoto > 0:
-            self.pwv_label.setText(f"PWV: {pwv_remoto:.2f} m/s")
-            
-            # Actualizar punto en el gráfico (Edad vs PWV)
-            if self.patient_age is not None:
-                self.patient_point_item.setData([self.patient_age], [pwv_remoto])
-        else:
-            self.pwv_label.setText("PWV: -- m/s")
-
-        '''
         processor.process_all()
-        pwv = processor.get_metrics().get('pwv')
+        t, y1, y2 = processor.get_signals()
+        status = processor.get_sensor_status()
+        metrics = processor.get_metrics()
 
-        if pwv is not None:
-            # Si hay un valor de PWV (ya promediado y estable)...
-            self.pwv_label.setText(f"PWV: {pwv:.1f} m/s")
+        c1 = status.get("c1", False)
+        c2 = status.get("c2", False)
+        s1 = status.get("s1", False)
+        s2 = status.get("s2", False)
 
-            if self.patient_age is not None:
-                # Actualizamos la posición del punto amarillo
-                self.patient_point_item.setData([self.patient_age], [pwv])
+        self._show_sensor_alert(self.prox_alert_label, "SENSOR PROXIMAL", c1, s1, "#b00020")
+        self._show_sensor_alert(self.dist_alert_label, "SENSOR DISTAL", c2, s2, "#c2185b")
+
+        if len(t) > 1:
+            x_end = t[-1]
+            x_start = max(0.0, x_end - 6.0)
+            self.graph1.setXRange(x_start, x_end, padding=0)
+            self.graph2.setXRange(x_start, x_end, padding=0)
         else:
-            # Si no hay PWV (aún calibrando), mostramos "--"
+            self.graph1.setXRange(0.0, 6.0, padding=0)
+            self.graph2.setXRange(0.0, 6.0, padding=0)
+
+        if c1 and s1 and len(t) == len(y1) and len(y1) > 1:
+            self.curve1.setData(t, y1)
+        else:
+            self.curve1.setData([], [])
+
+        if c2 and s2 and len(t) == len(y2) and len(y2) > 1:
+            self.curve2.setData(t, y2)
+        else:
+            self.curve2.setData([], [])
+
+        hr_val = metrics.get("hr")
+        if hr_val is not None:
+            self.hr_esp_label.setText(f"HR: {int(hr_val)} bpm")
+        elif c1 and c2 and s1 and s2:
+            self.hr_esp_label.setText("HR: Calculando...")
+        else:
+            self.hr_esp_label.setText("HR: -- bpm")
+
+        pwv_val = metrics.get("pwv")
+        if pwv_val is not None:
+            self.pwv_label.setText(f"PWV: {float(pwv_val):.2f} m/s")
+            if self.patient_age is not None:
+                self.patient_point_item.setData([self.patient_age], [float(pwv_val)])
+        elif c1 and c2 and s1 and s2:
+            self.pwv_label.setText("PWV: Calculando...")
+        else:
             self.pwv_label.setText("PWV: -- m/s")
-        '''
 
 
-
-    # Guardar medición
+    # Guardar medicion
     def save_measurement(self):
         filename = resource_path("mediciones_pwv.csv")
 
@@ -1976,8 +1952,9 @@ class MainScreen(QMainWindow):
         observaciones = self.patient_data.get('observaciones', '')
 
         # Obtener métricas del backend (los valores ya promediados)
-        pwv_val = processor.get_metrics().get('pwv')
-        hr_val = ComunicacionMax.hr_avg # HR del .ino
+        metrics = processor.get_metrics()
+        pwv_val = metrics.get('pwv')
+        hr_val = metrics.get('hr')
 
         # Validar que tengamos datos
         if pwv_val is None or hr_val is None:
@@ -2029,3 +2006,4 @@ if __name__ == "__main__":
     window.showMaximized()  # Esto hace que abra maximizada
     sys.exit(app.exec())
 exit(app.exec())
+

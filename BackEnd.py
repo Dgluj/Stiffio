@@ -1,81 +1,182 @@
 """
 BACKEND.PY
-Procesamiento de datos.
-ACTUALIZACIÓN: Delega el cálculo matemático al ESP32.
-Solo gestiona buffers para visualización.
+Visual-only processing pipeline for signal display.
+
+- Receives already-filtered signals from ESP32 through ComunicacionMax.
+- Runs a 10-second amplitude calibration (min/max) at session start.
+- Normalizes for stable plotting.
+- Does NOT compute HR or PWV (those come from ESP32 JSON).
 """
 
-import numpy as np
 from collections import deque
+import time
+
+import numpy as np
+
 import ComunicacionMax
+
 
 class SignalProcessor:
     def __init__(self, fs=50):
         self.fs = fs
         self.MAX_POINTS = 300
-        
-        # Buffers para gráficas (vienen del WebSocket)
-        self.proximal_filtered = deque([0]*self.MAX_POINTS, maxlen=self.MAX_POINTS)
-        self.distal_filtered = deque([0]*self.MAX_POINTS, maxlen=self.MAX_POINTS)
-        
-        # Variables de resultados (se actualizan desde el ESP32)
-        self.pwv = 0.0
-        self.hr = 0
-        
-        # Buffer simple para suavizar visualmente el PWV si varía muy rápido en pantalla
-        self.pwv_buffer = deque(maxlen=20) 
+        self.VIEW_SECONDS = 6.0
+        self.CALIB_SECONDS = 10.0
 
-    def clear_buffers(self):
-        """Limpia todo si se pierde conexión o dedos"""
+        self.proximal_filtered = deque(maxlen=self.MAX_POINTS)
+        self.distal_filtered = deque(maxlen=self.MAX_POINTS)
+        self.time_axis = deque(maxlen=self.MAX_POINTS)
+
+        self.hr = None
+        self.pwv = None
+
+        self.connected = False
+        self.c1 = False
+        self.c2 = False
+        self.s1 = False
+        self.s2 = False
+
+        self.session_active = False
+        self.session_start_local = None
+
+        self.calib_min_p = None
+        self.calib_max_p = None
+        self.calib_min_d = None
+        self.calib_max_d = None
+
+    def start_session(self):
+        self.session_active = True
+        self.session_start_local = time.monotonic()
+        self.calib_min_p = None
+        self.calib_max_p = None
+        self.calib_min_d = None
+        self.calib_max_d = None
+        self.hr = None
+        self.pwv = None
         self.proximal_filtered.clear()
         self.distal_filtered.clear()
-        self.pwv = 0.0
-        self.hr = 0
-        self.pwv_buffer.clear()
+        self.time_axis.clear()
 
-    def update_data(self):
-        """
-        Sincroniza los buffers locales con los datos que llegan al WebSocket.
-        """
-        # Copiamos los datos que ComunicacionMax recibió del ESP32
-        # Convertimos a lista para manejarlo fácil en pyqtgraph
-        self.proximal_filtered = list(ComunicacionMax.proximal_data_raw)
-        self.distal_filtered = list(ComunicacionMax.distal_data_raw)
+    def stop_session(self):
+        self.session_active = False
+
+    def clear_buffers(self):
+        self.proximal_filtered.clear()
+        self.distal_filtered.clear()
+        self.time_axis.clear()
+        self.hr = None
+        self.pwv = None
+
+    def _update_status(self, snapshot):
+        self.connected = bool(snapshot.get("connected", False))
+        self.c1 = bool(snapshot.get("c1", False))
+        self.c2 = bool(snapshot.get("c2", False))
+        self.s1 = bool(snapshot.get("s1", False))
+        self.s2 = bool(snapshot.get("s2", False))
+        self.hr = snapshot.get("hr", None)
+        self.pwv = snapshot.get("pwv", None)
+
+    def _calibration_progress(self):
+        if not self.session_active or self.session_start_local is None:
+            return 0.0
+        elapsed = time.monotonic() - self.session_start_local
+        return max(0.0, min(1.0, elapsed / self.CALIB_SECONDS))
+
+    def _has_valid_calibration(self):
+        if None in (self.calib_min_p, self.calib_max_p, self.calib_min_d, self.calib_max_d):
+            return False
+        return (self.calib_max_p - self.calib_min_p) > 1e-6 and (self.calib_max_d - self.calib_min_d) > 1e-6
+
+    def _update_calibration(self, p_arr, d_arr):
+        if p_arr.size == 0 or d_arr.size == 0:
+            return
+
+        p_min = float(np.min(p_arr))
+        p_max = float(np.max(p_arr))
+        d_min = float(np.min(d_arr))
+        d_max = float(np.max(d_arr))
+
+        self.calib_min_p = p_min if self.calib_min_p is None else min(self.calib_min_p, p_min)
+        self.calib_max_p = p_max if self.calib_max_p is None else max(self.calib_max_p, p_max)
+        self.calib_min_d = d_min if self.calib_min_d is None else min(self.calib_min_d, d_min)
+        self.calib_max_d = d_max if self.calib_max_d is None else max(self.calib_max_d, d_max)
+
+    def _normalize_signal(self, signal, vmin, vmax):
+        baseline = (vmax + vmin) * 0.5
+        half = (vmax - vmin) * 0.5
+        if half < 1e-6:
+            half = 1.0
+        normalized = ((signal - baseline) / half) * 100.0
+        return np.clip(normalized, -110.0, 110.0)
 
     def process_all(self):
-        """
-        Ciclo principal de procesamiento.
-        Ahora es pasivo: solo lee lo que calculó el ESP32.
-        """
-        # 1. Verificar si hay conexión y sensores OK
-        if not (ComunicacionMax.sensor1_ok and ComunicacionMax.sensor2_ok):
-            self.clear_buffers()
+        if not self.session_active:
             return
-        
-        # 2. Traer señales nuevas para el gráfico
-        self.update_data()
-        
-        # 3. LEER RESULTADOS DEL ESP32 (La Magia)
-        # El ESP32 manda el HR y PWV ya calculados.
-        
-        if ComunicacionMax.remote_hr > 0:
-            self.hr = ComunicacionMax.remote_hr
-            
-        if ComunicacionMax.remote_pwv > 0:
-            # Filtro suave local para que el número en pantalla no salte decimales a lo loco
-            # (Promedio móvil simple de lo que manda el ESP)
-            self.pwv_buffer.append(ComunicacionMax.remote_pwv)
-            self.pwv = sum(self.pwv_buffer) / len(self.pwv_buffer)
+
+        snapshot = ComunicacionMax.get_snapshot()
+        self._update_status(snapshot)
+
+        raw_t = snapshot.get("t", [])
+        raw_p = snapshot.get("p", [])
+        raw_d = snapshot.get("d", [])
+
+        if not raw_t or not raw_p or not raw_d:
+            self.proximal_filtered.clear()
+            self.distal_filtered.clear()
+            self.time_axis.clear()
+            return
+
+        n = min(len(raw_t), len(raw_p), len(raw_d))
+        raw_t = np.asarray(raw_t[-n:], dtype=float)
+        raw_p = np.asarray(raw_p[-n:], dtype=float)
+        raw_d = np.asarray(raw_d[-n:], dtype=float)
+
+        # Calibrate using first 10 seconds when both sensors are physically connected and on skin.
+        if self.c1 and self.c2 and self.s1 and self.s2 and self._calibration_progress() < 1.0:
+            self._update_calibration(raw_p[-1:], raw_d[-1:])
+
+        # Use fixed calibration when available; fallback to current window scale while calibrating.
+        if self._has_valid_calibration():
+            p_min, p_max = self.calib_min_p, self.calib_max_p
+            d_min, d_max = self.calib_min_d, self.calib_max_d
+        else:
+            p_min, p_max = float(np.min(raw_p)), float(np.max(raw_p))
+            d_min, d_max = float(np.min(raw_d)), float(np.max(raw_d))
+
+        norm_p = self._normalize_signal(raw_p, p_min, p_max)
+        norm_d = self._normalize_signal(raw_d, d_min, d_max)
+
+        if self.session_start_local is None:
+            self.session_start_local = raw_t[0]
+
+        t_rel = raw_t - self.session_start_local
+        t_end = float(t_rel[-1])
+        t_start = max(0.0, t_end - self.VIEW_SECONDS)
+        idx = int(np.searchsorted(t_rel, t_start, side="left"))
+
+        self.time_axis = deque(t_rel[idx:].tolist(), maxlen=self.MAX_POINTS)
+        self.proximal_filtered = deque(norm_p[idx:].tolist(), maxlen=self.MAX_POINTS)
+        self.distal_filtered = deque(norm_d[idx:].tolist(), maxlen=self.MAX_POINTS)
 
     def get_signals(self):
-        """Retorna ejes X e Y para graficar en FrontEnd"""
-        # Generar eje temporal relativo para el gráfico
-        length = len(self.proximal_filtered)
-        if length > 0:
-            time_axis = np.linspace(0, length/self.fs, length)
-            return time_axis, self.proximal_filtered, self.distal_filtered
-        else:
-            return [], [], []
+        return list(self.time_axis), list(self.proximal_filtered), list(self.distal_filtered)
 
-# Instancia global que usará el FrontEnd
+    def get_metrics(self):
+        return {
+            "hr": self.hr,
+            "pwv": self.pwv,
+            "calibrating": self.session_active and self._calibration_progress() < 1.0,
+            "calibration_progress": self._calibration_progress(),
+        }
+
+    def get_sensor_status(self):
+        return {
+            "connected": self.connected,
+            "c1": self.c1,
+            "c2": self.c2,
+            "s1": self.s1,
+            "s2": self.s2,
+        }
+
+
 processor = SignalProcessor()

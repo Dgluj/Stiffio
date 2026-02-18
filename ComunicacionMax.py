@@ -1,156 +1,254 @@
 """
 COMUNICACIONMAX.PY
-Maneja la conexión WebSocket con el ESP32.
-Recibe: Señales (p, d), Ritmo (hr), Velocidad de Onda (pwv).
-Envía: Datos de paciente (Altura, Edad) para el cálculo.
+WebSocket bridge between Python app and ESP32.
+
+Incoming JSON (ESP32 -> Python):
+{
+  "c1": bool, "c2": bool,
+  "s1": bool, "s2": bool,
+  "p": float, "d": float,
+  "hr": int|null, "pwv": float|null
+}
+
+Outgoing JSON (Python -> ESP32):
+{"h": int, "a": int}
 """
 
-import websocket
-import threading
-from collections import deque
 import json
+import threading
 import time
+from collections import deque
+
+import websocket
+
 
 # ==============================================================================
-# CONFIGURACIÓN DE RED
+# NETWORK CONFIG
 # ==============================================================================
-# esp_ip = "172.20.10.4"  # Datos Vitu
-# esp_ip = "192.168.0.177"    # WiFi Facu
-esp_ip = "192.168.0.238"    # WiFi Dani
+# esp_ip = "172.20.10.4"
+# esp_ip = "192.168.0.177"
+esp_ip = "192.168.0.238"
 ws_url = f"ws://{esp_ip}:81/"
 
-# ==============================================================================
-# VARIABLES GLOBALES Y BUFFERS
-# ==============================================================================
-# Estado de conexión
-connected = False
-ws_app = None  # Objeto del socket para poder enviar datos
 
-# Estado de sensores (True si el dedo está puesto)
+# ==============================================================================
+# SHARED STATE
+# ==============================================================================
+connected = False
+ws_app = None
+
+sensor1_connected = False
+sensor2_connected = False
 sensor1_ok = False
 sensor2_ok = False
 
-# Buffers de señales (Compartidos con BackEnd)
-MAX_POINTS = 300 
-proximal_data_raw = deque([0]*MAX_POINTS, maxlen=MAX_POINTS)
-distal_data_raw = deque([0]*MAX_POINTS, maxlen=MAX_POINTS)
+MAX_POINTS = 600
+sample_time_raw = deque(maxlen=MAX_POINTS)
+proximal_data_raw = deque(maxlen=MAX_POINTS)
+distal_data_raw = deque(maxlen=MAX_POINTS)
 
-# Resultados que vienen calculados desde el ESP32 (Modo Estudio Completo)
-remote_hr = 0
-remote_pwv = 0.0
+remote_hr = None
+remote_pwv = None
+
+_state_lock = threading.Lock()
+_connection_thread = None
+
+
+def _to_bool(value, default=False):
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    if isinstance(value, str):
+        v = value.strip().lower()
+        if v in ("true", "1", "yes", "y", "si"):
+            return True
+        if v in ("false", "0", "no", "n"):
+            return False
+    return default
+
+
+def _to_float(value, default=0.0):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _nullable_hr(value):
+    if value is None:
+        return None
+    try:
+        v = int(value)
+    except (TypeError, ValueError):
+        return None
+    return v if v > 0 else None
+
+
+def _nullable_pwv(value):
+    if value is None:
+        return None
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        return None
+    return v if v > 0.0 else None
+
+
+def reset_stream_buffers(reset_metrics=True):
+    global remote_hr, remote_pwv
+    with _state_lock:
+        sample_time_raw.clear()
+        proximal_data_raw.clear()
+        distal_data_raw.clear()
+        if reset_metrics:
+            remote_hr = None
+            remote_pwv = None
+
+
+def get_snapshot():
+    with _state_lock:
+        return {
+            "connected": connected,
+            "c1": sensor1_connected,
+            "c2": sensor2_connected,
+            "s1": sensor1_ok,
+            "s2": sensor2_ok,
+            "t": list(sample_time_raw),
+            "p": list(proximal_data_raw),
+            "d": list(distal_data_raw),
+            "hr": remote_hr,
+            "pwv": remote_pwv,
+        }
+
 
 # ==============================================================================
-# FUNCIONES DE ENVÍO (PC -> ESP32)
+# SEND (Python -> ESP32)
 # ==============================================================================
 def enviar_datos_paciente(altura_cm, edad):
-    """
-    Envía la altura y edad al ESP32 para que él haga el cálculo interno.
-    Se llama desde FrontEnd.py al dar 'Iniciar'.
-    """
     global ws_app, connected
-    
+
     if connected and ws_app:
         try:
-            # Creamos el JSON: {"h": 170, "a": 25}
             mensaje = json.dumps({"h": int(altura_cm), "a": int(edad)})
             ws_app.send(mensaje)
-            print(f"--> Datos enviados al ESP32: Altura={altura_cm}, Edad={edad}")
             return True
-        except Exception as e:
-            print(f"Error enviando datos: {e}")
+        except Exception:
             return False
-    else:
-        print("No se puede enviar: ESP32 no conectado.")
-        return False
+    return False
+
 
 # ==============================================================================
-# EVENTOS WEBSOCKET (ESP32 -> PC)
+# WEBSOCKET EVENTS
 # ==============================================================================
 def on_open(ws):
     global connected
-    print(f"--- CONEXIÓN ESTABLECIDA CON ESP32 ({esp_ip}) ---")
-    connected = True
+    with _state_lock:
+        connected = True
+
 
 def on_message(ws, message):
-    print(f"RECIBIDO: {message}")
-    global sensor1_ok, sensor2_ok, remote_hr, remote_pwv
-    
+    global sensor1_connected, sensor2_connected, sensor1_ok, sensor2_ok
+    global remote_hr, remote_pwv
+
     try:
-        # El ESP32 envía JSON. Ej: {"s1":true, "s2":true, "p":1200, "d":1300, "hr":75, "pwv":6.5}
         data = json.loads(message)
-
-        # 1. Actualizar estado de sensores
-        if 's1' in data: sensor1_ok = data['s1']
-        if 's2' in data: sensor2_ok = data['s2']
-
-        # 2. Procesar datos (Solo si ambos sensores están OK)
-        if sensor1_ok and sensor2_ok:
-            # Señales filtradas (p=proximal, d=distal)
-            if 'p' in data: proximal_data_raw.append(data['p'])
-            if 'd' in data: distal_data_raw.append(data['d'])
-            
-            # Resultados calculados por el ESP32
-            if 'hr' in data: remote_hr = data['hr']
-            if 'pwv' in data: remote_pwv = data['pwv']
-        else:
-            # Si se levanta un dedo, limpiamos buffers para evitar desfasajes en el gráfico
-            # y reseteamos valores para que la interfaz muestre "--" o 0
-            if len(proximal_data_raw) > 0: proximal_data_raw.clear()
-            if len(distal_data_raw) > 0: distal_data_raw.clear()
-            remote_hr = 0
-            remote_pwv = 0.0
-
     except json.JSONDecodeError:
-        print("Mensaje basura recibido:", message)
-    except Exception as e:
-        print("Error procesando mensaje:", e)
+        return
+    except Exception:
+        return
+
+    with _state_lock:
+        # Physical connection flags
+        if "c1" in data:
+            sensor1_connected = _to_bool(data.get("c1"), sensor1_connected)
+        elif "s1" in data:
+            # Backward compatibility with old firmware packets
+            sensor1_connected = True
+
+        if "c2" in data:
+            sensor2_connected = _to_bool(data.get("c2"), sensor2_connected)
+        elif "s2" in data:
+            sensor2_connected = True
+
+        # On-skin / contact flags
+        if "s1" in data:
+            sensor1_ok = _to_bool(data.get("s1"), sensor1_ok)
+        if "s2" in data:
+            sensor2_ok = _to_bool(data.get("s2"), sensor2_ok)
+
+        # Signal samples
+        if "p" in data and "d" in data and sensor1_connected and sensor2_connected and sensor1_ok and sensor2_ok:
+            p_val = _to_float(data.get("p"), 0.0)
+            d_val = _to_float(data.get("d"), 0.0)
+            sample_time_raw.append(time.monotonic())
+            proximal_data_raw.append(p_val)
+            distal_data_raw.append(d_val)
+
+        # Metrics already computed by ESP32
+        if "hr" in data:
+            remote_hr = _nullable_hr(data.get("hr"))
+        if "pwv" in data:
+            remote_pwv = _nullable_pwv(data.get("pwv"))
+
 
 def on_error(ws, error):
-    global connected
-    print("Error WebSocket:", error)
-    connected = False
+    global connected, sensor1_connected, sensor2_connected, sensor1_ok, sensor2_ok, remote_hr, remote_pwv
+    with _state_lock:
+        connected = False
+        sensor1_connected = False
+        sensor2_connected = False
+        sensor1_ok = False
+        sensor2_ok = False
+        remote_hr = None
+        remote_pwv = None
+        sample_time_raw.clear()
+        proximal_data_raw.clear()
+        distal_data_raw.clear()
+
 
 def on_close(ws, close_status_code, close_msg):
-    global connected
-    print("Conexión cerrada")
-    connected = False
+    global connected, sensor1_connected, sensor2_connected, sensor1_ok, sensor2_ok, remote_hr, remote_pwv
+    with _state_lock:
+        connected = False
+        sensor1_connected = False
+        sensor2_connected = False
+        sensor1_ok = False
+        sensor2_ok = False
+        remote_hr = None
+        remote_pwv = None
+        sample_time_raw.clear()
+        proximal_data_raw.clear()
+        distal_data_raw.clear()
+
 
 # ==============================================================================
-# HILO DE EJECUCIÓN
+# THREAD / STARTUP
 # ==============================================================================
 def run_ws():
     global ws_app
-    # websocket.enableTrace(True) # Descomentar para ver logs de red en consola
     ws_app = websocket.WebSocketApp(
         ws_url,
         on_open=on_open,
         on_message=on_message,
         on_error=on_error,
-        on_close=on_close
+        on_close=on_close,
     )
     ws_app.run_forever()
 
+
 def start_connection():
-    """Inicia el hilo de conexión en segundo plano"""
-    t = threading.Thread(target=run_ws)
-    t.daemon = True # El hilo muere si cierras la app principal
-    t.start()
+    global _connection_thread
+    if _connection_thread is not None and _connection_thread.is_alive():
+        return
+    _connection_thread = threading.Thread(target=run_ws, daemon=True)
+    _connection_thread.start()
 
 
-
-# ==============================================================================
-# BLOQUE DE PRUEBA (ESTO ES LO QUE TE FALTABA)
-# ==============================================================================
 if __name__ == "__main__":
-    print(f"--- Intentando conectar a: {ws_url} ---")
-    print("Espere unos segundos...")
-    
-    # 1. Iniciamos la conexión
     start_connection()
-    
-    # 2. Bucle infinito para mantener el programa abierto y ver los prints
     try:
         while True:
-            time.sleep(1) # Mantiene el script vivo
+            time.sleep(1)
     except KeyboardInterrupt:
-        print("\nPrueba finalizada.")
+        pass
