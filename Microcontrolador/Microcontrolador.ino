@@ -382,7 +382,7 @@ void TaskSensores(void *pvParameters) {
   unsigned long baseTime = 0;
   const unsigned long TIEMPO_ESTABILIZACION = 10000;
 
-  // Deteccin de picos locales
+  // Deteccin de pies de onda locales
   const unsigned long REFRACT_MS = 370;
   const unsigned long RR_MIN_MS = 460;
   const unsigned long RR_MAX_MS = 1700; // permite bradicardia
@@ -397,17 +397,17 @@ void TaskSensores(void *pvParameters) {
   float thrSumS1 = 0.0f, thrSumSqS1 = 0.0f;
   float thrSumS2 = 0.0f, thrSumSqS2 = 0.0f;
 
-  int peakPriming = 0;
+  int footPriming = 0;
   float s1_prev2 = 0.0f, s1_prev1 = 0.0f;
   float s2_prev2 = 0.0f, s2_prev1 = 0.0f;
   unsigned long prev2Time = 0;
   unsigned long prev1Time = 0;
 
-  unsigned long lastPeakTimeS1 = 0;
-  unsigned long lastPeakTimeS2 = 0;
-  unsigned long lastDistPeakForHR = 0;
-  unsigned long pendingProxPeakTime = 0;
-  bool waitingForS2 = false;
+  unsigned long lastFootTimeS1 = 0;
+  unsigned long lastFootTimeS2 = 0;
+  unsigned long lastDistFootForHR = 0;
+  unsigned long pendingProxFootTime = 0;
+  bool waitingForDistFoot = false;
 
   float rrWindow[RR_WINDOW_SIZE] = {0};
   int rrIdx = 0;
@@ -428,8 +428,8 @@ void TaskSensores(void *pvParameters) {
     if (medicionActiva) {
       if (resetearBuffersPWVSolicitado) {
         resetearBuffersPWVSolicitado = false;
-        waitingForS2 = false;
-        pendingProxPeakTime = 0;
+        waitingForDistFoot = false;
+        pendingProxFootTime = 0;
         pttCount = 0;
         conteoPTTValidos = 0;
         medicionFinalizada = false;
@@ -507,6 +507,8 @@ void TaskSensores(void *pvParameters) {
 
           long ir1 = sensorProx.getIR();
           long ir2 = sensorDist.getIR();
+          float sig1 = -((float)ir1);
+          float sig2 = -((float)ir2);
 
           // Chequeo sensores colocados (Dedo puesto)
           bool currentS1 = (ir1 > SENSOR_THRESHOLD);
@@ -518,12 +520,12 @@ void TaskSensores(void *pvParameters) {
             // --- PROCESAMIENTO DE SEAL ---
             
             // 1. Low-Pass
-            if (s1_lp == 0) s1_lp = ir1; if (s2_lp == 0) s2_lp = ir2;
-            s1_lp = (s1_lp * ALPHA_LP) + (ir1 * (1.0 - ALPHA_LP));
-            s2_lp = (s2_lp * ALPHA_LP) + (ir2 * (1.0 - ALPHA_LP));
+            if (s1_lp == 0) s1_lp = sig1; if (s2_lp == 0) s2_lp = sig2;
+            s1_lp = (s1_lp * ALPHA_LP) + (sig1 * (1.0 - ALPHA_LP));
+            s2_lp = (s2_lp * ALPHA_LP) + (sig2 * (1.0 - ALPHA_LP));
 
             // 2. DC Removal
-            if (s1_dc == 0) s1_dc = ir1; if (s2_dc == 0) s2_dc = ir2;
+            if (s1_dc == 0) s1_dc = sig1; if (s2_dc == 0) s2_dc = sig2;
             s1_dc = (s1_dc * ALPHA_DC) + (s1_lp * (1.0 - ALPHA_DC));
             s2_dc = (s2_dc * ALPHA_DC) + (s2_lp * (1.0 - ALPHA_DC));
 
@@ -552,7 +554,7 @@ void TaskSensores(void *pvParameters) {
               calibCount++;
             }
 
-            // 5. Threshold adaptativo: mean + 0.5 * std (ventana mvil ~2 s)
+            // 5. Threshold adaptativo para pies de onda: mean - k*std (ventana mvil ~2 s)
             if (thrCount < THRESH_WINDOW_SAMPLES) {
               thrWinS1[thrIdx] = valFinal1;
               thrWinS2[thrIdx] = valFinal2;
@@ -587,18 +589,18 @@ void TaskSensores(void *pvParameters) {
               float varS2 = (thrSumSqS2 / (float)thrCount) - (meanS2 * meanS2);
               if (varS1 < 0.0f) varS1 = 0.0f;
               if (varS2 < 0.0f) varS2 = 0.0f;
-              thresholdS1 = meanS1 + (0.5f * sqrtf(varS1));
-              thresholdS2 = meanS2 + (0.40f * sqrtf(varS2));
+              thresholdS1 = meanS1 - (0.5f * sqrtf(varS1));
+              thresholdS2 = meanS2 - (0.40f * sqrtf(varS2));
             }
 
-            // 6. Detector explcito de mximos locales sobre seal filtrada
-            bool peakS1 = false;
-            bool peakS2 = false;
-            unsigned long peakTimeS1 = 0;
-            unsigned long peakTimeS2 = 0;
+            // 6. Detector explcito de pies de onda (mnimos locales) sobre seal filtrada
+            bool footS1 = false;
+            bool footS2 = false;
+            unsigned long footTimeS1 = 0;
+            unsigned long footTimeS2 = 0;
 
-            if (peakPriming >= 2) {
-              if ((s1_prev2 < s1_prev1) && (s1_prev1 > valFinal1) && (s1_prev1 > thresholdS1)) {
+            if (footPriming >= 2) {
+              if ((s1_prev2 > s1_prev1) && (s1_prev1 < valFinal1) && (s1_prev1 < thresholdS1)) {
                 float denomS1 = s1_prev2 - (2.0f * s1_prev1) + valFinal1;
                 float deltaS1 = 0.0f;
                 if (fabsf(denomS1) > 1e-9f) {
@@ -608,16 +610,16 @@ void TaskSensores(void *pvParameters) {
                 }
                 float dtS1 = 0.5f * ((float)(prev1Time - prev2Time) + (float)(sampleTimestamp - prev1Time));
                 if (dtS1 < 0.0f) dtS1 = 0.0f;
-                float refinedPeakTimeS1 = (float)prev1Time + (deltaS1 * dtS1);
+                float refinedFootTimeS1 = (float)prev1Time + (deltaS1 * dtS1);
 
-                if ((refinedPeakTimeS1 - (float)lastPeakTimeS1) > (float)REFRACT_MS) {
-                  peakS1 = true;
-                  peakTimeS1 = (unsigned long)(refinedPeakTimeS1 + 0.5f);
-                  lastPeakTimeS1 = peakTimeS1;
+                if ((refinedFootTimeS1 - (float)lastFootTimeS1) > (float)REFRACT_MS) {
+                  footS1 = true;
+                  footTimeS1 = (unsigned long)(refinedFootTimeS1 + 0.5f);
+                  lastFootTimeS1 = footTimeS1;
                 }
               }
 
-              if ((s2_prev2 < s2_prev1) && (s2_prev1 > valFinal2) && (s2_prev1 > thresholdS2)) {
+              if ((s2_prev2 > s2_prev1) && (s2_prev1 < valFinal2) && (s2_prev1 < thresholdS2)) {
                 float denomS2 = s2_prev2 - (2.0f * s2_prev1) + valFinal2;
                 float deltaS2 = 0.0f;
                 if (fabsf(denomS2) > 1e-9f) {
@@ -627,22 +629,22 @@ void TaskSensores(void *pvParameters) {
                 }
                 float dtS2 = 0.5f * ((float)(prev1Time - prev2Time) + (float)(sampleTimestamp - prev1Time));
                 if (dtS2 < 0.0f) dtS2 = 0.0f;
-                float refinedPeakTimeS2 = (float)prev1Time + (deltaS2 * dtS2);
+                float refinedFootTimeS2 = (float)prev1Time + (deltaS2 * dtS2);
 
-                if ((refinedPeakTimeS2 - (float)lastPeakTimeS2) > (float)REFRACT_MS) {
-                  peakS2 = true;
-                  peakTimeS2 = (unsigned long)(refinedPeakTimeS2 + 0.5f);
-                  lastPeakTimeS2 = peakTimeS2;
+                if ((refinedFootTimeS2 - (float)lastFootTimeS2) > (float)REFRACT_MS) {
+                  footS2 = true;
+                  footTimeS2 = (unsigned long)(refinedFootTimeS2 + 0.5f);
+                  lastFootTimeS2 = footTimeS2;
                 }
               }
             }
 
-            if (peakPriming == 0) {
+            if (footPriming == 0) {
               s1_prev1 = valFinal1;
               s2_prev1 = valFinal2;
               prev2Time = sampleTimestamp;
               prev1Time = sampleTimestamp;
-              peakPriming = 1;
+              footPriming = 1;
             } else {
               s1_prev2 = s1_prev1;
               s2_prev2 = s2_prev1;
@@ -650,15 +652,15 @@ void TaskSensores(void *pvParameters) {
               s1_prev1 = valFinal1;
               s2_prev1 = valFinal2;
               prev1Time = sampleTimestamp;
-              if (peakPriming < 2) peakPriming = 2;
+              if (footPriming < 2) footPriming = 2;
             }
             
             // --- ALGORITMOS HR / PWV ---
             if (faseMedicion >= 2) {
-              // HR desde picos distales (S2)
-              if (peakS2) {
-                if (lastDistPeakForHR > 0) {
-                  long delta = peakTimeS2 - lastDistPeakForHR;
+              // HR desde pies de onda distales (S2)
+              if (footS2) {
+                if (lastDistFootForHR > 0) {
+                  long delta = footTimeS2 - lastDistFootForHR;
                   if (delta > (long)RR_MIN_MS && delta < (long)RR_MAX_MS) {
                     rrWindow[rrIdx] = (float)delta;
                     rrIdx = (rrIdx + 1) % RR_WINDOW_SIZE;
@@ -676,19 +678,19 @@ void TaskSensores(void *pvParameters) {
                     }
                   }
                 }
-                lastDistPeakForHR = peakTimeS2;
+                lastDistFootForHR = footTimeS2;
               }
 
-              // PTT desde proximal -> distal
-              if (!medicionFinalizada && peakS1) {
+              // PTT desde pie proximal -> pie distal
+              if (!medicionFinalizada && footS1) {
                 // Inicia ventana de bsqueda distal para PTT
-                pendingProxPeakTime = peakTimeS1;
-                waitingForS2 = true;
+                pendingProxFootTime = footTimeS1;
+                waitingForDistFoot = true;
               }
 
-              // Clculo PTT/PWV: primer pico distal vlido luego del proximal
-              if (!medicionFinalizada && waitingForS2 && peakS2) {
-                long transitTime = peakTimeS2 - pendingProxPeakTime;
+              // Clculo PTT/PWV: primer pie distal vlido luego del proximal
+              if (!medicionFinalizada && waitingForDistFoot && footS2) {
+                long transitTime = footTimeS2 - pendingProxFootTime;
                 if (transitTime > 0) {
                   if (pttCount < PTT_BUFFER_SIZE) {
                     pttBuffer[pttCount] = (float)transitTime;
@@ -714,7 +716,7 @@ void TaskSensores(void *pvParameters) {
                     }
                   }
                 }
-                waitingForS2 = false;
+                waitingForDistFoot = false;
               }
             } // Fin Fase 2
 
@@ -782,11 +784,11 @@ void TaskSensores(void *pvParameters) {
                 medicionFinalizada = false;
                 pwvResultadoValido = false;
                 hrResultadoValido = false;
-                waitingForS2 = false;
-                pendingProxPeakTime = 0;
-                lastDistPeakForHR = 0;
-                lastPeakTimeS1 = 0;
-                lastPeakTimeS2 = 0;
+                waitingForDistFoot = false;
+                pendingProxFootTime = 0;
+                lastDistFootForHR = 0;
+                lastFootTimeS1 = 0;
+                lastFootTimeS2 = 0;
                 rrIdx = 0; rrCount = 0;
                 pttCount = 0;
                 conteoRRValidos = 0;
@@ -834,18 +836,18 @@ void TaskSensores(void *pvParameters) {
               medicionFinalizada = false;
               pwvResultadoValido = false;
               hrResultadoValido = false;
-              waitingForS2 = false;
-              pendingProxPeakTime = 0;
-              lastDistPeakForHR = 0;
-              lastPeakTimeS1 = 0;
-              lastPeakTimeS2 = 0;
+              waitingForDistFoot = false;
+              pendingProxFootTime = 0;
+              lastDistFootForHR = 0;
+              lastFootTimeS1 = 0;
+              lastFootTimeS2 = 0;
               rrIdx = 0; rrCount = 0;
               pttCount = 0;
               conteoRRValidos = 0;
               conteoPTTValidos = 0;
               for (int i = 0; i < RR_WINDOW_SIZE; i++) rrWindow[i] = 0.0f;
               for (int i = 0; i < PTT_BUFFER_SIZE; i++) pttBuffer[i] = 0.0f;
-              peakPriming = 0;
+              footPriming = 0;
               thrIdx = 0;
               thrCount = 0;
               thrSumS1 = 0.0f; thrSumSqS1 = 0.0f;
