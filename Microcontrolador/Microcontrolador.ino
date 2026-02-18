@@ -160,13 +160,13 @@ const unsigned long DRAW_INTERVAL = 40;
 
 // Encabezado de pantalla de medicin
 const int HEADER_ICON_Y = 5;
-const int BTN_METRICAS_X = 340;
-const int BTN_CURVAS_X = 380;
+const int BTN_METRICAS_X = 380;
+const int BTN_CURVAS_X = 425;
 const int BTN_ICON_SIZE = 30;
-const int BTN_PAUSA_X = 425;
-const int BTN_PAUSA_Y = 6;
-const int BTN_PAUSA_W = 45;
-const int BTN_PAUSA_H = 28;
+const int BTN_PAUSA_X = 335;
+const int BTN_PAUSA_Y = 5;
+const int BTN_PAUSA_W = 30;
+const int BTN_PAUSA_H = 30;
 
 
 // ======================================================================
@@ -804,7 +804,9 @@ void TaskSensores(void *pvParameters) {
 
               if (medicionFinalizada) {
                 porcentajeCalculando = 100;
-                faseMedicion = 3;
+                if (pwvResultadoValido && hrResultadoValido) {
+                  faseMedicion = 3;
+                }
               }
             }
 
@@ -1020,6 +1022,17 @@ void dibujarBotonSiguiente(bool activo) {
   tft.fillRect(circX-10, circY-2, 9, 5, COLOR_FLECHA);
 }
 
+bool mostrarBotonPausaEnHeader() {
+  if (graficoPausado) return true;
+
+  int faseLocal = 0;
+  portENTER_CRITICAL(&bufferMux);
+  faseLocal = faseMedicion;
+  portEXIT_CRITICAL(&bufferMux);
+
+  return (faseLocal >= 3);
+}
+
 void dibujarBotonPausa() {
   uint16_t colorFondo = graficoPausado ? TFT_ORANGE : COLOR_BOTON;
   tft.fillRoundRect(BTN_PAUSA_X, BTN_PAUSA_Y, BTN_PAUSA_W, BTN_PAUSA_H, 6, colorFondo);
@@ -1028,11 +1041,12 @@ void dibujarBotonPausa() {
   if (graficoPausado) {
     int cx = BTN_PAUSA_X + (BTN_PAUSA_W / 2);
     int cy = BTN_PAUSA_Y + (BTN_PAUSA_H / 2);
-    tft.fillTriangle(cx - 5, cy - 6, cx - 5, cy + 6, cx + 6, cy, COLOR_BORDE);
+    tft.fillTriangle(cx - 4, cy - 6, cx - 4, cy + 6, cx + 6, cy, COLOR_BORDE);
   } else {
-    int barY = BTN_PAUSA_Y + 7;
-    tft.fillRect(BTN_PAUSA_X + 14, barY, 5, BTN_PAUSA_H - 14, COLOR_BORDE);
-    tft.fillRect(BTN_PAUSA_X + 25, barY, 5, BTN_PAUSA_H - 14, COLOR_BORDE);
+    int barY = BTN_PAUSA_Y + 6;
+    int barH = BTN_PAUSA_H - 12;
+    tft.fillRect(BTN_PAUSA_X + 9, barY, 4, barH, COLOR_BORDE);
+    tft.fillRect(BTN_PAUSA_X + BTN_PAUSA_W - 13, barY, 4, barH, COLOR_BORDE);
   }
 }
 
@@ -1304,7 +1318,9 @@ void dibujarPantallaMedicion() {
   }
 
   // Botn PAUSA/REANUDAR
-  dibujarBotonPausa();
+  if (mostrarBotonPausaEnHeader()) {
+    dibujarBotonPausa();
+  }
 
   // Botn Volver
   dibujarBotonVolver();
@@ -1539,6 +1555,15 @@ void actualizarMedicion() {
   if (localFase == 2) {
     graphSprite.fillSprite(COLOR_FONDO);
     graphSprite.setTextDatum(MC_DATUM);
+    if (localPwvFinalizado && (!localPwvValido || !localHrValido)) {
+      graphSprite.setTextColor(COLOR_BOTON_ACCION);
+      graphSprite.drawString("REINTENTAR MEDICION", GRAPH_W/2, GRAPH_H/2 - 10, 4);
+      graphSprite.setTextColor(COLOR_TEXTO);
+      graphSprite.drawString("Presione SALIR para nueva toma", GRAPH_W/2, GRAPH_H/2 + 24, 2);
+      graphSprite.pushSprite(11, 51);
+      return;
+    }
+
     graphSprite.setTextColor(COLOR_TEXTO);
     graphSprite.drawString("CALCULANDO ...", GRAPH_W/2, GRAPH_H/2 - 20, 4);
 
@@ -1690,18 +1715,19 @@ void actualizarMedicion() {
 
       // HR
       tft.setSwapBytes(true);
-      tft.pushImage(288, yInfo - 12, 24, 24, (const uint16_t*)epd_bitmap_ImgCorazon);
+      tft.pushImage(270, yInfo - 12, 24, 24, (const uint16_t*)epd_bitmap_ImgCorazon);
       tft.setSwapBytes(false);
       tft.setTextColor(COLOR_TEXTO, COLOR_FONDO);
-      tft.setTextPadding(160);
+      tft.setTextPadding(80);
+      int xHrCurvas = 300;
       if (localPwvFinalizado && !localHrValido) {
         tft.setTextColor(COLOR_BOTON_ACCION, COLOR_FONDO);
-        tft.drawString("REINTENTAR", 318, yInfo, 2);
+        tft.drawString("REINTENTAR", xHrCurvas, yInfo, 2);
         tft.setTextColor(COLOR_TEXTO, COLOR_FONDO);
       } else if(localBPM > 0) {
-        tft.drawString(String(localBPM), 318, yInfo, 4);
+        tft.drawString(String(localBPM), xHrCurvas, yInfo, 4);
       } else {
-        tft.drawString("---", 325, yInfo, 4);
+        tft.drawString("---", xHrCurvas, yInfo, 4);
       }
       tft.setTextPadding(0);
     }
@@ -1991,7 +2017,7 @@ void loop() {
           // Cambio de Modo Visualizacin
           if (y < 45) {
               // Botn PAUSA/REANUDAR
-              if (x >= BTN_PAUSA_X && x <= (BTN_PAUSA_X + BTN_PAUSA_W) && y >= BTN_PAUSA_Y && y <= (BTN_PAUSA_Y + BTN_PAUSA_H)) {
+              if (mostrarBotonPausaEnHeader() && x >= BTN_PAUSA_X && x <= (BTN_PAUSA_X + BTN_PAUSA_W) && y >= BTN_PAUSA_Y && y <= (BTN_PAUSA_Y + BTN_PAUSA_H)) {
                 sonarPitido();
                 graficoPausado = !graficoPausado;
                 if (graficoPausado) {
