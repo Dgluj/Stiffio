@@ -400,6 +400,7 @@ void TaskSensores(void *pvParameters) {
   int peakPriming = 0;
   float s1_prev2 = 0.0f, s1_prev1 = 0.0f;
   float s2_prev2 = 0.0f, s2_prev1 = 0.0f;
+  unsigned long prev2Time = 0;
   unsigned long prev1Time = 0;
 
   unsigned long lastPeakTimeS1 = 0;
@@ -598,18 +599,40 @@ void TaskSensores(void *pvParameters) {
 
             if (peakPriming >= 2) {
               if ((s1_prev2 < s1_prev1) && (s1_prev1 > valFinal1) && (s1_prev1 > thresholdS1)) {
-                if ((prev1Time - lastPeakTimeS1) > REFRACT_MS) {
+                float denomS1 = s1_prev2 - (2.0f * s1_prev1) + valFinal1;
+                float deltaS1 = 0.0f;
+                if (fabsf(denomS1) > 1e-9f) {
+                  deltaS1 = 0.5f * (s1_prev2 - valFinal1) / denomS1;
+                  if (deltaS1 > 1.0f) deltaS1 = 1.0f;
+                  if (deltaS1 < -1.0f) deltaS1 = -1.0f;
+                }
+                float dtS1 = 0.5f * ((float)(prev1Time - prev2Time) + (float)(sampleTimestamp - prev1Time));
+                if (dtS1 < 0.0f) dtS1 = 0.0f;
+                float refinedPeakTimeS1 = (float)prev1Time + (deltaS1 * dtS1);
+
+                if ((refinedPeakTimeS1 - (float)lastPeakTimeS1) > (float)REFRACT_MS) {
                   peakS1 = true;
-                  peakTimeS1 = prev1Time;
-                  lastPeakTimeS1 = prev1Time;
+                  peakTimeS1 = (unsigned long)(refinedPeakTimeS1 + 0.5f);
+                  lastPeakTimeS1 = peakTimeS1;
                 }
               }
 
               if ((s2_prev2 < s2_prev1) && (s2_prev1 > valFinal2) && (s2_prev1 > thresholdS2)) {
-                if ((prev1Time - lastPeakTimeS2) > REFRACT_MS) {
+                float denomS2 = s2_prev2 - (2.0f * s2_prev1) + valFinal2;
+                float deltaS2 = 0.0f;
+                if (fabsf(denomS2) > 1e-9f) {
+                  deltaS2 = 0.5f * (s2_prev2 - valFinal2) / denomS2;
+                  if (deltaS2 > 1.0f) deltaS2 = 1.0f;
+                  if (deltaS2 < -1.0f) deltaS2 = -1.0f;
+                }
+                float dtS2 = 0.5f * ((float)(prev1Time - prev2Time) + (float)(sampleTimestamp - prev1Time));
+                if (dtS2 < 0.0f) dtS2 = 0.0f;
+                float refinedPeakTimeS2 = (float)prev1Time + (deltaS2 * dtS2);
+
+                if ((refinedPeakTimeS2 - (float)lastPeakTimeS2) > (float)REFRACT_MS) {
                   peakS2 = true;
-                  peakTimeS2 = prev1Time;
-                  lastPeakTimeS2 = prev1Time;
+                  peakTimeS2 = (unsigned long)(refinedPeakTimeS2 + 0.5f);
+                  lastPeakTimeS2 = peakTimeS2;
                 }
               }
             }
@@ -617,11 +640,13 @@ void TaskSensores(void *pvParameters) {
             if (peakPriming == 0) {
               s1_prev1 = valFinal1;
               s2_prev1 = valFinal2;
+              prev2Time = sampleTimestamp;
               prev1Time = sampleTimestamp;
               peakPriming = 1;
             } else {
               s1_prev2 = s1_prev1;
               s2_prev2 = s2_prev1;
+              prev2Time = prev1Time;
               s1_prev1 = valFinal1;
               s2_prev1 = valFinal2;
               prev1Time = sampleTimestamp;
