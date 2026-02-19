@@ -47,6 +47,13 @@ volatile float buffer_s1[BUFFER_SIZE];
 volatile float buffer_s2[BUFFER_SIZE];
 volatile unsigned long buffer_time[BUFFER_SIZE]; 
 volatile int writeHead = 0; 
+const int FOOT_EVENT_BUFFER_SIZE = BUFFER_SIZE;
+volatile unsigned long footEventRelS1[FOOT_EVENT_BUFFER_SIZE];
+volatile unsigned long footEventRelS2[FOOT_EVENT_BUFFER_SIZE];
+volatile int footEventHeadS1 = 0;
+volatile int footEventHeadS2 = 0;
+volatile int footEventCountS1 = 0;
+volatile int footEventCountS2 = 0;
 
 // Control
 volatile bool medicionActiva = false;
@@ -98,6 +105,12 @@ float pausaBuf1[BUFFER_SIZE];
 float pausaBuf2[BUFFER_SIZE];
 unsigned long pausaTime[BUFFER_SIZE];
 int pausaHead = 0;
+unsigned long pausaFootEventRelS1[FOOT_EVENT_BUFFER_SIZE];
+unsigned long pausaFootEventRelS2[FOOT_EVENT_BUFFER_SIZE];
+int pausaFootEventHeadS1 = 0;
+int pausaFootEventHeadS2 = 0;
+int pausaFootEventCountS1 = 0;
+int pausaFootEventCountS2 = 0;
 int pausaFase = 0;
 int pausaPorcentajeEstabilizacion = 0;
 int pausaPorcentajeCalculando = 0;
@@ -117,12 +130,6 @@ bool pausaS1ok = false;
 bool pausaS2ok = false;
 bool pausaS1conectado = true;
 bool pausaS2conectado = true;
-
-// GLOBALES PARA TASKSENSORES (evitar stack overflow)
-const int MA_SIZE = 2;
-float bufMA1_global[2] = {0};
-float bufMA2_global[2] = {0};
-int idxMA_global = 0;
 
 // Variables para HPF anti-deriva
 float lastVal1_centered = 0;
@@ -315,10 +322,18 @@ void resetearSnapshotPWVyPausa() {
   hrResultadoValido = false;
   pwvMostrado = 0.0f;
   conteoPTTValidos = 0;
+  footEventHeadS1 = 0;
+  footEventHeadS2 = 0;
+  footEventCountS1 = 0;
+  footEventCountS2 = 0;
   resetearBuffersPWVSolicitado = true;
   portEXIT_CRITICAL(&bufferMux);
 
   graficoPausado = false;
+  pausaFootEventHeadS1 = 0;
+  pausaFootEventHeadS2 = 0;
+  pausaFootEventCountS1 = 0;
+  pausaFootEventCountS2 = 0;
   pausaFase = 0;
   pausaPorcentajeEstabilizacion = 0;
   pausaPorcentajeCalculando = 0;
@@ -358,8 +373,18 @@ void capturarSnapshotPausa() {
     memcpy(pausaBuf2, (const void*)buffer_s2, sizeof(buffer_s2));
     memcpy(pausaTime, (const void*)buffer_time, sizeof(buffer_time));
     pausaHead = writeHead;
+    memcpy(pausaFootEventRelS1, (const void*)footEventRelS1, sizeof(footEventRelS1));
+    memcpy(pausaFootEventRelS2, (const void*)footEventRelS2, sizeof(footEventRelS2));
+    pausaFootEventHeadS1 = footEventHeadS1;
+    pausaFootEventHeadS2 = footEventHeadS2;
+    pausaFootEventCountS1 = footEventCountS1;
+    pausaFootEventCountS2 = footEventCountS2;
   } else {
     pausaHead = 0;
+    pausaFootEventHeadS1 = 0;
+    pausaFootEventHeadS2 = 0;
+    pausaFootEventCountS1 = 0;
+    pausaFootEventCountS2 = 0;
   }
   portEXIT_CRITICAL(&bufferMux);
 }
@@ -432,6 +457,10 @@ void TaskSensores(void *pvParameters) {
         pendingProxFootTime = 0;
         pttCount = 0;
         conteoPTTValidos = 0;
+        footEventHeadS1 = 0;
+        footEventHeadS2 = 0;
+        footEventCountS1 = 0;
+        footEventCountS2 = 0;
         medicionFinalizada = false;
         pwvResultadoValido = false;
         hrResultadoValido = false;
@@ -538,15 +567,9 @@ void TaskSensores(void *pvParameters) {
             lastVal1_centered = val1_centered;
             lastVal2_centered = val2_centered;
 
-            // 4. Media Mvil
-            bufMA1_global[idxMA_global] = s1_hp;
-            bufMA2_global[idxMA_global] = s2_hp;
-            idxMA_global = (idxMA_global + 1) % MA_SIZE;
-
-            float sum1 = 0; float sum2 = 0;
-            for (int i = 0; i < MA_SIZE; i++) { sum1 += bufMA1_global[i]; sum2 += bufMA2_global[i]; }
-            float valFinal1 = sum1 / MA_SIZE;
-            float valFinal2 = sum2 / MA_SIZE;
+            // 4. Salida directa del HPF (sin media mvil)
+            float valFinal1 = s1_hp;
+            float valFinal2 = s2_hp;
 
             if (faseMedicion == 1 && calibCount < 1024) {
               calibS1[calibCount] = valFinal1;
@@ -638,6 +661,25 @@ void TaskSensores(void *pvParameters) {
                   footTimeS2 = (unsigned long)(refinedFootTimeS2 + 0.5f);
                   lastFootTimeS2 = footTimeS2;
                 }
+              }
+            }
+
+            if (faseMedicion >= 2) {
+              if (footS1 && footTimeS1 >= baseTime) {
+                unsigned long footRelS1 = footTimeS1 - baseTime;
+                portENTER_CRITICAL(&bufferMux);
+                footEventRelS1[footEventHeadS1] = footRelS1;
+                footEventHeadS1 = (footEventHeadS1 + 1) % FOOT_EVENT_BUFFER_SIZE;
+                if (footEventCountS1 < FOOT_EVENT_BUFFER_SIZE) footEventCountS1++;
+                portEXIT_CRITICAL(&bufferMux);
+              }
+              if (footS2 && footTimeS2 >= baseTime) {
+                unsigned long footRelS2 = footTimeS2 - baseTime;
+                portENTER_CRITICAL(&bufferMux);
+                footEventRelS2[footEventHeadS2] = footRelS2;
+                footEventHeadS2 = (footEventHeadS2 + 1) % FOOT_EVENT_BUFFER_SIZE;
+                if (footEventCountS2 < FOOT_EVENT_BUFFER_SIZE) footEventCountS2++;
+                portEXIT_CRITICAL(&bufferMux);
               }
             }
 
@@ -780,6 +822,10 @@ void TaskSensores(void *pvParameters) {
                   portENTER_CRITICAL(&bufferMux);
                   writeHead = 0;
                   for (int i = 0; i < BUFFER_SIZE; i++) { buffer_s1[i] = 0; buffer_s2[i] = 0; buffer_time[i] = 0; }
+                  footEventHeadS1 = 0;
+                  footEventHeadS2 = 0;
+                  footEventCountS1 = 0;
+                  footEventCountS2 = 0;
                   portEXIT_CRITICAL(&bufferMux);
                 }
                 bpmMostrado = 0; pwvMostrado = 0.0;
@@ -847,6 +893,10 @@ void TaskSensores(void *pvParameters) {
               pttCount = 0;
               conteoRRValidos = 0;
               conteoPTTValidos = 0;
+              footEventHeadS1 = 0;
+              footEventHeadS2 = 0;
+              footEventCountS1 = 0;
+              footEventCountS2 = 0;
               for (int i = 0; i < RR_WINDOW_SIZE; i++) rrWindow[i] = 0.0f;
               for (int i = 0; i < PTT_BUFFER_SIZE; i++) pttBuffer[i] = 0.0f;
               footPriming = 0;
@@ -874,6 +924,10 @@ void TaskSensores(void *pvParameters) {
         porcentajeCalculando = 0;
         conteoRRValidos = 0;
         conteoPTTValidos = 0;
+        footEventHeadS1 = 0;
+        footEventHeadS2 = 0;
+        footEventCountS1 = 0;
+        footEventCountS2 = 0;
         bpmMostrado = 0;
         pwvMostrado = 0.0f;
         medicionFinalizada = false;
@@ -1373,11 +1427,17 @@ void actualizarMedicion() {
   float localBuf1[BUFFER_SIZE];                          // Buffer proximal
   float localBuf2[BUFFER_SIZE];                          // Buffer distal
   unsigned long localTime[BUFFER_SIZE];                  // Timestamp
+  static unsigned long localFootEventRelS1[FOOT_EVENT_BUFFER_SIZE];
+  static unsigned long localFootEventRelS2[FOOT_EVENT_BUFFER_SIZE];
   int localFase = 0;                                     // Estado del sistema
   static int faseAnterior = -1; 
   static bool pantallaErrorMedicionVisible = false;
   static unsigned long ultimoSonido = 0;                 // Memoria del cronmetro de alarma
   int localHead = 0;                                     // Indica donde empezar a leer
+  int localFootHeadS1 = 0;
+  int localFootHeadS2 = 0;
+  int localFootCountS1 = 0;
+  int localFootCountS2 = 0;
   int localPorcentaje = 0;                               // Porcentaje barra
   int localPorcentajeCalculando = 0;                     // Porcentaje barra clculo
   int localConteoRR = 0;
@@ -1423,6 +1483,12 @@ void actualizarMedicion() {
       memcpy(localBuf2, pausaBuf2, sizeof(pausaBuf2));
       memcpy(localTime, pausaTime, sizeof(pausaTime));
       localHead = pausaHead;
+      memcpy(localFootEventRelS1, pausaFootEventRelS1, sizeof(pausaFootEventRelS1));
+      memcpy(localFootEventRelS2, pausaFootEventRelS2, sizeof(pausaFootEventRelS2));
+      localFootHeadS1 = pausaFootEventHeadS1;
+      localFootHeadS2 = pausaFootEventHeadS2;
+      localFootCountS1 = pausaFootEventCountS1;
+      localFootCountS2 = pausaFootEventCountS2;
     }
   } else {
     localFase = faseMedicion;
@@ -1452,6 +1518,12 @@ void actualizarMedicion() {
       memcpy(localBuf2, (const void*)buffer_s2, sizeof(buffer_s2));
       memcpy(localTime, (const void*)buffer_time, sizeof(buffer_time));
       localHead = writeHead;
+      memcpy(localFootEventRelS1, (const void*)footEventRelS1, sizeof(footEventRelS1));
+      memcpy(localFootEventRelS2, (const void*)footEventRelS2, sizeof(footEventRelS2));
+      localFootHeadS1 = footEventHeadS1;
+      localFootHeadS2 = footEventHeadS2;
+      localFootCountS1 = footEventCountS1;
+      localFootCountS2 = footEventCountS2;
     }
     portEXIT_CRITICAL(&bufferMux);
   }
@@ -1741,6 +1813,77 @@ void actualizarMedicion() {
         
         graphSprite.drawLine(x1, constrain(y1A,0,GRAPH_H), x2, constrain(y1B,0,GRAPH_H), COLOR_S1);
         graphSprite.drawLine(x1, constrain(y2A,0,GRAPH_H), x2, constrain(y2B,0,GRAPH_H), COLOR_S2); 
+      }
+
+      // 4. Marcar pies de onda detectados (ambos sensores) con puntos gruesos
+      unsigned long tMin = 0xFFFFFFFFUL;
+      unsigned long tMax = 0;
+      for (int i = 0; i < BUFFER_SIZE; i++) {
+        int idx = (localHead + i) % BUFFER_SIZE;
+        unsigned long ts = localTime[idx];
+        if (ts == 0) continue;
+        if (ts < tMin) tMin = ts;
+        if (ts > tMax) tMax = ts;
+      }
+
+      if (tMin <= tMax) {
+        int startS1 = localFootHeadS1 - localFootCountS1;
+        while (startS1 < 0) startS1 += FOOT_EVENT_BUFFER_SIZE;
+        for (int e = 0; e < localFootCountS1; e++) {
+          int evIdx = startS1 + e;
+          if (evIdx >= FOOT_EVENT_BUFFER_SIZE) evIdx -= FOOT_EVENT_BUFFER_SIZE;
+          unsigned long tFoot = localFootEventRelS1[evIdx];
+          if (tFoot < tMin || tFoot > tMax) continue;
+
+          int bestI = -1;
+          unsigned long bestDiff = 0xFFFFFFFFUL;
+          for (int i = 0; i < BUFFER_SIZE; i++) {
+            int idx = (localHead + i) % BUFFER_SIZE;
+            unsigned long ts = localTime[idx];
+            if (ts == 0) continue;
+            unsigned long diff = (ts > tFoot) ? (ts - tFoot) : (tFoot - ts);
+            if (bestI < 0 || diff < bestDiff) {
+              bestDiff = diff;
+              bestI = i;
+            }
+          }
+          if (bestI < 0) continue;
+
+          int idxBest = (localHead + bestI) % BUFFER_SIZE;
+          float n = (localBuf1[idxBest] - baseS1) / halfS1;
+          int x = (int)(bestI * xStep);
+          int y = (int)(yCenter - (n * yHalf));
+          graphSprite.fillCircle(x, constrain(y, 0, GRAPH_H), 3, COLOR_S1);
+        }
+
+        int startS2 = localFootHeadS2 - localFootCountS2;
+        while (startS2 < 0) startS2 += FOOT_EVENT_BUFFER_SIZE;
+        for (int e = 0; e < localFootCountS2; e++) {
+          int evIdx = startS2 + e;
+          if (evIdx >= FOOT_EVENT_BUFFER_SIZE) evIdx -= FOOT_EVENT_BUFFER_SIZE;
+          unsigned long tFoot = localFootEventRelS2[evIdx];
+          if (tFoot < tMin || tFoot > tMax) continue;
+
+          int bestI = -1;
+          unsigned long bestDiff = 0xFFFFFFFFUL;
+          for (int i = 0; i < BUFFER_SIZE; i++) {
+            int idx = (localHead + i) % BUFFER_SIZE;
+            unsigned long ts = localTime[idx];
+            if (ts == 0) continue;
+            unsigned long diff = (ts > tFoot) ? (ts - tFoot) : (tFoot - ts);
+            if (bestI < 0 || diff < bestDiff) {
+              bestDiff = diff;
+              bestI = i;
+            }
+          }
+          if (bestI < 0) continue;
+
+          int idxBest = (localHead + bestI) % BUFFER_SIZE;
+          float n = (localBuf2[idxBest] - baseS2) / halfS2;
+          int x = (int)(bestI * xStep);
+          int y = (int)(yCenter - (n * yHalf));
+          graphSprite.fillCircle(x, constrain(y, 0, GRAPH_H), 3, COLOR_S2);
+        }
       }
       
       graphSprite.pushSprite(11, 51); 
