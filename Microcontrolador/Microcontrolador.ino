@@ -1,4 +1,4 @@
-// ==============================================================================================
+﻿// ==============================================================================================
 // LIBRERAS
 // ==============================================================================================
 #include <SPI.h>
@@ -402,10 +402,10 @@ void TaskSensores(void *pvParameters) {
   float s1_lp = 0, s1_dc = 0;
   float s2_lp = 0, s2_dc = 0;
   float s1_hp = 0, s2_hp = 0;
-  const float ALPHA_LP = 0.8660;
-  const float ALPHA_DC = 0.9849;
-  const float ALPHA_HP_S1 = 0.9747;
-  const float ALPHA_HP_S2 = 0.9747;
+  const float ALPHA_LP = 0.75;
+  const float ALPHA_DC = 0.97;
+  const float ALPHA_HP_S1 = 0.95;
+  const float ALPHA_HP_S2 = 0.95;
   const long SENSOR_THRESHOLD = 50000;
 
   // Tiempo
@@ -420,7 +420,7 @@ void TaskSensores(void *pvParameters) {
   const unsigned long RR_MAX_MS = 1700; // permite bradicardia
   // const unsigned long PTT_MIN_MS = 50;
   // const unsigned long PTT_MAX_MS = 290;
-  const int THRESH_WINDOW_SAMPLES = 200; // ~2s a 100 SPS
+  const int THRESH_WINDOW_SAMPLES = 100; // ~2s a 50 SPS
 
   static float thrWinS1[THRESH_WINDOW_SAMPLES] = {0};
   static float thrWinS2[THRESH_WINDOW_SAMPLES] = {0};
