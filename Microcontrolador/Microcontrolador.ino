@@ -131,6 +131,12 @@ bool pausaS2ok = false;
 bool pausaS1conectado = true;
 bool pausaS2conectado = true;
 
+// GLOBALES PARA TASKSENSORES (suavizado por media movil)
+const int MA_SIZE = 2;
+float bufMA1_global[2] = {0};
+float bufMA2_global[2] = {0};
+int idxMA_global = 0;
+
 // Variables para HPF anti-deriva
 float lastVal1_centered = 0;
 float lastVal2_centered = 0;
@@ -409,6 +415,7 @@ void TaskSensores(void *pvParameters) {
 
   // Deteccin de pies de onda locales
   const unsigned long REFRACT_MS = 370;
+  const float FOOT_DERIV_EPS = 1e-6f;
   const unsigned long RR_MIN_MS = 460;
   const unsigned long RR_MAX_MS = 1700; // permite bradicardia
   // const unsigned long PTT_MIN_MS = 50;
@@ -457,6 +464,8 @@ void TaskSensores(void *pvParameters) {
         pendingProxFootTime = 0;
         pttCount = 0;
         conteoPTTValidos = 0;
+        idxMA_global = 0;
+        for (int i = 0; i < MA_SIZE; i++) { bufMA1_global[i] = 0.0f; bufMA2_global[i] = 0.0f; }
         footEventHeadS1 = 0;
         footEventHeadS2 = 0;
         footEventCountS1 = 0;
@@ -483,14 +492,14 @@ void TaskSensores(void *pvParameters) {
           // Se acaba de reconectar fsicamente. Intentamos revivirlo:
           
           // 1. Reiniciamos el BUS Wire por si qued "tonto"
-          Wire.begin(SDA1, SCL1, 200000); 
+          Wire.begin(SDA1, SCL1, 100000); 
           delay(10); 
 
           // 2. Intentamos inicializar la librera
-          if (sensorProx.begin(Wire, 200000)) {
+          if (sensorProx.begin(Wire, I2C_SPEED_STANDARD)) {
               sensorProx.softReset(); // Reset de software para limpiar registros basura
               delay(10);
-              sensorProx.setup(30, 4, 2, 400, 411, 4096);
+              sensorProx.setup(30, 8, 2, 400, 411, 4096);
               s1_conectado = true; // XITO: Ahora s lo marcamos como conectado
           } else {
               s1_conectado = false; // Fall el handshake lgico, seguimos intentando
@@ -506,14 +515,14 @@ void TaskSensores(void *pvParameters) {
         
         if (!s2_conectado && s2_fisico) {
           // 1. Reiniciamos el BUS Wire1
-          Wire1.begin(SDA2, SCL2, 200000);
+          Wire1.begin(SDA2, SCL2, 100000);
           delay(10);
 
           // 2. Inicializamos librera
-          if (sensorDist.begin(Wire1, 200000)) {
+          if (sensorDist.begin(Wire1, I2C_SPEED_STANDARD)) {
               sensorDist.softReset();
               delay(10);
-              sensorDist.setup(30, 4, 2, 400, 411, 4096);
+              sensorDist.setup(30, 8, 2, 400, 411, 4096);
               s2_conectado = true;
           } else {
               s2_conectado = false;
@@ -567,9 +576,14 @@ void TaskSensores(void *pvParameters) {
             lastVal1_centered = val1_centered;
             lastVal2_centered = val2_centered;
 
-            // 4. Salida directa del HPF (sin media mvil)
-            float valFinal1 = s1_hp;
-            float valFinal2 = s2_hp;
+            // 4. Media mvil (2 muestras)
+            bufMA1_global[idxMA_global] = s1_hp;
+            bufMA2_global[idxMA_global] = s2_hp;
+            idxMA_global = (idxMA_global + 1) % MA_SIZE;
+            float sum1 = 0.0f, sum2 = 0.0f;
+            for (int i = 0; i < MA_SIZE; i++) { sum1 += bufMA1_global[i]; sum2 += bufMA2_global[i]; }
+            float valFinal1 = sum1 / MA_SIZE;
+            float valFinal2 = sum2 / MA_SIZE;
 
             if (faseMedicion == 1 && calibCount < 1024) {
               calibS1[calibCount] = valFinal1;
@@ -626,40 +640,26 @@ void TaskSensores(void *pvParameters) {
 
             if (footPriming >= 2) {
               if ((s1_prev2 > s1_prev1) && (s1_prev1 < valFinal1) && (s1_prev1 < thresholdS1)) {
-                float denomS1 = s1_prev2 - (2.0f * s1_prev1) + valFinal1;
-                float deltaS1 = 0.0f;
-                if (fabsf(denomS1) > 1e-9f) {
-                  deltaS1 = 0.5f * (s1_prev2 - valFinal1) / denomS1;
-                  if (deltaS1 > 1.0f) deltaS1 = 1.0f;
-                  if (deltaS1 < -1.0f) deltaS1 = -1.0f;
-                }
-                float dtS1 = 0.5f * ((float)(prev1Time - prev2Time) + (float)(sampleTimestamp - prev1Time));
-                if (dtS1 < 0.0f) dtS1 = 0.0f;
-                float refinedFootTimeS1 = (float)prev1Time + (deltaS1 * dtS1);
-
-                if ((refinedFootTimeS1 - (float)lastFootTimeS1) > (float)REFRACT_MS) {
-                  footS1 = true;
-                  footTimeS1 = (unsigned long)(refinedFootTimeS1 + 0.5f);
-                  lastFootTimeS1 = footTimeS1;
+                float dUpS1 = valFinal1 - s1_prev1;
+                if (dUpS1 > FOOT_DERIV_EPS) {
+                  unsigned long alignedFootTimeS1 = sampleTimestamp;
+                  if ((alignedFootTimeS1 - lastFootTimeS1) > REFRACT_MS) {
+                    footS1 = true;
+                    footTimeS1 = alignedFootTimeS1;
+                    lastFootTimeS1 = footTimeS1;
+                  }
                 }
               }
 
               if ((s2_prev2 > s2_prev1) && (s2_prev1 < valFinal2) && (s2_prev1 < thresholdS2)) {
-                float denomS2 = s2_prev2 - (2.0f * s2_prev1) + valFinal2;
-                float deltaS2 = 0.0f;
-                if (fabsf(denomS2) > 1e-9f) {
-                  deltaS2 = 0.5f * (s2_prev2 - valFinal2) / denomS2;
-                  if (deltaS2 > 1.0f) deltaS2 = 1.0f;
-                  if (deltaS2 < -1.0f) deltaS2 = -1.0f;
-                }
-                float dtS2 = 0.5f * ((float)(prev1Time - prev2Time) + (float)(sampleTimestamp - prev1Time));
-                if (dtS2 < 0.0f) dtS2 = 0.0f;
-                float refinedFootTimeS2 = (float)prev1Time + (deltaS2 * dtS2);
-
-                if ((refinedFootTimeS2 - (float)lastFootTimeS2) > (float)REFRACT_MS) {
-                  footS2 = true;
-                  footTimeS2 = (unsigned long)(refinedFootTimeS2 + 0.5f);
-                  lastFootTimeS2 = footTimeS2;
+                float dUpS2 = valFinal2 - s2_prev1;
+                if (dUpS2 > FOOT_DERIV_EPS) {
+                  unsigned long alignedFootTimeS2 = sampleTimestamp;
+                  if ((alignedFootTimeS2 - lastFootTimeS2) > REFRACT_MS) {
+                    footS2 = true;
+                    footTimeS2 = alignedFootTimeS2;
+                    lastFootTimeS2 = footTimeS2;
+                  }
                 }
               }
             }
@@ -828,6 +828,8 @@ void TaskSensores(void *pvParameters) {
                   footEventCountS2 = 0;
                   portEXIT_CRITICAL(&bufferMux);
                 }
+                idxMA_global = 0;
+                for (int i = 0; i < MA_SIZE; i++) { bufMA1_global[i] = 0.0f; bufMA2_global[i] = 0.0f; }
                 bpmMostrado = 0; pwvMostrado = 0.0;
                 medicionFinalizada = false;
                 pwvResultadoValido = false;
@@ -897,6 +899,8 @@ void TaskSensores(void *pvParameters) {
               footEventHeadS2 = 0;
               footEventCountS1 = 0;
               footEventCountS2 = 0;
+              idxMA_global = 0;
+              for (int i = 0; i < MA_SIZE; i++) { bufMA1_global[i] = 0.0f; bufMA2_global[i] = 0.0f; }
               for (int i = 0; i < RR_WINDOW_SIZE; i++) rrWindow[i] = 0.0f;
               for (int i = 0; i < PTT_BUFFER_SIZE; i++) pttBuffer[i] = 0.0f;
               footPriming = 0;
@@ -928,6 +932,8 @@ void TaskSensores(void *pvParameters) {
         footEventHeadS2 = 0;
         footEventCountS1 = 0;
         footEventCountS2 = 0;
+        idxMA_global = 0;
+        for (int i = 0; i < MA_SIZE; i++) { bufMA1_global[i] = 0.0f; bufMA2_global[i] = 0.0f; }
         bpmMostrado = 0;
         pwvMostrado = 0.0f;
         medicionFinalizada = false;
@@ -1927,22 +1933,22 @@ void actualizarMedicion() {
 // ==================================================================================================================================================================
 void iniciarSensores() {
   // Inicializamos los buses
-  Wire.begin(SDA1, SCL1, 200000); 
-  Wire1.begin(SDA2, SCL2, 200000);
-  Wire.setClock(200000); 
-  Wire1.setClock(200000);
+  Wire.begin(SDA1, SCL1, 100000); 
+  Wire1.begin(SDA2, SCL2, 100000);
+  Wire.setClock(100000); 
+  Wire1.setClock(100000);
 
   // Intentamos iniciar Sensor 1
-  if (sensorProx.begin(Wire, 200000)) {
-      sensorProx.setup(30, 4, 2, 400, 411, 4096);
+  if (sensorProx.begin(Wire, I2C_SPEED_STANDARD)) {
+      sensorProx.setup(30, 8, 2, 400, 411, 4096);
       s1_conectado = true;
   } else {
       s1_conectado = false; // Marcamos como desconectado desde el inicio
   }
 
   // Intentamos iniciar Sensor 2
-  if (sensorDist.begin(Wire1, 200000)) {
-      sensorDist.setup(30, 4, 2, 400, 411, 4096);
+  if (sensorDist.begin(Wire1, I2C_SPEED_STANDARD)) {
+      sensorDist.setup(30, 8, 2, 400, 411, 4096);
       s2_conectado = true;
   } else {
       s2_conectado = false; // Marcamos como desconectado desde el inicio
