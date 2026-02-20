@@ -132,9 +132,9 @@ bool pausaS1conectado = true;
 bool pausaS2conectado = true;
 
 // GLOBALES PARA TASKSENSORES (suavizado por media movil)
-const int MA_SIZE = 2;
-float bufMA1_global[2] = {0};
-float bufMA2_global[2] = {0};
+const int MA_SIZE = 6;
+float bufMA1_global[MA_SIZE] = {0};
+float bufMA2_global[MA_SIZE] = {0};
 int idxMA_global = 0;
 
 // Variables para HPF anti-deriva
@@ -398,14 +398,14 @@ void capturarSnapshotPausa() {
 
 void TaskSensores(void *pvParameters) {
 
-  // Filtros anti-deriva mejorados
+  // Filtros mas agresivos para reducir drift y priorizar robustez de deteccion
   float s1_lp = 0, s1_dc = 0;
   float s2_lp = 0, s2_dc = 0;
   float s1_hp = 0, s2_hp = 0;
-  const float ALPHA_LP = 0.75;
-  const float ALPHA_DC = 0.97;
-  const float ALPHA_HP_S1 = 0.95;
-  const float ALPHA_HP_S2 = 0.95;
+  const float ALPHA_LP = 0.88f;
+  const float ALPHA_DC = 0.94f;
+  const float ALPHA_HP_S1 = 0.90f;
+  const float ALPHA_HP_S2 = 0.90f;
   const long SENSOR_THRESHOLD = 50000;
 
   // Tiempo
@@ -415,12 +415,15 @@ void TaskSensores(void *pvParameters) {
 
   // Deteccin de pies de onda locales
   const unsigned long REFRACT_MS = 370;
-  const float FOOT_DERIV_EPS = 1e-6f;
+  const float FOOT_DERIV_EPS = 0.25f;
+  const int FOOT_RISE_CONFIRM_SAMPLES = 2;
+  const float FOOT_RISE_STD_FRACTION = 0.10f;
+  const float FOOT_RISE_MIN_ABS = 0.25f;
   const unsigned long RR_MIN_MS = 460;
   const unsigned long RR_MAX_MS = 1700; // permite bradicardia
   // const unsigned long PTT_MIN_MS = 50;
   // const unsigned long PTT_MAX_MS = 290;
-  const int THRESH_WINDOW_SAMPLES = 100; // ~2s a 100 SPS
+  const int THRESH_WINDOW_SAMPLES = 100; // ~2.0 s a 50 SPS
 
   static float thrWinS1[THRESH_WINDOW_SAMPLES] = {0};
   static float thrWinS2[THRESH_WINDOW_SAMPLES] = {0};
@@ -430,10 +433,12 @@ void TaskSensores(void *pvParameters) {
   float thrSumS2 = 0.0f, thrSumSqS2 = 0.0f;
 
   int footPriming = 0;
-  float s1_prev2 = 0.0f, s1_prev1 = 0.0f;
-  float s2_prev2 = 0.0f, s2_prev1 = 0.0f;
-  unsigned long prev2Time = 0;
-  unsigned long prev1Time = 0;
+  float s1_prev1 = 0.0f, s2_prev1 = 0.0f;
+  bool trackingValleyS1 = false, trackingValleyS2 = false;
+  bool rearmS1 = true, rearmS2 = true;
+  float valleyMinS1 = 0.0f, valleyMinS2 = 0.0f;
+  unsigned long valleyTimeS1 = 0, valleyTimeS2 = 0;
+  int riseCountS1 = 0, riseCountS2 = 0;
 
   unsigned long lastFootTimeS1 = 0;
   unsigned long lastFootTimeS2 = 0;
@@ -474,6 +479,16 @@ void TaskSensores(void *pvParameters) {
         pwvResultadoValido = false;
         hrResultadoValido = false;
         pwvMostrado = 0.0f;
+        footPriming = 0;
+        s1_prev1 = 0.0f; s2_prev1 = 0.0f;
+        trackingValleyS1 = false; trackingValleyS2 = false;
+        rearmS1 = true; rearmS2 = true;
+        valleyMinS1 = 0.0f; valleyMinS2 = 0.0f;
+        valleyTimeS1 = 0; valleyTimeS2 = 0;
+        riseCountS1 = 0; riseCountS2 = 0;
+        thrIdx = 0; thrCount = 0;
+        thrSumS1 = 0.0f; thrSumSqS1 = 0.0f;
+        thrSumS2 = 0.0f; thrSumSqS2 = 0.0f;
         for (int i = 0; i < PTT_BUFFER_SIZE; i++) pttBuffer[i] = 0.0f;
       }
 
@@ -576,7 +591,7 @@ void TaskSensores(void *pvParameters) {
             lastVal1_centered = val1_centered;
             lastVal2_centered = val2_centered;
 
-            // 4. Media mvil (2 muestras)
+            // 4. Media movil larga (6 muestras), igual en ambos canales para no desincronizar
             bufMA1_global[idxMA_global] = s1_hp;
             bufMA2_global[idxMA_global] = s2_hp;
             idxMA_global = (idxMA_global + 1) % MA_SIZE;
@@ -619,6 +634,10 @@ void TaskSensores(void *pvParameters) {
 
             float thresholdS1 = 0.0f;
             float thresholdS2 = 0.0f;
+            float rearmThresholdS1 = 0.0f;
+            float rearmThresholdS2 = 0.0f;
+            float sigmaS1 = 1.0f;
+            float sigmaS2 = 1.0f;
             if (thrCount > 0) {
               float meanS1 = thrSumS1 / (float)thrCount;
               float meanS2 = thrSumS2 / (float)thrCount;
@@ -626,40 +645,88 @@ void TaskSensores(void *pvParameters) {
               float varS2 = (thrSumSqS2 / (float)thrCount) - (meanS2 * meanS2);
               if (varS1 < 0.0f) varS1 = 0.0f;
               if (varS2 < 0.0f) varS2 = 0.0f;
-              thresholdS1 = meanS1 - (0.5f * sqrtf(varS1));
-              thresholdS2 = meanS2 - (0.40f * sqrtf(varS2));
+              sigmaS1 = sqrtf(varS1);
+              sigmaS2 = sqrtf(varS2);
+              thresholdS1 = meanS1 - (0.95f * sigmaS1);
+              thresholdS2 = meanS2 - (0.90f * sigmaS2);
+              rearmThresholdS1 = meanS1 - (0.15f * sigmaS1);
+              rearmThresholdS2 = meanS2 - (0.15f * sigmaS2);
             }
 
-            // 6. Detector de pie por mnimo local (derivada de negativa a positiva).
-            // El mximo de derivada positiva puede ser ms preciso en limpio, pero en ruido
-            // requiere suavizado extra de derivada; aqu se mantiene mnimo local por robustez.
+            // 6. Detector de pie robusto:
+            //    - Busca el valle mas bajo bajo umbral adaptativo.
+            //    - Confirma solo cuando arranca una subida sostenida.
+            //    - Exige rearme por amplitud para evitar dobles pies por ciclo.
             bool footS1 = false;
             bool footS2 = false;
             unsigned long footTimeS1 = 0;
             unsigned long footTimeS2 = 0;
 
-            if (footPriming >= 2) {
-              if ((s1_prev2 > s1_prev1) && (s1_prev1 < valFinal1) && (s1_prev1 < thresholdS1)) {
-                float dUpS1 = valFinal1 - s1_prev1;
-                if (dUpS1 > FOOT_DERIV_EPS) {
-                  unsigned long alignedFootTimeS1 = sampleTimestamp;
-                  if ((alignedFootTimeS1 - lastFootTimeS1) > REFRACT_MS) {
+            if (footPriming >= 1) {
+              float dS1 = valFinal1 - s1_prev1;
+              float dS2 = valFinal2 - s2_prev1;
+              float riseDeltaS1 = fmaxf(FOOT_RISE_MIN_ABS, FOOT_RISE_STD_FRACTION * sigmaS1);
+              float riseDeltaS2 = fmaxf(FOOT_RISE_MIN_ABS, FOOT_RISE_STD_FRACTION * sigmaS2);
+
+              if (!rearmS1 && valFinal1 > rearmThresholdS1) rearmS1 = true;
+              if (!rearmS2 && valFinal2 > rearmThresholdS2) rearmS2 = true;
+
+              if (rearmS1 && !trackingValleyS1 && valFinal1 < thresholdS1) {
+                trackingValleyS1 = true;
+                valleyMinS1 = valFinal1;
+                valleyTimeS1 = sampleTimestamp;
+                riseCountS1 = 0;
+              }
+              if (rearmS2 && !trackingValleyS2 && valFinal2 < thresholdS2) {
+                trackingValleyS2 = true;
+                valleyMinS2 = valFinal2;
+                valleyTimeS2 = sampleTimestamp;
+                riseCountS2 = 0;
+              }
+
+              if (trackingValleyS1) {
+                if (valFinal1 < valleyMinS1) {
+                  valleyMinS1 = valFinal1;
+                  valleyTimeS1 = sampleTimestamp;
+                }
+                if (dS1 > riseDeltaS1) riseCountS1++;
+                else if (dS1 < -FOOT_DERIV_EPS) riseCountS1 = 0;
+
+                if (riseCountS1 >= FOOT_RISE_CONFIRM_SAMPLES && valFinal1 > (valleyMinS1 + riseDeltaS1)) {
+                  if ((valleyTimeS1 - lastFootTimeS1) > REFRACT_MS) {
                     footS1 = true;
-                    footTimeS1 = alignedFootTimeS1;
+                    footTimeS1 = valleyTimeS1;
                     lastFootTimeS1 = footTimeS1;
                   }
+                  trackingValleyS1 = false;
+                  rearmS1 = false;
+                  riseCountS1 = 0;
+                } else if (valFinal1 > rearmThresholdS1) {
+                  trackingValleyS1 = false;
+                  riseCountS1 = 0;
                 }
               }
 
-              if ((s2_prev2 > s2_prev1) && (s2_prev1 < valFinal2) && (s2_prev1 < thresholdS2)) {
-                float dUpS2 = valFinal2 - s2_prev1;
-                if (dUpS2 > FOOT_DERIV_EPS) {
-                  unsigned long alignedFootTimeS2 = sampleTimestamp;
-                  if ((alignedFootTimeS2 - lastFootTimeS2) > REFRACT_MS) {
+              if (trackingValleyS2) {
+                if (valFinal2 < valleyMinS2) {
+                  valleyMinS2 = valFinal2;
+                  valleyTimeS2 = sampleTimestamp;
+                }
+                if (dS2 > riseDeltaS2) riseCountS2++;
+                else if (dS2 < -FOOT_DERIV_EPS) riseCountS2 = 0;
+
+                if (riseCountS2 >= FOOT_RISE_CONFIRM_SAMPLES && valFinal2 > (valleyMinS2 + riseDeltaS2)) {
+                  if ((valleyTimeS2 - lastFootTimeS2) > REFRACT_MS) {
                     footS2 = true;
-                    footTimeS2 = alignedFootTimeS2;
+                    footTimeS2 = valleyTimeS2;
                     lastFootTimeS2 = footTimeS2;
                   }
+                  trackingValleyS2 = false;
+                  rearmS2 = false;
+                  riseCountS2 = 0;
+                } else if (valFinal2 > rearmThresholdS2) {
+                  trackingValleyS2 = false;
+                  riseCountS2 = 0;
                 }
               }
             }
@@ -683,21 +750,9 @@ void TaskSensores(void *pvParameters) {
               }
             }
 
-            if (footPriming == 0) {
-              s1_prev1 = valFinal1;
-              s2_prev1 = valFinal2;
-              prev2Time = sampleTimestamp;
-              prev1Time = sampleTimestamp;
-              footPriming = 1;
-            } else {
-              s1_prev2 = s1_prev1;
-              s2_prev2 = s2_prev1;
-              prev2Time = prev1Time;
-              s1_prev1 = valFinal1;
-              s2_prev1 = valFinal2;
-              prev1Time = sampleTimestamp;
-              if (footPriming < 2) footPriming = 2;
-            }
+            s1_prev1 = valFinal1;
+            s2_prev1 = valFinal2;
+            if (footPriming == 0) footPriming = 1;
             
             // --- ALGORITMOS HR / PWV ---
             if (faseMedicion >= 2) {
@@ -839,6 +894,16 @@ void TaskSensores(void *pvParameters) {
                 lastDistFootForHR = 0;
                 lastFootTimeS1 = 0;
                 lastFootTimeS2 = 0;
+                footPriming = 0;
+                s1_prev1 = 0.0f; s2_prev1 = 0.0f;
+                trackingValleyS1 = false; trackingValleyS2 = false;
+                rearmS1 = true; rearmS2 = true;
+                valleyMinS1 = 0.0f; valleyMinS2 = 0.0f;
+                valleyTimeS1 = 0; valleyTimeS2 = 0;
+                riseCountS1 = 0; riseCountS2 = 0;
+                thrIdx = 0; thrCount = 0;
+                thrSumS1 = 0.0f; thrSumSqS1 = 0.0f;
+                thrSumS2 = 0.0f; thrSumSqS2 = 0.0f;
                 rrIdx = 0; rrCount = 0;
                 pttCount = 0;
                 conteoRRValidos = 0;
@@ -891,6 +956,12 @@ void TaskSensores(void *pvParameters) {
               lastDistFootForHR = 0;
               lastFootTimeS1 = 0;
               lastFootTimeS2 = 0;
+              s1_prev1 = 0.0f; s2_prev1 = 0.0f;
+              trackingValleyS1 = false; trackingValleyS2 = false;
+              rearmS1 = true; rearmS2 = true;
+              valleyMinS1 = 0.0f; valleyMinS2 = 0.0f;
+              valleyTimeS1 = 0; valleyTimeS2 = 0;
+              riseCountS1 = 0; riseCountS2 = 0;
               rrIdx = 0; rrCount = 0;
               pttCount = 0;
               conteoRRValidos = 0;
@@ -939,8 +1010,24 @@ void TaskSensores(void *pvParameters) {
         medicionFinalizada = false;
         pwvResultadoValido = false;
         hrResultadoValido = false;
+        waitingForDistFoot = false;
+        pendingProxFootTime = 0;
+        lastDistFootForHR = 0;
+        lastFootTimeS1 = 0;
+        lastFootTimeS2 = 0;
+        footPriming = 0;
+        s1_prev1 = 0.0f; s2_prev1 = 0.0f;
+        trackingValleyS1 = false; trackingValleyS2 = false;
+        rearmS1 = true; rearmS2 = true;
+        valleyMinS1 = 0.0f; valleyMinS2 = 0.0f;
+        valleyTimeS1 = 0; valleyTimeS2 = 0;
+        riseCountS1 = 0; riseCountS2 = 0;
         rrIdx = 0; rrCount = 0;
         pttCount = 0;
+        thrIdx = 0;
+        thrCount = 0;
+        thrSumS1 = 0.0f; thrSumSqS1 = 0.0f;
+        thrSumS2 = 0.0f; thrSumSqS2 = 0.0f;
         for (int i = 0; i < RR_WINDOW_SIZE; i++) rrWindow[i] = 0.0f;
         for (int i = 0; i < PTT_BUFFER_SIZE; i++) pttBuffer[i] = 0.0f;
         calibCount = 0;
