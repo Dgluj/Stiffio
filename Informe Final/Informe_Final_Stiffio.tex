@@ -483,11 +483,7 @@ El dispositivo está dirigido al uso en consultorio clínico. La propuesta no bu
         \subsubsection{Arquitectura del sistema y flujo de datos}
         El firmware desarrollado para el microcontrolador ESP32 aprovecha su arquitectura de doble núcleo para ejecutar en paralelo la adquisición de señales y la gestión de la interfaz gráfica. En el Core 0 se implementa la tarea de muestreo de los sensores MAX30102, ubicados en posiciones proximal y distal, a una frecuencia de 50 Hz (intervalo de 20 ms). Cada muestra es registrada con un timestamp absoluto, lo que permite calcular con precisión el tiempo de tránsito del pulso (PTT) y la velocidad de onda de pulso (PWV).
 
-        \vspace{0.1cm}
-
         El sistema opera en dos modos diferenciados: \textbf{Test Rápido} (autónomo) y \textbf{Estudio Clínico} (vinculado a la aplicación de escritorio). En el modo Test Rápido, todo el procesamiento y la visualización se realizan íntegramente en el dispositivo, permitiendo el ingreso de datos básicos y la visualización de resultados en la pantalla táctil. En el modo Estudio Clínico, el dispositivo se conecta por WiFi a la aplicación de escritorio mediante WebSockets, enviando los datos en tiempo real en formato JSON para su almacenamiento y análisis avanzado.
-
-        \vspace{0.1cm}
 
         La interfaz gráfica embebida se estructura como una máquina de estados, permitiendo la navegación secuencial entre pantallas, el ingreso de datos y la visualización de métricas y curvas. El sistema incluye alertas visuales y sonoras ante errores, desconexión de sensores o valores fuera de rango, garantizando robustez y facilidad de uso.
 
@@ -495,9 +491,11 @@ El dispositivo está dirigido al uso en consultorio clínico. La propuesta no bu
 
         En ambos modos, el sistema monitorea en tiempo real el estado de conexión de los sensores y la validez de los resultados, generando alertas y permitiendo al usuario reiniciar la medición de manera sencilla. La arquitectura modular del software facilita la adaptación a distintos flujos de trabajo y asegura la sincronización precisa de las señales adquiridas.
 
+        \vspace{0.2cm}
+
         \begin{figure}[H]
         \centering
-        \includegraphics[width=0.85\textwidth]{images/DiagramaSoftwareMenu.png}
+        \includegraphics[width=0.9\textwidth]{images/DiagramaSoftwareMenu.png}
         \captionsetup{margin=1.5cm, justification=centering}
         \caption{Diagrama de bloques del software del sistema, mostrando los dos modos de operación: Test Rápido y Estudio Clínico, y el flujo de datos entre los principales módulos funcionales.}
         \label{fig:diagrama_software_menu}
@@ -512,7 +510,7 @@ El dispositivo está dirigido al uso en consultorio clínico. La propuesta no bu
 
         \begin{figure}[H]
         \centering
-        \includegraphics[width=0.8\textwidth]{images/PPG_reflectance_vs_transmission.jpg}
+        \includegraphics[width=0.9\textwidth]{images/PPG_reflectance_vs_transmission.jpg}
         \captionsetup{margin=1.5cm, justification=centering}
         \caption{Modos de adquisición de señal PPG: transmisión (A) y reflexión (B). En el modo reflectivo, el pie de onda fisiológico (e) se manifiesta como un máximo local. Imagen adaptada de \cite{paperPPG}.}
         \label{fig:PPG_reflectance}
@@ -520,41 +518,32 @@ El dispositivo está dirigido al uso en consultorio clínico. La propuesta no bu
 
         Antes del filtrado, se realiza una normalización dividiendo los valores crudos por el máximo representable en 18 bits, permitiendo así escalar la señal a un rango uniforme y adecuado para su graficación y procesamiento.
 
-        \vspace{0.1cm}
         
         Una vez normalizada, la señal se somete a un filtrado secuencial destinado a eliminar las componentes no fisiológicas. En primer lugar, se aplica un filtro pasa altos de primer orden con una frecuencia de corte de 0,5 Hz, cuyo objetivo es suprimir el componente DC y variaciones lentas asociadas al movimiento o cambios de perfusión. A continuación, la salida del pasa altos se procesa mediante un filtro pasa bajos de primer orden con una frecuencia de corte de 5 Hz, que atenúa el ruido de alta frecuencia y preserva únicamente el contenido característico de la onda pulsátil. Finalmente, se implementa una media móvil de dos muestras para suavizado adicional.
-
-        \vspace{0.1cm}
 
         En conjunto, este filtrado pasa banda resulta adecuado para el rango fisiológico de la señal PPG y mejora significativamente la calidad para la detección de los pulsos y el cálculo de los parámetros derivados.
 
 
         \subsubsection{Cálculo de frecuencia cardíaca}
-        La señal filtrada ingresa al algoritmo de detección de latidos, que se basa en la identificación de pies de onda en la señal distal (sensor ubicado en la muñeca). Para ello, se detectan mínimos locales en la señal invertida, correspondientes al inicio del ascenso sistólico (punto e en la Figura~\ref{fig:PPG_reflectance}). La detección se realiza utilizando un criterio robusto: se exige que el valor actual sea menor que sus vecinos inmediatos y que se encuentre por debajo de un umbral adaptativo calculado dinámicamente sobre una ventana móvil. Además, se verifica que la derivada cambie de signo (de negativa a positiva) para confirmar la presencia de un pie de onda fisiológico y evitar la detección de artefactos.
+        La señal filtrada ingresa al algoritmo de detección de latidos, que se basa en la identificación de pies de onda en la señal distal (sensor ubicado en la muñeca). Para ello, se detectan mínimos locales en la señal invertida, correspondientes al inicio del ascenso sistólico (punto e en la Figura~\ref{fig:PPG_reflectance}). Para que un pico sea detectado se exige que el valor actual sea menor que sus vecinos inmediatos y que se encuentre por debajo de un umbral adaptativo calculado dinámicamente sobre una ventana móvil. Además, se verifica que la derivada cambie de signo (de negativa a positiva) para confirmar la presencia de un pie de onda fisiológico y evitar la detección de artefactos.
 
-        \vspace{0.1cm}
-
-        Cada vez que se detecta un pie de onda válido, se calcula el intervalo RR en milisegundos como la diferencia temporal entre dos eventos consecutivos. Estos valores se almacenan en un buffer FIFO circular de 15 muestras, que se actualiza en cada nuevo latido detectado. Para obtener una estimación robusta y estable de la frecuencia cardíaca, se calcula la mediana de los valores almacenados en el buffer y se utiliza la siguiente relación:
+        Cada vez que se detecta un pie de onda válido, se calcula el intervalo RR en milisegundos como la diferencia temporal entre dos eventos consecutivos. Estos valores se almacenan en un buffer FIFO circular de 15 muestras, que se actualiza en cada nuevo latido detectado. Para obtener una estimación robusta y estable de la frecuencia cardíaca, se calcula la mediana de los valores almacenados en el buffer. Finalmente el valor de frecuencia cardíaca mostrado en pantalla se calcula con la siguiente relación:
         
         \[
         \mathrm{HR} = \frac{60000}{RR_{\text{mediana}}}
         \]
+
+        \vspace{0.3cm}
         
-        donde $RR_{\text{mediana}}$ es el valor mediano de los intervalos RR en milisegundos. El sistema exige acumular un mínimo de latidos válidos antes de mostrar el resultado, lo que garantiza la estabilidad de la medición y evita fluctuaciones erráticas.
+        donde $RR_{\text{mediana}}$ es el valor mediano de los intervalos RR en milisegundos. 
 
-        \vspace{0.1cm}
+        \vspace{0.3cm}
 
-        Si los sensores pierden contacto o la señal cae por debajo del umbral de apoyo, todos los promedios y contadores se reinician, obligando a reconstruir la secuencia de latidos antes de exponer un nuevo valor. Este mecanismo asegura que la frecuencia cardíaca mostrada represente una estimación suave y robusta, permitiendo además reiniciar automáticamente la medición al cambiar de paciente.
+        El sistema exige acumular un mínimo de latidos válidos antes de mostrar el resultado, lo que garantiza la estabilidad de la medición y evita fluctuaciones erráticas. Si los sensores pierden contacto o la señal cae por debajo del umbral de apoyo, todos los promedios y contadores se reinician, obligando a reconstruir la secuencia de latidos antes de exponer un nuevo valor. Este mecanismo asegura que la frecuencia cardíaca mostrada represente una estimación suave y robusta, permitiendo además reiniciar automáticamente la medición al cambiar de paciente.
 
         
         \subsubsection{Cálculo de velocidad de onda de pulso}
-        El cálculo de la velocidad de onda de pulso (PWV) se realiza emparejando cada pie de onda detectado en la señal proximal con el siguiente pie en la señal distal, calculando así el tiempo de tránsito del pulso ($\Delta t$) como la diferencia temporal entre ambos eventos.
-
-        \vspace{0.1cm}
-
-        Los valores de $\Delta t$ obtenidos se almacenan secuencialmente en un buffer no circular de 25 muestras. Una vez completado el buffer, se calcula la mediana de estos 25 valores, que es utilizada para estimar y mostrar el valor de PWV. Este enfoque permite obtener una estimación robusta y estable, minimizando el impacto de valores atípicos o artefactos.
-
-        \vspace{0.1cm}
+        El cálculo de la velocidad de onda de pulso (PWV) se realiza emparejando cada pie de onda detectado en la señal proximal con el siguiente pie de la señal distal, obteniendo así el tiempo de tránsito del pulso ($\Delta t$) como la diferencia temporal entre ambos eventos. Los valores de $\Delta t$ obtenidos se almacenan secuencialmente en un buffer no circular de 25 muestras. Una vez completado el buffer, se calcula la mediana de estos 25 valores, que es utilizada para estimar y mostrar el valor de PWV. Este enfoque permite obtener una estimación más robusta y estable, minimizando el impacto de valores atípicos o artefactos.
 
         La velocidad de onda de pulso se calcula mediante la siguiente fórmula, que relaciona la distancia anatómica recorrida por la onda ($d$) y el tiempo de tránsito medido:
 
@@ -569,13 +558,10 @@ El dispositivo está dirigido al uso en consultorio clínico. La propuesta no bu
 
         \paragraph{Estimación de la distancia}\mbox{}\\
 
-        La estimación de la distancia anatómica recorrida por la onda de pulso se realiza multiplicando la altura del usuario por un factor fijo de 0,436 [ver Anexo]. Este coeficiente proviene de mediciones anatómicas realizadas sobre 54 sujetos de distintas edades, donde se midió con una cinta métrica flexible la distancia externa entre el punto palpable de la arteria carótida en el cuello y el punto palpable de la arteria radial en la muñeca [ver Figura~\ref{fig:Arterias}]. 
+        La estimación de la distancia anatómica recorrida por la onda de pulso se realiza multiplicando la altura del usuario por un factor fijo de 0,436. Este coeficiente proviene de mediciones anatómicas realizadas sobre 54 sujetos de distintas edades \textcolor{red}{[ver Anexo]}, donde se midió con una cinta métrica flexible la distancia externa entre el punto palpable de la arteria carótida en el cuello y el punto palpable de la arteria radial en la muñeca [ver Figura~\ref{fig:Arterias}]. 
         
-        Se adoptó esta geometría carótidorradial porque el sensor óptico no resultó práctico en la región púbica: el vello y la ergonomía dificultan la correcta alineación en el trayecto carotidofemoral, comprometiendo la comodidad del paciente. 
-
-        Además, la literatura evidencia que la PWV carótida–radial es reproducible y presenta correlación con marcadores fisiopatológicos centrales, admitiendo consideraciones específicas para su interpretación frente a la central, pero permitiendo una alternativa fiable y robusta en dispositivos ópticos portátiles.\cite{nitta2024}\cite{wang2023}
+        Se adoptó esta geometría carótidorradial porque el sensor óptico no resultó práctico en la región púbica, donde permitiria una medición mas estandar carótido-femoral. El vello y la ergonomía dificultan la correcta alineación en el trayecto, comprometiendo la comodidad del paciente. textcolor{red}{[Además, la literatura evidencia que la PWV carótida–radial es reproducible y presenta correlación con marcadores fisiopatológicos centrales, admitiendo consideraciones específicas para su interpretación frente a la central, pero permitiendo una alternativa fiable y robusta en dispositivos ópticos portátiles.\cite{nitta2024}\cite{wang2023}]}
         
-        De este modo, la distancia efectiva coincide con el camino óptico real del hardware y permite estimar la PWV como la razón entre dicha distancia corregida y el $\Delta t$ obtenido a partir de los pies de onda. 
 
         \begin{figure}[H]
         \centering
@@ -593,14 +579,14 @@ El dispositivo está dirigido al uso en consultorio clínico. La propuesta no bu
         \subsubsection{Interfaz táctil en display integrado (Modo Test Rápido)}
         Con el objetivo de permitir el uso autónomo del dispositivo, se desarrolló una interfaz gráfica embebida en el display táctil integrado. Esta interfaz posibilita la utilización de todas las funcionalidades principales del sistema sin necesidad de conexión a una PC, a excepción del almacenamiento y la gestión avanzada de datos, que se realizan exclusivamente mediante la aplicación de escritorio \textit{StiffioApp}.
 
-        La interfaz fue desarrollada en lenguaje C++ utilizando el entorno Arduino IDE. Para el control gráfico del display se empleó la librería \texttt{TFT\_eSPI.h}, encargada del renderizado de texto, botones, gráficos y actualización dinámica de pantalla, mientras que para la detección y procesamiento de las coordenadas del panel táctil resistivo se utilizó la librería \texttt{XPT2046\_Touchscreen.h}.  La arquitectura lógica de la interfaz se estructuró como una máquina de estados, donde cada pantalla corresponde a un estado específico del sistema. Este enfoque permitió organizar el flujo de navegación de manera clara, secuencial y robusta frente a eventos del usuario.
+        La interfaz fue desarrollada en lenguaje C++ utilizando el entorno Arduino IDE. Para el control gráfico del display se empleó la librería \texttt{TFT\_eSPI.h}, encargada del renderizado de texto, botones, gráficos y actualización dinámica de pantalla, mientras que para la detección y procesamiento de las coordenadas del panel táctil resistivo se utilizó la librería \texttt{XPT2046\_Touchscreen.h}.  
 
         Al encender el dispositivo, se presenta un menú inicial en el cual el usuario debe seleccionar el modo de funcionamiento: ESTUDIO CLÍNICO o TEST RÁPIDO, tal como se muestra en la Figura~\ref{fig:MenuDisplay}.
 
 
         \begin{figure}[H]
         \centering
-        \includegraphics[width=0.7\textwidth]{images/Menu Display.jpeg}
+        \includegraphics[width=0.6\textwidth]{images/Menu Display.jpeg}
         \captionsetup{margin=1.5cm, justification=centering}
         \caption{Menú principal de la interfaz táctil en el display integrado. Selección de modo de uso.}
         \label{fig:MenuDisplay}
@@ -721,60 +707,42 @@ El dispositivo está dirigido al uso en consultorio clínico. La propuesta no bu
     
     
     \subsection{Metodología de evaluación y validación}
-    La validación del dispositivo se realizó mediante métodos estadísticos reconocidos internacionalmente, con el objetivo de garantizar precisión, confiabilidad y equivalencia clínica respecto a estándares aceptados. La validación incluyó análisis respecto a valores poblacionales, comparación instrumental frente a gold standard, y estudio de la discriminación entre subgrupos clínicos, en línea con las recomendaciones de guías internacionales y revisiones metodológicas recientes.\cite{sorensen2015}
+    En esta sección se describe el enfoque metodológico adoptado para la evaluación del dispositivo, detallando las condiciones bajo las cuales se realizaron las mediciones y los criterios utilizados para su análisis.
+
+
+    \textcolor{red}{NO SE DE QUE ES ESTA CITA \cite{sorensen2015}}
 
         \subsubsection{Protocolo de Medición}
 
         \begin{enumerate}
+
         \item \textbf{Preparación del paciente:}
         \begin{itemize}
-            \item Explicar el procedimiento y obtener el consentimiento informado.
-            \item Colocar al paciente en decúbito supino, con los brazos relajados, en un ambiente tranquilo y con temperatura controlada (22-26°C).
-            \item Evitar cafeína, nicotina, alcohol o ejercicio intenso al menos 3 horas antes.
-            \item Permitir un reposo de 5-10 minutos para lograr estabilidad hemodinámica y respiración lenta y normal.
+            \item Explicar el procedimiento al paciente y obtener el consentimiento informado correspondiente.
+            \item Colocar al paciente en decúbito supino, con los miembros superiores relajados, en un ambiente tranquilo y con temperatura controlada (22–26\,°C).
+            \item Indicar evitar la ingesta de cafeína, nicotina, alcohol o la realización de ejercicio intenso al menos 3 horas antes de la medición.
+            \item Permitir un período de reposo de 5 a 10 minutos previo al inicio, con el fin de alcanzar estabilidad hemodinámica y respiración normal.
         \end{itemize}
-        
+
         \item \textbf{Preparación del equipo:}
         \begin{itemize}
-            \item Encender el dispositivo y verificar el funcionamiento y el estado de conexión de los sensores.
-            \item Colocar el sensor proximal (rojo) y el distal (rosa) en sus sitios correspondientes. La colocación correcta de los sensores se detalla más adelante.
+            \item Encender el dispositivo y verificar el correcto funcionamiento y la conexión de los sensores.
+            \item Localizar mediante palpación el pulso arterial en los sitios de medición.
+            \item Colocar el sensor proximal (1, color rojo) sobre la arteria carótida derecha, en la región lateral del cuello, sujetándolo con la banda elástica, evitando ejercer presión excesiva.
+            \item Colocar el sensor distal (2, color rosa) sobre la arteria radial derecha, en la cara interna de la muñeca, sujetandolo con la banda elástica de forma análoga.
+            \item Fijar ambos sensores utilizando las bandas elásticas con velcro, asegurando contacto adecuado con la piel sin generar compresión excesiva.
+            \item Verificar que ambos sensores esten colocados adecuadamente. El dispositivo indicará visualmente si alguno de los sensores no se encuentra haciendo buen contacto.
         \end{itemize}
 
-        \item \textbf{Ingreso de datos:}
+        \item \textbf{Adquisición de datos:}
         \begin{itemize}
-            \item Completar la información del paciente en la interfaz del equipo (nombre, edad, sexo, altura).
+            \item Completar los datos del paciente requeridos.
+            \item Presionar el botón \textbf{“Iniciar medición”} para comenzar la adquisición.
+            \item Una vez obtenido el resultado, presionar el botón “Guardar Medición” para almacenarlo en el sistema para su posterior análisis.
+            \item En caso de observar señal pletismográfica inestable o CON artefactos por movimiento, reacomodar los sensores y repetir la medición.
         \end{itemize}
 
-        \item \textbf{Adquisición de señal:}
-        \begin{itemize}
-            \item Presionar el botón \textbf{“Iniciar medición”} y mantener la adquisición durante 30-60 segundos para obtener ciclos de pulso estables.
-            \item Si la señal pletismográfica se ve inestable, reacomodar los sensores antes de continuar.
-        \end{itemize}
-
-        \item \textbf{Finalización y visualización:}
-        \begin{itemize}
-            \item Detener la medición con \textbf{“Detener medición”} cuando la señal sea estable.
-            \item Verificar que se muestren correctamente ambas señales pletismográficas, la PWV y la HR.
-            \item Si se desea, se pueden guardar las mediciones realizadas presionando \textbf{“Guardar medición”}.
-        \end{itemize}
-    \end{enumerate}
-
-        \paragraph{Colocación del Sensor Proximal (Cuello)}\mbox{}\\
-        
-        \underline{\textbf{Ubicación:}} Palpar la arteria carótida común en la base del cuello, lateral a la tráquea y a la altura del cartílago cricoides.
-        
-        \vspace{0.1cm}
-        
-        \underline{\textbf{Forma de colocación:}} Colocar el sensor sobre el punto de máximo pulso y fijarlo con la correa elástica, asegurando buen contacto sin comprimir la arteria para evitar distorsiones en la señal.
-
-
-        \paragraph{Colocación del Sensor Distal (Muñeca)}\mbox{}\\
-
-        \underline{\textbf{Ubicación:}} Palpar el pulso en la arteria radial, ubicada en la superficie lateral de la muñeca (lado del pulgar).
-
-        \vspace{0.1cm}
-        
-        \underline{\textbf{Forma de colocación:}} Colocar el sensor sobre el sitio de máximo pulso y fijarlo con la correa elástica, asegurando buen contacto sin comprimir la arteria para evitar distorsiones en la señal.
+        \end{enumerate}
     
 
 
@@ -788,9 +756,12 @@ El dispositivo está dirigido al uso en consultorio clínico. La propuesta no bu
 
         Para cada conjunto de mediciones se calculó la media, el desvío estándar y el coeficiente de variación (CV\%), definido como:
 
-        \begin{equation}
+        \[
         CV(\%) = \frac{\sigma}{\mu} \times 100
-        \end{equation}
+        \]
+
+        \vspace{0.2cm}
+
 
         El coeficiente de variación se utilizó como métrica principal de repetitibilidad, ya que permite normalizar la dispersión respecto del valor medido y facilita la comparación entre ambas condiciones experimentales.
 
@@ -798,12 +769,15 @@ El dispositivo está dirigido al uso en consultorio clínico. La propuesta no bu
         \subsubsection{Evaluación frente a rangos fisiológicos}
         Con el objetivo de evaluar la coherencia fisiológica de los valores obtenidos con el dispositivo desarrollado, se realizó una comparación de los mismos con los rangos de PWV reportados en la literatura. Para ello, se seleccionaron diez sujetos sanos distribuidos en dos grupos etarios diferenciados. El primer grupo estuvo conformado por cinco participantes con edades comprendidas entre 20 y 25 años, mientras que el segundo grupo incluyó cinco participantes entre 55 y 60 años. Ninguno de los sujetos presentaba antecedentes de enfermedad cardiovascular ni factores de riesgo conocidos. Al igual que en el análisis de repetitibilidad, todas las mediciones se realizaron siguiendo estrictamente el protocolo previamente descripto.
 
-        Para cada grupo etario se calculó la media ($\bar{x}$) y el desvío estándar ($s$) de las mediciones obtenidas. Para evaluar si la media muestral difería significativamente del valor de referencia reportado en la literatura ($\mu_0$), se aplicó una prueba t de Student para una muestra (One-Sample t-test). La hipótesis nula ($H_0$) establece que no existen diferencias significativas entre la media medida y el valor de referencia. La hipótesis alternativa ($H_1$) plantea la existencia de una diferencia significativa. 
-        El estadístico de prueba se calculó mediante:
+        Para cada grupo etario se calculó la media ($\bar{x}$) y el desvío estándar ($s$) de las mediciones obtenidas. Para evaluar si la media muestral difería significativamente del valor de referencia reportado en la literatura ($\mu_0$), se aplicó una prueba t de Student para una muestra (One-Sample t-test). La hipótesis nula ($H_0$) establece que no existen diferencias significativas entre la media medida y el valor de referencia, mientras que la hipótesis alternativa ($H_1$) plantea que si. El estadístico de prueba se calculó como:
 
         \[t = \frac{\bar{x} - \mu_0}{\frac{s}{\sqrt{n}}}\]
 
+        \vspace{0.4cm}
+
         donde $\bar{x}$ es la media muestral, $\mu_0$ el valor de referencia, $s$ el desvío estándar de la muestra y $n$ el tamaño muestral. El valor de $t$ obtenido se comparó con la distribución t de Student con $n-1$ grados de libertad.
+
+        \vspace{0.2cm}
 
         El análisis se realizó considerando un nivel de significancia $\alpha = 0{,}05$. Un valor de $p > 0{,}05$ se interpreta como ausencia de diferencias estadísticamente significativas respecto del valor de referencia, lo que sugiere coherencia entre las mediciones del dispositivo y los rangos fisiológicos reportados.  Por el contrario, un valor de $p < 0{,}05$ indicaría una discrepancia estadísticamente significativa.
 
@@ -811,13 +785,12 @@ El dispositivo está dirigido al uso en consultorio clínico. La propuesta no bu
         \textcolor{red}{FALTA MENCIONAR CON QUÉ VALORES DE REFERENCIA SE COMPARA Y AGREGAR TABLA O GRÁFICO.}
 
 
+        \subsubsection{Comparación frente a equipo gold standard}
+        La validación instrumental del dispositivo Stiffio se realizó en el marco de una colaboración con el Instituto Cardiovascular de Buenos Aires (ICBA), institución de referencia en investigación clínica y atención cardiovascular. El ICBA facilitó el uso del equipo Arteriograph, reconocido internacionalmente como método de referencia para la estimación no invasiva de la velocidad de onda de pulso (PWV) \cite{sorensen2015}.
 
-        \subsubsection{Validación frente a equipo gold standard}
+        El Arteriograph estima la PWV aórtica mediante un método oscilométrico basado en la medición de variaciones de presión obtenidas a través de un manguito braquial. A partir del análisis de la onda de presión y sus reflexiones, el sistema calcula la velocidad de propagación de la onda a lo largo de la aorta. Dado que este procedimiento se basa en señales de presión arterial central, mientras que Stiffio determina la PWV a partir de señales pletismográficas registradas en dos sitios arteriales periféricos, ambos dispositivos no evalúan exactamente el mismo trayecto arterial ni emplean el mismo principio físico de medición. En consecuencia, no se espera una coincidencia absoluta entre los valores obtenidos, sino una concordancia fisiológica y una correspondencia dentro de rangos clínicamente aceptables.En este sentido, se espera que sujetos clasificados dentro del rango fisiológico normal por el Arteriograph presenten, de manera consistente, valores compatibles con el rango considerado normal según los criterios establecidos para Stiffio, aun cuando puedan existir diferencias numéricas atribuibles a la metodología empleada por cada sistema.
 
-        La validación instrumental del dispositivo Stiffio se realizó en el marco de una colaboración con el Instituto Cardiovascular de Buenos Aires (ICBA), reconocido referente en investigación clínica y atención cardiovascular. El ICBA proveyó acceso a un equipo Arteriograph, reconocido internacionalmente como gold standard para la medición de la velocidad de onda de pulso (PWV) \cite{sorensen2015}, así como una cohorte de pacientes que incluyó sujetos sanos y pacientes con insuficiencia cardíaca, permitiendo así evaluar el desempeño del dispositivo en escenarios clínicamente relevantes.
-
-        Se llevaron a cabo mediciones pareadas en cada paciente, registrando los valores de PWV y frecuencia cardíaca (HR) con ambos dispositivos en condiciones controladas y consecutivas. Los resultados se analizaron mediante la t de Student para muestras pareadas (Dependent T-Test), conforme a las recomendaciones metodológicas internacionales y normas de validación de equipos biomédicos. Este enfoque permitió evaluar la equivalencia instrumental entre Stiffio y el Arteriograph, estableciendo si existían diferencias estadísticamente significativas en las mediciones obtenidas.
-
+        Se evaluaron tres sujetos, realizando tres mediciones consecutivas por cada uno con ambos dispositivos. Los participantes fueron adultos jóvenes de entre 20 y 25 años de edad, sin antecedentes cardiovasculares conocidos ni diagnóstico de patología arterial. Todas las mediciones se realizaron siguiendo el protocolo de medicion del respectivo equipo.
  
 
 
