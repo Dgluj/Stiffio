@@ -30,12 +30,15 @@
 \contentsline {subsubsection}{\numberline {5.4.3}Evaluación frente a rangos fisiológicos}{26}{subsubsection.5.4.3}%
 \contentsline {subsubsection}{\numberline {5.4.4}Comparación frente a equipo gold standard}{27}{subsubsection.5.4.4}%
 \contentsline {section}{\numberline {6}Resultados}{28}{section.6}%
-\contentsline {section}{\numberline {7}Discusión}{28}{section.7}%
-\contentsline {section}{\numberline {8}Conclusiones}{28}{section.8}%
-\contentsline {section}{Bibliografía}{29}{section.8}%
+\contentsline {section}{\numberline {7}Discusión}{30}{section.7}%
+\contentsline {subsection}{\numberline {7.1}Análisis de resultados}{30}{subsection.7.1}%
+\contentsline {subsection}{\numberline {7.2}Limitaciones y posibles mejoras}{30}{subsection.7.2}%
+\contentsline {subsection}{\numberline {7.3}Comparación con dispositivos del mercado}{31}{subsection.7.3}%
+\contentsline {section}{\numberline {8}Conclusiones}{31}{section.8}%
+\contentsline {section}{Bibliografía}{32}{section.8}%
 \etoc@depthtag {anexo}
-\contentsline {section}{\numberline {A}Asignación de pines del circuito electrónico}{32}{appendix.Alph1}%
-\contentsline {section}{\numberline {B}Modelo 3D de la carcasa}{33}{appendix.Alph2}%
-\contentsline {section}{\numberline {C}Modelo 3D del encapsulado de sensores}{34}{appendix.Alph3}%
-\contentsline {section}{\numberline {D}factor de corrección altura}{35}{appendix.Alph4}%
-\contentsline {section}{\numberline {E}Reporte PDF}{36}{appendix.Alph5}%
+\contentsline {section}{\numberline {A}Asignación de pines del circuito electrónico}{34}{appendix.Alph1}%
+\contentsline {section}{\numberline {B}Modelo 3D de la carcasa}{35}{appendix.Alph2}%
+\contentsline {section}{\numberline {C}Modelo 3D del encapsulado de sensores}{36}{appendix.Alph3}%
+\contentsline {section}{\numberline {D}factor de corrección altura}{37}{appendix.Alph4}%
+\contentsline {section}{\numberline {E}Reporte PDF}{38}{appendix.Alph5}%

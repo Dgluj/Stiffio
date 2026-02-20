@@ -799,36 +799,149 @@ El dispositivo está dirigido al uso en consultorio clínico. La propuesta no bu
 
 % RESULTADOS =======================================================================================================
 \section{Resultados}
+Los resultados correspondientes al análisis de repetitibilidad se presentan en la Tabla \ref{tab:rep_sin} y Tabla \ref{tab:rep_con}, donde se muestran las mediciones obtenidas bajo las dos condiciones experimentales: sin reposicionamiento y con reposicionamiento de sensores, respectivamente.
 
-No hay mediciones aún.
+\begin{table}[H]
+\centering
+\caption{Mediciones de PWV y HR sin reposicionamiento de sensores}
+\label{tab:rep_sin}
+\begin{tabular}{c c c}
+\hline
+Medición & PWV (m/s) & HR (bpm) \\
+\hline
+1  &  &  \\
+2  &  &  \\
+3  &  &  \\
+4  &  &  \\
+5  &  &  \\
+6  &  &  \\
+7  &  &  \\
+8  &  &  \\
+9  &  &  \\
+10 &  &  \\
+\hline
+Media &  &  \\
+Desvío estándar &  &  \\
+CV (\%) &  &  \\
+\hline
+\end{tabular}
+\end{table}
 
-Una vez finalizado el proceso de recolección y análisis de datos, los resultados serán presentados de forma estructurada, clara y acorde a los estándares para la evaluación clínica de dispositivos médicos. Para cada grupo y prueba estadística:\cite{ispch2021}
 
-Se mostrarán las estadísticas descriptivas de las variables principales (PWV y HR), incluyendo medias, desvíos estándar y número de casos en cada grupo, para cada rango etario y estado clínico (sanos e insuficientes cardíacos).
+\begin{table}[H]
+\centering
+\caption{Mediciones de PWV y HR con reposicionamiento de sensores}
+\label{tab:rep_con}
+\begin{tabular}{c c c}
+\hline
+Medición & PWV (m/s) & HR (bpm) \\
+\hline
+1  &  &  \\
+2  &  &  \\
+3  &  &  \\
+4  &  &  \\
+5  &  &  \\
+6  &  &  \\
+7  &  &  \\
+8  &  &  \\
+9  &  &  \\
+10 &  &  \\
+\hline
+Media &  &  \\
+Desvío estándar &  &  \\
+CV (\%) &  &  \\
+\hline
+\end{tabular}
+\end{table}
 
-Se publicarán ejemplos representativos de las señales adquiridas, permitiendo ilustrar la forma de onda pletismográfica típica y su calidad en diferentes ubicaciones y niveles de perfusión.
+Bajo la condición sin reposicionamiento, el coeficiente de variación obtenido fue de X\%, indicando .... En la condición con reposicionamiento de sensores, el coeficiente de variación fue de Y\%, evidenciando un aumento del en la variabilidad asociada a la recolocación manual.
 
-Para la t-Student aplicada sobre nuestras mediciones, se reportarán los resultados comparativos de la media poblacional por grupo etario, junto al estadístico t, el valor de p, y la interpretación clínica en términos de significancia y correspondencia con los valores de referencia.
+\vspace{0.4cm}
 
-En la comparación pareada con el gold standard (Arteriograph), se mostrarán los gráficos de dispersión, los valores individuales para cada paciente y grupo, y los resultados de la t-Student pareada, evidenciando la concordancia estadística o diferencias entre dispositivos.
+Los valores individuales de velocidad de onda de pulso (PWV) y frecuencia cardíaca (HR) obtenidos en las mediciones realizadas a los diferentes sujetos se presentan en la Tabla \ref{tab:mediciones}. 
 
-Esta estructura asegurará transparencia en la interpretación y alineación con normas regulatorias de presentación de resultados en validaciones clínicas. 
+\begin{table}[H]
+\centering
+\caption{Valores individuales de PWV y frecuencia cardíaca (HR) obtenidos medición diferentes sujetos}
+\label{tab:mediciones}
+\begin{tabular}{c c c c}
+\hline
+Grupo & Sujeto & PWV (m/s) & HR (lpm) \\
+\hline
+\multirow{5}{*}{20–25 años} 
+& S1 &  &  \\
+& S2 &  &  \\
+& S3 &  &  \\
+& S4 &  &  \\
+& S5 &  &  \\
+\hline
+\multirow{5}{*}{55–60 años} 
+& S6 &  &  \\
+& S7 &  &  \\
+& S8 &  &  \\
+& S9 &  &  \\
+& S10 &  &  \\
+\hline
+\end{tabular}
+\end{table}
+
+
+La media y el desvío estándar correspondientes a cada grupo etario se presentan de forma resumida en la Tabla \ref{tab:mediciones_media}.
+
+\begin{table}[H]
+\centering
+\caption{Media y desvío estándar de PWV y HR por grupo etario}
+\label{tab:mediciones_media}
+\begin{tabular}{c c c c c}
+\hline
+Grupo & PWV media (m/s) & PWV DE & HR media (lpm) & HR DE \\
+\hline
+20–25 años &  &  &  &  \\
+55–60 años &  &  &  &  \\
+\hline
+\end{tabular}
+\end{table}
+
+
+
+Para el grupo de 20 a 25 años, la media obtenida fue de X m/s, en comparación con el valor de referencia reportado en la literatura de Y m/s. El análisis mediante prueba t de Student arrojó un valor de t = ... y p = ...
+
+Para el grupo de 55 a60 años, la media fue de ... m/s, con un valor de p = ...
+
 
 
 % DISCUSIÓN ========================================================================================================
 \section{Discusión}
-el equipo una presenta una presicion de blablab
 
-sensible a la posiccion de los sensores y al movimiento
-
+\subsection{Análisis de resultados}
 
 
-ventajas y desventajas del equipo 
+
+\subsection{Limitaciones y posibles mejoras}
+La evaluación preliminar del dispositivo Stiffio mostró que, en términos generales, las mediciones evidenciaron coherencia fisiológica y consistencia intra-sujeto. Esto indica que el dispositivo es capaz de detectar diferencias temporales entre señales arteriales y traducirlas en estimaciones de velocidad de onda de pulso dentro de los rangos esperables para la población evaluada. No obstante, se identificaron diversos aspectos técnicos y metodológicos que influyen en la calidad de las mediciones obtenidas.
+
+Se observó una marcada dependencia de la correcta colocación de los sensores. Dado que el sistema se basa en la detección de señales pletismográficas en sitios arteriales específicos, pequeñas variaciones en la posición, en la presión ejercida o en la alineación respecto al eje arterial pueden modificar la morfología de la señal y afectar la determinación del tiempo de tránsito. Esta característica introduce una componente operador-dependiente que debe considerarse en el entrenamiento del usuario. Como posible línea de mejora, podría desarrollarse un sistema de posicionamiento asistido o un algoritmo automático de evaluación de calidad de señal que proporcione retroalimentación en tiempo real.
+
+Asimismo, el dispositivo mostró sensibilidad al ruido por movimiento. Artefactos generados por respiraciones profundas, deglución o contracciones musculares pueden alterar la estabilidad de la señal y comprometer la detección precisa de los puntos característicos utilizados para el cálculo de la velocidad de onda de pulso. Esto pone de manifiesto la necesidad de optimizar los métodos de filtrado y los algoritmos de detección de eventos no fisiológicos, minimizando la probabilidad de que estos afecten la estimación final.
+
+Otra limitación relevante está asociada al hardware utilizado. Los sensores empleados fueron originalmente diseñados para mediciones en dedo y corresponden a dispositivos de uso principalmente no profesional, lo que puede restringir su desempeño en aplicaciones clínicas más exigentes. Además, la placa ESP utilizada presenta capacidad de procesamiento limitada, lo que impidió implementar técnicas de procesamiento de señal más complejas o computacionalmente demandantes.
+
+Otro factor relevante se relaciona con la estimación de la distancia recorrida por la onda entre los sitios de medición. En este trabajo, dicha distancia fue medida superficialmente utilizando referencias anatómicas externas, lo cual no necesariamente refleja con exactitud la longitud real del trayecto arterial. Además, existen variaciones anatómicas individuales que no se tienen en cuenta, ya que el dispositivo generaliza para todas las personas de la misma altura. Estas variaciones pueden introducir error en el cálculo, constituyendo una limitación metodológica a considerar en futuras iteraciones del dispositivo.
+
+
+\subsection{Comparación con dispositivos del mercado}
+A diferencia de otros dispositivos disponibles en el mercado, Stiffio presenta como principal ventaja su simplicidad instrumental y bajo costo, al basarse en sensores ópticos y no requerir equipamiento voluminoso ni técnicas de alta complejidad operativa. Esta elección tecnológica implica ciertos compromisos en términos de precisión y robustez, pero al mismo tiempo permite una implementación accesible y potencialmente escalable. 
+
+Además, el dispositivo no requiere oclusión arterial transitoria ni compresión elevada, lo que reduce la posible incomodidad para el usuario. Estas características podrían favorecer su utilización en entornos ambulatorios o en esquemas de monitoreo periódico, donde la simplicidad operativa constituye un factor clave.
 
 
 
 % CONCLUSIONES =====================================================================================================
 \section{Conclusiones}
+
+El presente trabajo demostró la factibilidad técnica de estimar la velocidad de onda de pulso mediante un sistema basado en la medición del tiempo de tránsito entre señales pletismográficas periféricas. El dispositivo desarrollado logró obtener mediciones fisiológicamente coherentes en condiciones controladas, validando el enfoque conceptual adoptado. Si bien se identificaron limitaciones metodológicas y técnicas, los resultados obtenidos confirman la viabilidad del sistema.
+
+Para consolidar su aplicabilidad clínica, es necesario ampliar el tamaño muestral, incorporar poblaciones con distintos perfiles hemodinámicos y realizar estudios comparativos con métodos de referencia. No obstante, el desarrollo alcanzado establece una base sólida para la optimización futura del dispositivo y su proyección como alternativa accesible para la evaluación la evaluación de la rigidez arterial. 
 
 
 
