@@ -481,83 +481,95 @@ El dispositivo está dirigido al uso en consultorio clínico. La propuesta no bu
     % SOFTWARE -----------------------------------------------------------------------------------------------------
     \subsection{Software}
         \subsubsection{Arquitectura del sistema y flujo de datos}
-
-
-        ACA METER DIAGRAMA DE BLOQUES/FLUJO Y EXPLICAR LOS DOS MODOS DE USO
-
-
-
-        El firmware de la ESP32 se encarga de muestrear las señales infrarrojas provenientes de los sensores MAX30102 a 50 Hz (intervalo de 20 ms). Tras la adquisición, las señales son filtradas y procesadas localmente para obtener en tiempo real la frecuencia cardíaca, cuyo cálculo se detalla en secciones posteriores. Además, el sistema monitorea el estado de conexión de cada sensor, enviando esta información para que la interfaz pueda generar alertas ante cualquier desconexión o falla en la adquisición.
+        El firmware desarrollado para el microcontrolador ESP32 aprovecha su arquitectura de doble núcleo para ejecutar en paralelo la adquisición de señales y la gestión de la interfaz gráfica. En el Core 0 se implementa la tarea de muestreo de los sensores MAX30102, ubicados en posiciones proximal y distal, a una frecuencia de 50 Hz (intervalo de 20 ms). Cada muestra es registrada con un timestamp absoluto, lo que permite calcular con precisión el tiempo de tránsito del pulso (PTT) y la velocidad de onda de pulso (PWV).
 
         \vspace{0.1cm}
 
-        La transmisión de datos se realiza mediante conectividad WiFi, donde la ESP32 actúa como servidor y habilita un canal WebSockets en el puerto 81. Este protocolo permite un envío continuo, bidireccional y de baja latencia, adecuado para la visualización en tiempo real.
-        Todas las mediciones, métricas procesadas y banderas de estado se empaquetan en un string con formato JSON, lo que permite agrupar múltiples variables en un único mensaje y garantizar que las lecturas de ambos sensores se envíen de forma sincronizada.
-        
+        El sistema opera en dos modos diferenciados: \textbf{Test Rápido} (autónomo) y \textbf{Estudio Clínico} (vinculado a la aplicación de escritorio). En el modo Test Rápido, todo el procesamiento y la visualización se realizan íntegramente en el dispositivo, permitiendo el ingreso de datos básicos y la visualización de resultados en la pantalla táctil. En el modo Estudio Clínico, el dispositivo se conecta por WiFi a la aplicación de escritorio mediante WebSockets, enviando los datos en tiempo real en formato JSON para su almacenamiento y análisis avanzado.
 
-            
+        \vspace{0.1cm}
+
+        La interfaz gráfica embebida se estructura como una máquina de estados, permitiendo la navegación secuencial entre pantallas, el ingreso de datos y la visualización de métricas y curvas. El sistema incluye alertas visuales y sonoras ante errores, desconexión de sensores o valores fuera de rango, garantizando robustez y facilidad de uso.
+
+        \vspace{0.1cm}
+
+        En ambos modos, el sistema monitorea en tiempo real el estado de conexión de los sensores y la validez de los resultados, generando alertas y permitiendo al usuario reiniciar la medición de manera sencilla. La arquitectura modular del software facilita la adaptación a distintos flujos de trabajo y asegura la sincronización precisa de las señales adquiridas.
+
+        \begin{figure}[H]
+        \centering
+        \includegraphics[width=0.85\textwidth]{images/DiagramaSoftwareMenu.png}
+        \captionsetup{margin=1.5cm, justification=centering}
+        \caption{Diagrama de bloques del software del sistema, mostrando los dos modos de operación: Test Rápido y Estudio Clínico, y el flujo de datos entre los principales módulos funcionales.}
+        \label{fig:diagrama_software_menu}
+        \end{figure}
+
         \subsubsection{Filtrado digital de las señales}
-        Para mejorar la calidad de la señal fotopletismográfica adquirida por los sensores MAX30102, se implementó en el microcontrolador un preprocesamiento de la misma.
+        Para mejorar la calidad de la señal fotopletismográfica adquirida por los sensores MAX30102, se implementó un preprocesamiento digital en el microcontrolador. La señal original proviene del fotodiodo integrado en el sensor, cuya lectura es digitalizada mediante un conversor analógico–digital (ADC) interno de 18 bits. Este valor corresponde a la luz infrarroja reflejada por el tejido e incluye un componente DC de gran magnitud asociado a la absorción constante de luz, sobre el cual se superpone una componente AC de muy baja amplitud generada por las variaciones pulsátiles del volumen sanguíneo.
+
+        \vspace{0.1cm}
+
+        En la Figura~\ref{fig:PPG_reflectance} se observa la diferencia entre los modos de adquisición por transmisión (A) y por reflectancia (B). En el modo de transmisión, el pie de onda fisiológico corresponde a un mínimo local de la señal. Sin embargo, en el modo reflectivo utilizado en este dispositivo, el pie de onda fisiológico se manifiesta como un máximo local (punto e en la imagen). Para unificar el procesamiento y facilitar la detección automática, la señal es invertida digitalmente antes de la detección de eventos, de modo que el pie de onda pueda ser tratado como un mínimo local, coherente con la mayoría de los algoritmos descritos en la literatura.
+
+        \begin{figure}[H]
+        \centering
+        \includegraphics[width=0.8\textwidth]{images/PPG_reflectance_vs_transmission.jpg}
+        \captionsetup{margin=1.5cm, justification=centering}
+        \caption{Modos de adquisición de señal PPG: transmisión (A) y reflexión (B). En el modo reflectivo, el pie de onda fisiológico (e) se manifiesta como un máximo local. Imagen adaptada de \cite{paperPPG}.}
+        \label{fig:PPG_reflectance}
+        \end{figure}
+
+        Antes del filtrado, se realiza una normalización dividiendo los valores crudos por el máximo representable en 18 bits, permitiendo así escalar la señal a un rango uniforme y adecuado para su graficación y procesamiento.
 
         \vspace{0.1cm}
         
-        La señal original proviene del fotodiodo integrado en el sensor, cuya lectura es digitalizada mediante un conversor analógico–digital (ADC) interno de 18 bits. Este valor corresponde a la luz infrarroja reflejada por el tejido e incluye un componente DC de gran magnitud asociado a la absorción constante de luz, sobre el cual se superpone una componente AC de muy baja amplitud generada por las variaciones pulsátiles del volumen sanguíneo. 
+        Una vez normalizada, la señal se somete a un filtrado secuencial destinado a eliminar las componentes no fisiológicas. En primer lugar, se aplica un filtro pasa altos de primer orden con una frecuencia de corte de 0,5 Hz, cuyo objetivo es suprimir el componente DC y variaciones lentas asociadas al movimiento o cambios de perfusión. A continuación, la salida del pasa altos se procesa mediante un filtro pasa bajos de primer orden con una frecuencia de corte de 5 Hz, que atenúa el ruido de alta frecuencia y preserva únicamente el contenido característico de la onda pulsátil. Finalmente, se implementa una media móvil de dos muestras para suavizado adicional.
 
         \vspace{0.1cm}
-        
-        Dado que la información útil (componente AC) constituye solo una fracción mínima del valor total, y que la alta resolución del ADC del MAX30102 produce valores crudos numéricamente elevados, con un rango amplio que varía entre individuos y entre distintas zonas anatómicas, la visualización directa de la señal resulta dificultosa. En particular, es complejo seleccionar escalas que permitan observar adecuadamente la componente pulsátil para todos los casos. Por este motivo, antes del filtrado se realiza una normalización dividiendo los valores crudos por el máximo representable en 18 bits, permitiendo así escalar la señal a un rango uniforme y adecuado para su graficación.
 
-        \vspace{0.1cm}
-        
-        Una vez normalizada, la señal se somete a un filtrado secuencial destinado a eliminar las componentes no fisiológicas. En primer lugar, se aplica un filtro pasa altos de primer orden con una frecuencia de corte de 0,5 Hz, cuyo objetivo es suprimir el componente DC y variaciones lentas asociadas al movimiento o cambios de perfusión. A continuación, la salida del pasa altos se procesa mediante un filtro pasa bajos de primer orden con una frecuencia de corte de 5 Hz, que atenúa el ruido de alta frecuencia y preserva únicamente el contenido característico de la onda pulsátil. En conjunto, este filtrado pasa banda resulta adecuado para el rango fisiológico de la señal PPG y mejora significativamente la calidad para la detección de los pulsos y el cálculo de los parámetros derivados.
-
-
+        En conjunto, este filtrado pasa banda resulta adecuado para el rango fisiológico de la señal PPG y mejora significativamente la calidad para la detección de los pulsos y el cálculo de los parámetros derivados.
 
 
         \subsubsection{Cálculo de frecuencia cardíaca}
-        La señal filtrada ingresa al algoritmo de detección de latidos implementado mediante la función checkForBeat de la librería MAX3010x. Este método identifica un pulso cuando la energía de la señal supera un umbral dinámico, lo que permite adaptarse a variaciones de amplitud propias del contacto o del tejido. Cada vez que se confirma un latido, se calcula el intervalo RR en milisegundos y se convierte a BPM. El valor obtenido se valida dentro de un rango fisiológico razonable para descartar falsos positivos producidos por ruido o artefactos de la señal.
-
-
-        \vspace{0.1cm}
-                
-        Los BPM aceptados se almacenan en un buffer circular de 40 muestras, cuyo promedio entero constituye la frecuencia cardíaca final. Este promediado suaviza la variabilidad latido a latido y evita fluctuaciones bruscas en la lectura.
+        La señal filtrada ingresa al algoritmo de detección de latidos, que se basa en la identificación de pies de onda en la señal distal (sensor ubicado en la muñeca). Para ello, se detectan mínimos locales en la señal invertida, correspondientes al inicio del ascenso sistólico (punto e en la Figura~\ref{fig:PPG_reflectance}). La detección se realiza utilizando un criterio robusto: se exige que el valor actual sea menor que sus vecinos inmediatos y que se encuentre por debajo de un umbral adaptativo calculado dinámicamente sobre una ventana móvil. Además, se verifica que la derivada cambie de signo (de negativa a positiva) para confirmar la presencia de un pie de onda fisiológico y evitar la detección de artefactos.
 
         \vspace{0.1cm}
-        Además, para garantizar la estabilidad de la medición antes de mostrarla, el sistema exige detectar diez latidos válidos consecutivos. Sólo después de cumplir este criterio la frecuencia cardíaca se considera confiable. Hasta entonces, la interfaz permanece en el estado “Procesando...”. Una vez estabilizada la detección, la lectura final en BPM se actualiza tanto en la interfaz gráfica como en el display OLED del dispositivo.
 
-
-        \vspace{0.1cm}
+        Cada vez que se detecta un pie de onda válido, se calcula el intervalo RR en milisegundos como la diferencia temporal entre dos eventos consecutivos. Estos valores se almacenan en un buffer FIFO circular de 15 muestras, que se actualiza en cada nuevo latido detectado. Para obtener una estimación robusta y estable de la frecuencia cardíaca, se calcula la mediana de los valores almacenados en el buffer y se utiliza la siguiente relación:
         
-        Si en algún instante los sensores pierden contacto, es decir la señal IR detectada se encuentra por debajo del umbral de apoyo, todos promedios y contadores se reinician, obligando a reconstruir la secuencia de diez latidos antes de exponer un nuevo valor. Esto evita saltos erráticos y garantiza que la frecuencia cardíaca mostrada represente una estimación suave y robusta. Este mecanismo también permite reiniciar automáticamente la medición al cambiar de persona.
+        \[
+        \mathrm{HR} = \frac{60000}{RR_{\text{mediana}}}
+        \]
+        
+        donde $RR_{\text{mediana}}$ es el valor mediano de los intervalos RR en milisegundos. El sistema exige acumular un mínimo de latidos válidos antes de mostrar el resultado, lo que garantiza la estabilidad de la medición y evita fluctuaciones erráticas.
 
+        \vspace{0.1cm}
+
+        Si los sensores pierden contacto o la señal cae por debajo del umbral de apoyo, todos los promedios y contadores se reinician, obligando a reconstruir la secuencia de latidos antes de exponer un nuevo valor. Este mecanismo asegura que la frecuencia cardíaca mostrada represente una estimación suave y robusta, permitiendo además reiniciar automáticamente la medición al cambiar de paciente.
 
         
         \subsubsection{Cálculo de velocidad de onda de pulso}
-        Para esta instancia del procesamiento, los datos provenientes del microcontrolador ya fueron enviados a la computadora para su análisis en Python. En el backend, ambas señales PPG se someten a un segundo filtrado mediante un suavizado exponencial, cuyo objetivo es reducir de manera más efectiva el ruido de alta frecuencia sin alterar la morfología del pulso. Esto permite obtener una forma de onda más limpia y estable para las etapas de detección y cálculo posteriores.
+        El cálculo de la velocidad de onda de pulso (PWV) se realiza emparejando cada pie de onda detectado en la señal proximal con el siguiente pie en la señal distal, calculando así el tiempo de tránsito del pulso ($\Delta t$) como la diferencia temporal entre ambos eventos.
 
         \vspace{0.1cm}
 
-        Una vez acondicionadas las señales, se localiza el pie de cada pulso buscando el mínimo de amplitud previo a cada pico sistólico. Este candidato se valida exigiendo que la primera derivada cambie de signo (negativo a positivo), lo que confirma que se trata del inicio del ascenso sistólico y evita confundir irregularidades o artefactos con el verdadero pie de onda. 
+        Los valores de $\Delta t$ obtenidos se almacenan secuencialmente en un buffer no circular de 25 muestras. Una vez completado el buffer, se calcula la mediana de estos 25 valores, que es utilizada para estimar y mostrar el valor de PWV. Este enfoque permite obtener una estimación robusta y estable, minimizando el impacto de valores atípicos o artefactos.
 
         \vspace{0.1cm}
 
-        Con los pies identificados en ambas señales, se empareja el de la señal proximal con el de la señal distal y se calcula el tiempo de tránsito del pulso ($\Delta t$) como la diferencia temporal entre ambos eventos. El sistema evalúa múltiples latidos consecutivos, descarta retardos fuera del rango fisiológico y aplica estadísticas robustas (mediana y rechazo de valores atípicos) para obtener un valor de ($\Delta t$) representativo. 
+        La velocidad de onda de pulso se calcula mediante la siguiente fórmula, que relaciona la distancia anatómica recorrida por la onda ($d$) y el tiempo de tránsito medido:
+
+        \[
+        \mathrm{PWV} = \frac{d}{\Delta t}
+        \]
 
         \vspace{0.1cm}
-        
-        La PWV se obtiene entonces como la razón entre la distancia efectiva recorrida por la onda y dicho retardo temporal. Matemáticamente, esto se expresa como:
 
-        \[ \mathrm{PWV} = \frac{d}{\Delta t} \]
-
-        \vspace{0.1cm}
-        
-        Antes de actualizar la PWV calculada, el algoritmo exige acumular diez valores válidos, de forma análoga al proceso utilizado para la frecuencia cardíaca. Esto asegura que la estimación presentada en la interfaz sea estable y no esté afectada por fluctuaciones instantáneas.
-
+        Antes de actualizar la PWV calculada, el algoritmo exige acumular veinticinco valores válidos de $\Delta t$, asegurando que la estimación presentada en la interfaz sea estable y no esté afectada por fluctuaciones instantáneas. El sistema monitorea en todo momento el estado de conexión de los sensores y la validez de los resultados, generando alertas visuales y sonoras ante cualquier error o desconexión, y permitiendo al usuario reiniciar la medición de manera sencilla.
 
 
         \paragraph{Estimación de la distancia}\mbox{}\\
 
-        La estimación de la distancia anatómica recorrida por la onda de pulso se realiza multiplicando la altura del usuario por un factor fijo de 0,436 [ver Anexo]. Este coeficiente proviene de mediciones anatómicas realizadas sobre 32 sujetos de distintas edades, donde se midió con una cinta métrica flexible la distancia externa entre el punto palpable de la arteria carótida en el cuello y el punto palpable de la arteria radial en la muñeca [ver Figura~\ref{fig:Arterias}]. 
+        La estimación de la distancia anatómica recorrida por la onda de pulso se realiza multiplicando la altura del usuario por un factor fijo de 0,436 [ver Anexo]. Este coeficiente proviene de mediciones anatómicas realizadas sobre 54 sujetos de distintas edades, donde se midió con una cinta métrica flexible la distancia externa entre el punto palpable de la arteria carótida en el cuello y el punto palpable de la arteria radial en la muñeca [ver Figura~\ref{fig:Arterias}]. 
         
         Se adoptó esta geometría carótidorradial porque el sensor óptico no resultó práctico en la región púbica: el vello y la ergonomía dificultan la correcta alineación en el trayecto carotidofemoral, comprometiendo la comodidad del paciente. 
 

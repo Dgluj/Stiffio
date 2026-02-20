@@ -18,26 +18,26 @@
 \contentsline {subsection}{\numberline {5.2}Software}{13}{subsection.5.2}%
 \contentsline {subsubsection}{\numberline {5.2.1}Arquitectura del sistema y flujo de datos}{13}{subsubsection.5.2.1}%
 \contentsline {subsubsection}{\numberline {5.2.2}Filtrado digital de las señales}{14}{subsubsection.5.2.2}%
-\contentsline {subsubsection}{\numberline {5.2.3}Cálculo de frecuencia cardíaca}{15}{subsubsection.5.2.3}%
-\contentsline {subsubsection}{\numberline {5.2.4}Cálculo de velocidad de onda de pulso}{15}{subsubsection.5.2.4}%
-\contentsline {paragraph}{Estimación de la distancia}{16}{section*.3}%
-\contentsline {subsection}{\numberline {5.3}Interfaces de usuario}{17}{subsection.5.3}%
-\contentsline {subsubsection}{\numberline {5.3.1}Interfaz táctil en display integrado (Modo Test Rápido)}{17}{subsubsection.5.3.1}%
-\contentsline {subsubsection}{\numberline {5.3.2}Aplicación de escritorio (Modo Estudio Clínico)}{20}{subsubsection.5.3.2}%
-\contentsline {subsection}{\numberline {5.4}Metodología de evaluación y validación}{23}{subsection.5.4}%
-\contentsline {subsubsection}{\numberline {5.4.1}Protocolo de Medición}{24}{subsubsection.5.4.1}%
-\contentsline {paragraph}{Colocación del Sensor Proximal (Cuello)}{25}{section*.4}%
-\contentsline {paragraph}{Colocación del Sensor Distal (Muñeca)}{25}{section*.5}%
-\contentsline {subsubsection}{\numberline {5.4.2}Análisis de repetitibilidad}{25}{subsubsection.5.4.2}%
-\contentsline {subsubsection}{\numberline {5.4.3}Evaluación frente a rangos fisiológicos}{26}{subsubsection.5.4.3}%
-\contentsline {subsubsection}{\numberline {5.4.4}Validación frente a equipo gold standard}{26}{subsubsection.5.4.4}%
-\contentsline {section}{\numberline {6}Resultados}{27}{section.6}%
-\contentsline {section}{\numberline {7}Discusión}{27}{section.7}%
-\contentsline {section}{\numberline {8}Conclusiones}{28}{section.8}%
-\contentsline {section}{Bibliografía}{29}{section.8}%
+\contentsline {subsubsection}{\numberline {5.2.3}Cálculo de frecuencia cardíaca}{16}{subsubsection.5.2.3}%
+\contentsline {subsubsection}{\numberline {5.2.4}Cálculo de velocidad de onda de pulso}{16}{subsubsection.5.2.4}%
+\contentsline {paragraph}{Estimación de la distancia}{17}{section*.3}%
+\contentsline {subsection}{\numberline {5.3}Interfaces de usuario}{18}{subsection.5.3}%
+\contentsline {subsubsection}{\numberline {5.3.1}Interfaz táctil en display integrado (Modo Test Rápido)}{18}{subsubsection.5.3.1}%
+\contentsline {subsubsection}{\numberline {5.3.2}Aplicación de escritorio (Modo Estudio Clínico)}{21}{subsubsection.5.3.2}%
+\contentsline {subsection}{\numberline {5.4}Metodología de evaluación y validación}{24}{subsection.5.4}%
+\contentsline {subsubsection}{\numberline {5.4.1}Protocolo de Medición}{25}{subsubsection.5.4.1}%
+\contentsline {paragraph}{Colocación del Sensor Proximal (Cuello)}{26}{section*.4}%
+\contentsline {paragraph}{Colocación del Sensor Distal (Muñeca)}{26}{section*.5}%
+\contentsline {subsubsection}{\numberline {5.4.2}Análisis de repetitibilidad}{26}{subsubsection.5.4.2}%
+\contentsline {subsubsection}{\numberline {5.4.3}Evaluación frente a rangos fisiológicos}{27}{subsubsection.5.4.3}%
+\contentsline {subsubsection}{\numberline {5.4.4}Validación frente a equipo gold standard}{27}{subsubsection.5.4.4}%
+\contentsline {section}{\numberline {6}Resultados}{28}{section.6}%
+\contentsline {section}{\numberline {7}Discusión}{28}{section.7}%
+\contentsline {section}{\numberline {8}Conclusiones}{29}{section.8}%
+\contentsline {section}{Bibliografía}{30}{section.8}%
 \etoc@depthtag {anexo}
-\contentsline {section}{\numberline {A}Asignación de pines del circuito electrónico}{31}{appendix.Alph1}%
-\contentsline {section}{\numberline {B}Modelo 3D de la carcasa}{32}{appendix.Alph2}%
-\contentsline {section}{\numberline {C}Modelo 3D del encapsulado de sensores}{33}{appendix.Alph3}%
-\contentsline {section}{\numberline {D}factor de corrección altura}{34}{appendix.Alph4}%
-\contentsline {section}{\numberline {E}Reporte PDF}{35}{appendix.Alph5}%
+\contentsline {section}{\numberline {A}Asignación de pines del circuito electrónico}{33}{appendix.Alph1}%
+\contentsline {section}{\numberline {B}Modelo 3D de la carcasa}{34}{appendix.Alph2}%
+\contentsline {section}{\numberline {C}Modelo 3D del encapsulado de sensores}{35}{appendix.Alph3}%
+\contentsline {section}{\numberline {D}factor de corrección altura}{36}{appendix.Alph4}%
+\contentsline {section}{\numberline {E}Reporte PDF}{37}{appendix.Alph5}%

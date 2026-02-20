@@ -1,4 +1,4 @@
-This is BibTeX, Version 0.99d
+This is BibTeX, Version 0.99e
 Capacity: max_strings=200000, hash_size=200000, hash_prime=170003
 The top-level auxiliary file: Informe_Final_Stiffio.aux
 Reallocating 'name_of_file' (item size: 1) to 9 items.
@@ -15,44 +15,44 @@ Database file #1: Referencias.bib
 -- See the "IEEEtran_bst_HOWTO.pdf" manual for usage information.
 
 Done.
-You've used 19 entries,
+You've used 20 entries,
             4087 wiz_defined-function locations,
-            942 strings with 11591 characters,
-and the built_in function-call counts, 11347 in all, are:
-= -- 1006
-> -- 214
-< -- 52
-+ -- 112
-- -- 45
-* -- 494
-:= -- 1927
-add.period$ -- 46
-call.type$ -- 19
-change.case$ -- 34
+            950 strings with 11915 characters,
+and the built_in function-call counts, 12136 in all, are:
+= -- 1078
+> -- 239
+< -- 54
++ -- 124
+- -- 51
+* -- 532
+:= -- 2051
+add.period$ -- 48
+call.type$ -- 20
+change.case$ -- 35
 chr.to.int$ -- 90
-cite$ -- 19
-duplicate$ -- 873
-empty$ -- 876
-format.name$ -- 57
-if$ -- 2570
+cite$ -- 20
+duplicate$ -- 936
+empty$ -- 930
+format.name$ -- 64
+if$ -- 2755
 int.to.chr$ -- 0
-int.to.str$ -- 19
-missing$ -- 178
-newline$ -- 98
-num.names$ -- 19
-pop$ -- 403
+int.to.str$ -- 20
+missing$ -- 190
+newline$ -- 103
+num.names$ -- 20
+pop$ -- 431
 preamble$ -- 1
 purify$ -- 0
 quote$ -- 2
-skip$ -- 899
+skip$ -- 966
 stack$ -- 0
-substring$ -- 291
-swap$ -- 668
-text.length$ -- 22
+substring$ -- 304
+swap$ -- 718
+text.length$ -- 24
 text.prefix$ -- 0
 top$ -- 5
-type$ -- 19
+type$ -- 20
 warning$ -- 0
-while$ -- 39
-width$ -- 21
-write$ -- 229
+while$ -- 41
+width$ -- 22
+write$ -- 242

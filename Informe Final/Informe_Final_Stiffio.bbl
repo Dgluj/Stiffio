@@ -120,6 +120,15 @@ P.~Karimpour, J.~M. May, and P.~A. Kyriacou, ``Photoplethysmography for the
   assessment of arterial stiffness,'' \emph{Sensors}, vol.~23, no.~24, p. 9882,
   2023.
 
+\bibitem{paperPPG}
+\BIBentryALTinterwordspacing
+Y.~Liu, Z.~Wang, Y.~Guo, Y.~Liu, Y.~Wang, and Y.~Liu, ``Non-invasive evaluation
+  of coronary heart disease in patients with chronic kidney disease using
+  photoplethysmography,'' \emph{Biomedical Signal Processing and Control},
+  vol.~54, p. 101601, 2019. [Online]. Available:
+  \url{https://academic.oup.com/ckj/article/12/4/538/5301654}
+\BIBentrySTDinterwordspacing
+
 \bibitem{nitta2024}
 Y.~Nitta, R.~Niwa, S.~Hirata, K.~Okamoto, S.~Yoshizawa, and M.~Oiwa,
   ``Determinants of hand pulse wave velocity and hand pulse transit time in
