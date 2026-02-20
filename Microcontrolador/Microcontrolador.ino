@@ -1,4 +1,4 @@
-﻿// ==============================================================================================
+// ==============================================================================================
 // LIBRERAS
 // ==============================================================================================
 #include <SPI.h>
@@ -132,7 +132,7 @@ bool pausaS1conectado = true;
 bool pausaS2conectado = true;
 
 // GLOBALES PARA TASKSENSORES (suavizado por media movil)
-const int MA_SIZE = 6;
+const int MA_SIZE = 4;
 float bufMA1_global[MA_SIZE] = {0};
 float bufMA2_global[MA_SIZE] = {0};
 int idxMA_global = 0;
@@ -1185,19 +1185,22 @@ bool mostrarBotonPausaEnHeader() {
 }
 
 void dibujarBotonPausa() {
-  uint16_t colorFondo = graficoPausado ? TFT_ORANGE : COLOR_BOTON;
-  tft.fillRoundRect(BTN_PAUSA_X, BTN_PAUSA_Y, BTN_PAUSA_W, BTN_PAUSA_H, 6, colorFondo);
-  tft.drawRoundRect(BTN_PAUSA_X, BTN_PAUSA_Y, BTN_PAUSA_W, BTN_PAUSA_H, 6, COLOR_BORDE);
+  int cx = BTN_PAUSA_X + (BTN_PAUSA_W / 2);
+  int cy = BTN_PAUSA_Y + (BTN_PAUSA_H / 2);
+  int r = (BTN_PAUSA_W < BTN_PAUSA_H ? BTN_PAUSA_W : BTN_PAUSA_H) / 2;
+  uint16_t colorFondo = graficoPausado ? COLOR_BOTON : COLOR_BOTON_VOLVER; // gris en pausa, rojo en ejecucion
+  uint16_t colorIcono = COLOR_TEXTO_BOTON_ACCION;                           // blanco
+
+  // Boton circular manteniendo el tamano/ubicacion del cuadro original 30x30
+  tft.fillCircle(cx, cy, r, colorFondo);
 
   if (graficoPausado) {
-    int cx = BTN_PAUSA_X + (BTN_PAUSA_W / 2);
-    int cy = BTN_PAUSA_Y + (BTN_PAUSA_H / 2);
-    tft.fillTriangle(cx - 4, cy - 6, cx - 4, cy + 6, cx + 6, cy, COLOR_BORDE);
+    // Icono PLAY
+    tft.fillTriangle(cx - 3, cy - 6, cx - 3, cy + 6, cx + 7, cy, colorIcono);
   } else {
-    int barY = BTN_PAUSA_Y + 6;
-    int barH = BTN_PAUSA_H - 12;
-    tft.fillRect(BTN_PAUSA_X + 9, barY, 4, barH, COLOR_BORDE);
-    tft.fillRect(BTN_PAUSA_X + BTN_PAUSA_W - 13, barY, 4, barH, COLOR_BORDE);
+    // Icono PAUSA
+    tft.fillRect(cx - 6, cy - 6, 4, 12, colorIcono);
+    tft.fillRect(cx + 2, cy - 6, 4, 12, colorIcono);
   }
 }
 
