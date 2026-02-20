@@ -420,7 +420,7 @@ void TaskSensores(void *pvParameters) {
   const unsigned long RR_MAX_MS = 1700; // permite bradicardia
   // const unsigned long PTT_MIN_MS = 50;
   // const unsigned long PTT_MAX_MS = 290;
-  const int THRESH_WINDOW_SAMPLES = 100; // ~2s a 50 SPS
+  const int THRESH_WINDOW_SAMPLES = 100; // ~2s a 100 SPS
 
   static float thrWinS1[THRESH_WINDOW_SAMPLES] = {0};
   static float thrWinS2[THRESH_WINDOW_SAMPLES] = {0};
