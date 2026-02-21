@@ -1,6 +1,5 @@
 ﻿Fecha y Hora;Nombre;Edad;Altura (cm);Sexo;HR (bpm);PWV (m/s)
 2025-11-17 00:01:11;thsd;23;170;Femenino;69;5.5
-2025-11-17 00:04:19;pepito;45;158;Masculino;66;7.4
 2025-11-17 15:30:47;Olivia Grosso;23;170;Femenino;64;2.5
 2025-11-17 19:15:03;Victoria Orsi;23;168;Femenino;77;9.7
 2025-11-17 19:19:14;Victoria Orsi;23;168;Femenino;75;9.9
@@ -16,3 +15,4 @@
 2025-11-18 18:54:25;vit orsi;23;168;Femenino;79;3.0
 2026-02-21 18:42:45;44367023;Catalina;Jonquieres;23;159;Femenino;45;7.9;
 2026-02-21 19:17:02;43987562;Victoria;Orsi;23;168;Femenino;79;6.6;
+2026-02-21 19:54:44;43987562;Victoria;Orsi;23;168;Femenino;75;8.4;

@@ -93,6 +93,8 @@ ModoOperacion modoActual = MODO_TEST_RAPIDO;
 int modoVisualizacion = 0;
 bool graficoPausado = false;
 volatile bool resetearBuffersPWVSolicitado = false;
+volatile bool resetRemotoEstudioSolicitado = false;
+volatile bool esperandoDatosPacientePC = false;
 
 portMUX_TYPE bufferMux = portMUX_INITIALIZER_UNLOCKED;
 
@@ -189,11 +191,31 @@ const int BTN_PAUSA_H = 30;
 void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length) {
     if(type == WStype_TEXT) {
         // Parseo MANUAL simple para evitar libreras pesadas (JSON)
-        // Esperamos formato: {"h":175,"a":30}
+        // Esperamos formato: {"h":175,"a":30} o {"r":1}
         String texto = String((char*)payload);
+
+        int idxR = texto.indexOf("\"r\":");
+        if (idxR != -1) {
+            int endR = texto.indexOf(",", idxR);
+            if (endR == -1) endR = texto.indexOf("}", idxR);
+            String valR = texto.substring(idxR + 4, endR);
+            valR.trim();
+            valR.toLowerCase();
+            bool solicitarReset = (valR == "1" || valR == "true");
+
+            if (solicitarReset) {
+                portENTER_CRITICAL(&bufferMux);
+                resetRemotoEstudioSolicitado = true;
+                esperandoDatosPacientePC = true;
+                pacienteAltura = 0;
+                pacienteEdad = 0;
+                portEXIT_CRITICAL(&bufferMux);
+            }
+        }
         
         int idxH = texto.indexOf("\"h\":");
         int idxA = texto.indexOf("\"a\":");
+        bool recibioDatosPaciente = false;
         
         if (idxH != -1) {
             // Extraer altura
@@ -204,6 +226,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
             portENTER_CRITICAL(&bufferMux);
             pacienteAltura = valH.toInt();
             portEXIT_CRITICAL(&bufferMux);
+            recibioDatosPaciente = true;
         }
         
         if (idxA != -1) {
@@ -214,6 +237,15 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
             
             portENTER_CRITICAL(&bufferMux);
             pacienteEdad = valA.toInt();
+            portEXIT_CRITICAL(&bufferMux);
+            recibioDatosPaciente = true;
+        }
+
+        if (recibioDatosPaciente) {
+            portENTER_CRITICAL(&bufferMux);
+            if (pacienteAltura > 0 && pacienteEdad > 0) {
+                esperandoDatosPacientePC = false;
+            }
             portEXIT_CRITICAL(&bufferMux);
         }
     }
@@ -464,6 +496,30 @@ void TaskSensores(void *pvParameters) {
 
   for (;;) {
     if (medicionActiva) {
+      if (resetRemotoEstudioSolicitado) {
+        portENTER_CRITICAL(&bufferMux);
+        resetRemotoEstudioSolicitado = false;
+        faseMedicion = 0;
+        porcentajeEstabilizacion = 0;
+        porcentajeCalculando = 0;
+        conteoRRValidos = 0;
+        conteoPTTValidos = 0;
+        s1ok = false;
+        s2ok = false;
+        bpmMostrado = 0;
+        pwvMostrado = 0.0f;
+        medicionFinalizada = false;
+        pwvResultadoValido = false;
+        hrResultadoValido = false;
+        visEscalaFijada = false;
+        visBaselineS1 = 0.0f;
+        visBaselineS2 = 0.0f;
+        visHalfRangeS1 = 50.0f;
+        visHalfRangeS2 = 50.0f;
+        resetearBuffersPWVSolicitado = true;
+        portEXIT_CRITICAL(&bufferMux);
+      }
+
       if (resetearBuffersPWVSolicitado) {
         resetearBuffersPWVSolicitado = false;
         waitingForDistFoot = false;
@@ -547,6 +603,21 @@ void TaskSensores(void *pvParameters) {
         else if (s2_conectado && !s2_fisico) {
            s2_conectado = false;
         }
+      }
+
+      if (modoActual == MODO_ESTUDIO_CLINICO && esperandoDatosPacientePC) {
+        enviarPaqueteEstudio(
+          s1_conectado,
+          s2_conectado,
+          false,
+          false,
+          0.0f,
+          0.0f,
+          0,
+          0.0f
+        );
+        vTaskDelay(20);
+        continue;
       }
 
       // --- BLOQUE 2: LECTURA DE DATOS ---
@@ -2037,6 +2108,9 @@ void loop() {
       if (x > btnX && x < btnX + btnW && y > btnY1 && y < btnY1 + btnH) {
          sonarPitido(); 
          modoActual = MODO_TEST_RAPIDO;
+         portENTER_CRITICAL(&bufferMux);
+         esperandoDatosPacientePC = false;
+         portEXIT_CRITICAL(&bufferMux);
          edadInput = ""; 
          alturaInput = "";
          modoVisualizacion = 0; // Reset modo visualizacin a curvas
@@ -2063,6 +2137,8 @@ void loop() {
             portENTER_CRITICAL(&bufferMux);
             faseMedicion = 0; s1ok=false; s2ok=false;
             pacienteAltura = 0; // Reset altura, la PC debe mandarla
+            pacienteEdad = 0;
+            esperandoDatosPacientePC = true;
             portEXIT_CRITICAL(&bufferMux);
              
             medicionActiva = true; 
@@ -2109,6 +2185,14 @@ void loop() {
           if (wifiConectado) {
               pantallaActual = PANTALLA_PC_ESPERA;
               dibujarPantallaPC();
+              portENTER_CRITICAL(&bufferMux);
+              faseMedicion = 0;
+              s1ok = false;
+              s2ok = false;
+              pacienteAltura = 0;
+              pacienteEdad = 0;
+              esperandoDatosPacientePC = true;
+              portEXIT_CRITICAL(&bufferMux);
               medicionActiva = true;
           } else {
               dibujarPantallaFalloWiFi(); // Si vuelve a fallar, redibuja el error

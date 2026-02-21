@@ -12,6 +12,7 @@ Incoming JSON (ESP32 -> Python):
 
 Outgoing JSON (Python -> ESP32):
 {"h": int, "a": int}
+{"r": 1}  # reset remoto de estudio clínico
 """
 
 import json
@@ -25,9 +26,8 @@ import websocket
 # ==============================================================================
 # NETWORK CONFIG
 # ==============================================================================
-# esp_ip = "172.20.10.4"
-# esp_ip = "192.168.0.177"
-esp_ip = "192.168.0.238"
+esp_ip = "172.20.10.4" #CelVit
+# esp_ip = "192.168.0.238" #CasaDani
 ws_url = f"ws://{esp_ip}:81/"
 WS_PING_INTERVAL_SEC = 12
 WS_PING_TIMEOUT_SEC = 6
@@ -152,6 +152,20 @@ def enviar_datos_paciente(altura_cm, edad):
     if connected and ws_app:
         try:
             mensaje = json.dumps({"h": int(altura_cm), "a": int(edad)})
+            with _send_lock:
+                ws_app.send(mensaje)
+            return True
+        except Exception:
+            return False
+    return False
+
+
+def enviar_reset_estudio():
+    global ws_app, connected
+
+    if connected and ws_app:
+        try:
+            mensaje = json.dumps({"r": 1})
             with _send_lock:
                 ws_app.send(mensaje)
             return True

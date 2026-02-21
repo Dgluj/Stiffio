@@ -1701,6 +1701,19 @@ class MainScreen(QMainWindow):
 
 
     # Funcionalidad -------------------------------------------------------------------------------
+
+    def _enviar_reset_estudio_remoto(self):
+        try:
+            ComunicacionMax.enviar_reset_estudio()
+        except Exception:
+            pass
+
+    def _limpiar_sesion_local(self):
+        self.measuring = False
+        self.stop_graph_update()
+        processor.stop_session()
+        processor.clear_buffers()
+        ComunicacionMax.reset_stream_buffers()
     
     # Volver a la ventana de inicio
     def go_back(self):
@@ -1737,7 +1750,9 @@ class MainScreen(QMainWindow):
 
         # Si el usuario confirma, volvemos al inicio
         if msg.clickedButton() == si_button:
-           
+            self._enviar_reset_estudio_remoto()
+            self._limpiar_sesion_local()
+
             self.welcome_screen = WelcomeScreen()
             self.welcome_screen.resize(self.size())
             self.welcome_screen.move(self.pos())
@@ -1803,10 +1818,8 @@ class MainScreen(QMainWindow):
         msg.exec()
 
         if msg.clickedButton() == si_button:
-            # Limpiamos buffers antes de irnos
-            processor.stop_session()
-            processor.clear_buffers()
-            ComunicacionMax.reset_stream_buffers()
+            self._enviar_reset_estudio_remoto()
+            self._limpiar_sesion_local()
 
            
             self.patient_data_window = PatientDataScreen()
