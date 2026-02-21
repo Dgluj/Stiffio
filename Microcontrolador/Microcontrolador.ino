@@ -163,7 +163,7 @@ int btnW = 300; int btnH = 70;
 int btnX = (480 - btnW) / 2;
 int btnY1 = 85; int btnY2 = 185; 
 
-// Grfico
+// Gráfico
 #define GRAPH_W 458  // 460 - 2 pxeles de bordes
 #define GRAPH_H 178  // 180 - 2 pxeles de bordes
 #define GRAPH_X 11   // 10 (del marco) + 1 de margen
@@ -171,7 +171,8 @@ int btnY1 = 85; int btnY2 = 185;
 unsigned long lastDrawTime = 0;
 const unsigned long DRAW_INTERVAL = 20; 
 
-// Encabezado de pantalla de medicin
+// Encabezado de pantalla de medición
+const int TOUCH_OFFSET_X = 10;
 const int HEADER_ICON_Y = 5;
 const int BTN_METRICAS_X = 380;
 const int BTN_CURVAS_X = 425;
@@ -1189,8 +1190,8 @@ void dibujarBotonPausa() {
   int cx = BTN_PAUSA_X + (BTN_PAUSA_W / 2);
   int cy = BTN_PAUSA_Y + (BTN_PAUSA_H / 2);
   int r = (BTN_PAUSA_W < BTN_PAUSA_H ? BTN_PAUSA_W : BTN_PAUSA_H) / 2;
-  uint16_t colorFondo = graficoPausado ? COLOR_BOTON : COLOR_BOTON_VOLVER; // gris en pausa, rojo en ejecucion
-  uint16_t colorIcono = COLOR_TEXTO_BOTON_ACCION;                           // blanco
+  uint16_t colorFondo = graficoPausado ? COLOR_BOTON_SIGUIENTE : COLOR_BOTON_VOLVER;   // verde para play, rojo para pausar
+  uint16_t colorIcono = COLOR_TEXTO_BOTON_ACCION;                                      // blanco
 
   // Boton circular manteniendo el tamano/ubicacion del cuadro original 30x30
   tft.fillCircle(cx, cy, r, colorFondo);
@@ -1801,22 +1802,22 @@ void actualizarMedicion() {
     return;
   }
 
-  // VISUALIZACIN MODO MTRICAS -----------------------------------------------------------------
+  // VISUALIZACIÓN MODO MÉTRICAS -----------------------------------------------------------------
   if (modoVisualizacion == 1) {
       int centroX = 240;
       tft.setTextDatum(MC_DATUM);
 
       // PWV
       tft.setTextColor(COLOR_TEXTO, COLOR_FONDO);
-      tft.drawString("PWV", centroX, 80, 4);
-      tft.setTextPadding(240);
+      tft.drawString("crPWV", centroX, 80, 4);
+      tft.setTextPadding(140);
       if (localPwvFinalizado && (!localPwvValido || !localHrValido)) {
         tft.setTextColor(COLOR_BOTON_ACCION, COLOR_FONDO);
         tft.drawString("REINTENTAR", centroX, 150, 4);
         tft.setTextPadding(0);
       } else if (localPwvValido && localPWV > 0.0f) {
         tft.setTextColor(TFT_GREEN, COLOR_FONDO);
-        tft.drawString(String(localPWV, 1), centroX - 30, 150, 7);
+        tft.drawString(String(localPWV, 1), centroX - 20, 150, 7);
         tft.setTextPadding(0);
         tft.setTextColor(COLOR_TEXTO, COLOR_FONDO);
         tft.drawString("m/s", centroX + 70, 160, 4); 
@@ -1829,10 +1830,10 @@ void actualizarMedicion() {
       // HR
       int yHR = 220;
       tft.setSwapBytes(true);
-      tft.pushImage(centroX - 72, yHR - 12, 24, 24, (const uint16_t*)epd_bitmap_ImgCorazon); // Imagen corazon
+      tft.pushImage(centroX - 72, yHR - 12, 24, 24, (const uint16_t*)epd_bitmap_ImgCorazon); // Imagen corazón
       tft.setSwapBytes(false);
       tft.setTextColor(COLOR_TEXTO, COLOR_FONDO);
-      tft.setTextPadding(180); // Ancho de limpieza seguro
+      tft.setTextPadding(120); // Ancho de limpieza seguro
       int xTexto = centroX + 10; 
       if (localPwvFinalizado && !localHrValido) {
          tft.setTextColor(COLOR_BOTON_ACCION, COLOR_FONDO);
@@ -1850,7 +1851,7 @@ void actualizarMedicion() {
       
   }
 
-  // VISUALIZACIN MODO CURVAS ---------------------------------------------------------------------
+  // VISUALIZACIÓN MODO CURVAS ---------------------------------------------------------------------
   else {
       graphSprite.fillSprite(COLOR_FONDO);  // Limpiar sprite
 
@@ -1922,20 +1923,20 @@ void actualizarMedicion() {
       // PWV
       tft.setTextDatum(ML_DATUM); 
       tft.setTextColor(COLOR_TEXTO, COLOR_FONDO);
-      tft.drawString("PWV = ", 100, yInfo, 4);
+      tft.drawString("crPWV = ", 90, yInfo, 4);
       tft.setTextPadding(160);
       if (localPwvFinalizado && (!localPwvValido || !localHrValido)) tft.drawString("REINTENTAR", 180, yInfo, 4);
-      else if (localPwvValido && localPWV > 0.0f) tft.drawString(String(localPWV, 1) + " m/s", 180, yInfo, 4);
+      else if (localPwvValido && localPWV > 0.0f) tft.drawString(String(localPWV, 1) + " m/s", 185, yInfo, 4);
       else tft.drawString("--- m/s", 180, yInfo, 4);
       tft.setTextPadding(0);
 
       // HR
       tft.setSwapBytes(true);
-      tft.pushImage(270, yInfo - 12, 24, 24, (const uint16_t*)epd_bitmap_ImgCorazon);
+      tft.pushImage(295, yInfo - 12, 24, 24, (const uint16_t*)epd_bitmap_ImgCorazon);
       tft.setSwapBytes(false);
       tft.setTextColor(COLOR_TEXTO, COLOR_FONDO);
-      tft.setTextPadding(80);
-      int xHrCurvas = 300;
+      tft.setTextPadding(55);
+      int xHrCurvas = 325;
       if (localPwvFinalizado && !localHrValido) {
         tft.setTextColor(COLOR_BOTON_ACCION, COLOR_FONDO);
         tft.drawString("REINTENTAR", xHrCurvas, yInfo, 2);
@@ -2227,7 +2228,7 @@ void loop() {
     
 
 
-    // PANTALLA MEDICIN ----------------------------------------------------------------
+    // PANTALLA MEDICIÓN ----------------------------------------------------------------
     else if (pantallaActual == PANTALLA_MEDICION_RAPIDA) {
           if (errorMedicionBloqueanteActivo()) {
               // Botn REINTENTAR (misma ubicacin que error de conexin)
@@ -2266,10 +2267,11 @@ void loop() {
               }
           }
 
-          // Cambio de Modo Visualizacin
+          // Cambio de Modo Visualización
           else if (y < 45) {
               // Botn PAUSA/REANUDAR
-              if (mostrarBotonPausaEnHeader() && x >= BTN_PAUSA_X && x <= (BTN_PAUSA_X + BTN_PAUSA_W) && y >= BTN_PAUSA_Y && y <= (BTN_PAUSA_Y + BTN_PAUSA_H)) {
+              if (mostrarBotonPausaEnHeader() && x >= (BTN_PAUSA_X + TOUCH_OFFSET_X) && x <= (BTN_PAUSA_X + BTN_PAUSA_W + TOUCH_OFFSET_X) &&
+                      y >= BTN_PAUSA_Y && y <= (BTN_PAUSA_Y + BTN_PAUSA_H)) {
                 sonarPitido();
                 graficoPausado = !graficoPausado;
                 if (graficoPausado) {
@@ -2279,8 +2281,8 @@ void loop() {
                 actualizarMedicion();
                 delay(200);
               }
-              // Icono Mtricas
-              else if (x >= BTN_METRICAS_X && x <= (BTN_METRICAS_X + BTN_ICON_SIZE)) {
+              // Icono Métricas
+              else if (x >= (BTN_METRICAS_X + TOUCH_OFFSET_X) && x <= (BTN_METRICAS_X + BTN_ICON_SIZE + TOUCH_OFFSET_X)) {
                 if (modoVisualizacion != 1) {
                     sonarPitido();
                     modoVisualizacion = 1;
@@ -2290,7 +2292,7 @@ void loop() {
                 }
               }
               // Icono Curvas
-              else if (x >= BTN_CURVAS_X && x <= (BTN_CURVAS_X + BTN_ICON_SIZE)) {
+              else if (x >= (BTN_CURVAS_X + TOUCH_OFFSET_X) && x <= (BTN_CURVAS_X + BTN_ICON_SIZE + TOUCH_OFFSET_X)) {
                 if (modoVisualizacion != 0) {
                     sonarPitido();
                     modoVisualizacion = 0;
@@ -2336,7 +2338,7 @@ void loop() {
     }
   }
 
-  // Actualizacin contnua del grfico (si estamos midiendo)
+  // Actualización contnua del grafico (si estamos midiendo)
   if (modoActual == MODO_TEST_RAPIDO && medicionActiva && pantallaActual == PANTALLA_MEDICION_RAPIDA && !graficoPausado) {
     if (millis() - lastDrawTime >= DRAW_INTERVAL) {
       lastDrawTime = millis();
