@@ -236,7 +236,7 @@ class PatientDataScreen(QWidget):
         self.age_input = QLineEdit()
         self.age_input.setFixedWidth(230) # Limitar ancho
         self.age_input.setStyleSheet("background-color: white; color: black; font-size: 14pt; padding: 5px;")
-        self.age_input.setMaxLength(2)
+        self.age_input.setMaxLength(3)
         self.age_input.setValidator(QRegularExpressionValidator(QRegularExpression(r"^[0-9]{1,3}$")))
         self.age_container.addWidget(self.age_label)
         self.age_container.addWidget(self.age_input)
@@ -428,13 +428,13 @@ class PatientDataScreen(QWidget):
            # ---------- Validación de edad ----------
         try:
             age_val = int(self.age_input.text())
-            if not (10 <= age_val <= 80):
+            if not (10 <= age_val <= 100):
                 raise ValueError
         except ValueError:
             msg = QMessageBox(self)
             msg.setIcon(QMessageBox.Icon.Warning)
             msg.setWindowTitle("Edad inválida")
-            msg.setText("La edad ingresada es inválida.\nDebe estar entre 10 y 80 años.")
+            msg.setText("La edad ingresada es inválida.\nDebe estar entre 10 y 100 años.")
             font = QFont()
             font.setPointSize(14)
             msg.setFont(font)
@@ -692,6 +692,19 @@ class HistoryScreen(QWidget):
         self.layout.addWidget(back_button, alignment=Qt.AlignmentFlag.AlignLeft)
 
 
+    @staticmethod
+    def _crpwv_bounds_for_age(age_years):
+        exp_term = np.exp(0.0022 * age_years)
+        upper = 12.0 * exp_term
+        lower = 4.0 * exp_term
+        return lower, upper
+
+
+    def _is_crpwv_normal(self, age_years, crpwv_value):
+        lower, upper = self._crpwv_bounds_for_age(age_years)
+        return lower <= crpwv_value <= upper
+
+
 
 
     def load_data(self):
@@ -701,7 +714,7 @@ class HistoryScreen(QWidget):
         # Si el archivo NO existe, lo creamos con el formato correcto y datos de prueba
         if not os.path.exists(filename):
             print(f"Creando archivo nuevo: {filename}")
-            header = ["Fecha y Hora", "DNI", "Nombre", "Apellido", "Edad", "Altura (cm)", "Sexo", "HR (bpm)", "PWV (m/s)", "Observaciones"]
+            header = ["Fecha y Hora", "DNI", "Nombre", "Apellido", "Edad", "Altura (cm)", "Sexo", "HR (bpm)", "crPWV (m/s)", "Observaciones"]
             # Datos de prueba para que veas algo en la tabla apenas abrís
             demo_data = [
                 ["2026-02-13 10:00:00", "43987562", "Victoria", "Orsi", "23", "168", "Femenino", "75", "6.5", "Control inicial"],
@@ -751,7 +764,7 @@ class HistoryScreen(QWidget):
     def show_table(self, data):
         self.table = QTableWidget()
         self.table.setRowCount(len(data))
-        visible_headers = ["Fecha y Hora", "DNI", "Nombre",  "Apellido", "Edad", "Altura", "Sexo", "HR", "PWV", "Acciones"]
+        visible_headers = ["Fecha y Hora", "DNI", "Nombre",  "Apellido", "Edad", "Altura", "Sexo", "HR", "crPWV", "Acciones"]
         self.table.setColumnCount(len(visible_headers))
         self.table.setHorizontalHeaderLabels(visible_headers)
 
@@ -792,7 +805,7 @@ class HistoryScreen(QWidget):
         self.table.verticalScrollBar().setSingleStep(5)
 
         for r, row in enumerate(data):
-            # 0:Fecha, 1:DNI, 2:Nombre, 3:Apellido, 4:Edad, 5:Altura, 6:Sexo, 7:HR, 8:PWV
+            # 0:Fecha, 1:DNI, 2:Nombre, 3:Apellido, 4:Edad, 5:Altura, 6:Sexo, 7:HR, 8:crPWV
             
             # Fecha (DD/MM/YYYY HH:MM)
             try:
@@ -815,11 +828,13 @@ class HistoryScreen(QWidget):
             self.table.setItem(r, 6, QTableWidgetItem(row[6])) # Sexo
             self.table.setItem(r, 7, QTableWidgetItem(row[7])) # HR
 
-            # PWV con lógica de color 
+            # crPWV con lógica dinámica por edad (zona fisiológica del gráfico de referencia)
             pwv_item = QTableWidgetItem(row[8])
             try:
                 val = float(row[8])
-                pwv_item.setForeground(Qt.GlobalColor.green if val < 7.0 else Qt.GlobalColor.red)
+                edad_val = float(row[4])
+                es_normal = self._is_crpwv_normal(edad_val, val)
+                pwv_item.setForeground(Qt.GlobalColor.green if es_normal else Qt.GlobalColor.red)
             except: pass
             self.table.setItem(r, 8, pwv_item)
 
@@ -1047,13 +1062,13 @@ class HistoryScreen(QWidget):
                 observaciones = r[9] # La columna 9 son las observaciones
                 break
 
-        # Determinamos el estado para el reporte
+        # Determinamos el estado para el reporte con criterio dinámico por edad
         pwv_status = ""
         try:
-            if float(pwv.split()[0]) < 7.0: # .split() por si tiene el " m/s"
-                pwv_status = " (Normal)"
-            else: 
-                pwv_status = " (Anormal)"
+            pwv_val = float(pwv.split()[0]) # .split() por si tiene el " m/s"
+            edad_val = float(edad)
+            es_normal = self._is_crpwv_normal(edad_val, pwv_val)
+            pwv_status = " (Normal)" if es_normal else " (Anormal)"
         except: pass
 
         # Construir el texto del reporte
@@ -1072,7 +1087,7 @@ DATOS DEL PACIENTE:
   
 RESULTADOS DE LA MEDICIÓN:
   • HR: {hr} bpm
-  • PWV: {pwv} m/s{pwv_status}
+  • crPWV: {pwv} m/s{pwv_status}
 
 """
         # Agregar observaciones solo si existen
@@ -1276,7 +1291,7 @@ class MainScreen(QMainWindow):
 
         self.setup_new_button() # Botón Nuevo Paciente
         self.setup_patient_data() # Datos del paciente
-        self.setup_results_graph() # Curva PWV vs Edad
+        self.setup_results_graph() # Curva crPWV vs Edad
         self.setup_control_buttons() # Botones de control
         self.left_layout.addStretch()
 
@@ -1431,61 +1446,76 @@ class MainScreen(QMainWindow):
 
         self.results_layout = QVBoxLayout()
         self.results_frame.setLayout(self.results_layout)
-        self.results_frame.setFixedSize(500, 340)
+        self.results_layout.setContentsMargins(8, 8, 8, 6)
+        self.results_layout.setSpacing(0)
+        self.results_frame.setFixedSize(500, 370)
 
-        # --- Crear gráfico PWV vs Edad ---
+        # --- Crear gráfico crPWV vs Edad ---
+        self.pwv_graph_container = QWidget()
+        self.pwv_graph_container.setStyleSheet("background-color: #000000;")
+        self.pwv_graph_container_layout = QVBoxLayout()
+        self.pwv_graph_container_layout.setContentsMargins(0, 0, 0, 2)
+        self.pwv_graph_container_layout.setSpacing(0)
+        self.pwv_graph_container.setLayout(self.pwv_graph_container_layout)
+
         self.pwv_graph = pg.PlotWidget()
         self.pwv_graph.setBackground('k')
-        self.pwv_graph.setTitle("Relación entre Edad y PWV", color='w', size='12pt')
         self.pwv_graph.showGrid(x=True, y=True)
-        self.pwv_graph.setLabel('left', 'PWV (m/s)', color='w', size='10pt')
-        self.pwv_graph.setLabel('bottom', 'Edad (años)', color='w', size='10pt')
+        plot_item = self.pwv_graph.getPlotItem()
+        axis_label_style = {'color': '#FFFFFF', 'font-size': '11pt'}
+        left_axis = plot_item.getAxis('left')
+        bottom_axis = plot_item.getAxis('bottom')
+        left_axis.setLabel('crPWV (m/s)', **axis_label_style)
+        bottom_axis.setLabel('')
+        bottom_axis.label.setRotation(0)
+        left_axis.showLabel(True)
+        bottom_axis.showLabel(False)
+        left_axis.setPen(pg.mkPen('w'))
+        left_axis.setTextPen(pg.mkPen('w'))
+        bottom_axis.setPen(pg.mkPen('w'))
+        bottom_axis.setTextPen(pg.mkPen('w'))
+        left_axis.setWidth(52)
+        bottom_axis.setHeight(46)
+        left_axis.setStyle(autoExpandTextSpace=True, tickTextOffset=8)
+        bottom_axis.setStyle(autoExpandTextSpace=True, tickTextOffset=8)
 
-        # --- Datos de la tabla (paper DOI:10.1155/2014/653239) ---
-        age_groups = np.array([15, 25, 35, 45, 55, 65, 75])
-        mean_pwv = np.array([5.04, 5.86, 6.32, 6.85, 8.15, 8.47, 9.01])
-        lower_range = np.array([3.12, 3.92, 4.08, 5.00, 5.46, 6.46, 5.52])
-        upper_range = np.array([7.33, 8.14, 8.26, 9.84, 12.50, 11.20, 13.40])
+        # --- Curvas de referencia crPWV (paper) ---
+        x_fit = np.linspace(10, 100, 550)
+        y_center = 7.37 * np.exp(0.0022 * x_fit)               # curva central
+        y_upper = 12.0 * np.exp(0.0022 * x_fit)                # curva superior (corta y=12 en x=0)
+        y_lower = 4.0 * np.exp(0.0022 * x_fit)                 # curva inferior (corta y=4 en x=0)
 
-        # --- Ajuste lineal (rectas) ---
-        coef_mean = np.polyfit(age_groups, mean_pwv, 1)
-        coef_lower = np.polyfit(age_groups, lower_range, 1)
-        coef_upper = np.polyfit(age_groups, upper_range, 1)
+        # Ejes fijos solicitados
+        self.pwv_graph.setXRange(10, 100, padding=0)
+        self.pwv_graph.setYRange(1, 18, padding=0)
+        self.pwv_graph.setLimits(xMin=10, xMax=100, yMin=1, yMax=18)
 
-        poly_mean = np.poly1d(coef_mean)
-        poly_lower = np.poly1d(coef_lower)
-        poly_upper = np.poly1d(coef_upper)
+        # Líneas auxiliares para sombreado de zonas
+        y_top = np.full_like(x_fit, 18.0)
+        y_bottom = np.full_like(x_fit, 1.0)
+        top_item = pg.PlotDataItem(x_fit, y_top, pen=None)
+        bottom_item = pg.PlotDataItem(x_fit, y_bottom, pen=None)
 
-        # --- Eje continuo para graficar rectas ---
-        x_fit = np.linspace(10, 80, 300)
-        y_mean = poly_mean(x_fit)
-        y_lower = poly_lower(x_fit)
-        y_upper = poly_upper(x_fit)
+        # Curvas punteadas (central verde, límites rojos)
+        dashed_green = pg.mkPen((0, 220, 0), width=2, style=Qt.PenStyle.DashLine)
+        dashed_red = pg.mkPen((255, 80, 80), width=1.6, style=Qt.PenStyle.DashLine)
+        center_item = pg.PlotDataItem(x_fit, y_center, pen=dashed_green)
+        upper_item = pg.PlotDataItem(x_fit, y_upper, pen=dashed_red)
+        lower_item = pg.PlotDataItem(x_fit, y_lower, pen=dashed_red)
 
-        # --- Crear PlotDataItems para límites (NECESARIO para FillBetweenItem) ---
-        upper_item = pg.PlotDataItem(x_fit, y_upper, pen=pg.mkPen((255, 80, 80), width=1.3))
-        lower_item = pg.PlotDataItem(x_fit, y_lower, pen=pg.mkPen((255, 80, 80), width=1.3))
+        # Sombreado: interior verde, exterior rojo (dentro del rango visible del eje)
+        fill_inside = pg.FillBetweenItem(upper_item, lower_item, brush=pg.mkBrush(0, 255, 0, 70))
+        fill_upper_out = pg.FillBetweenItem(top_item, upper_item, brush=pg.mkBrush(255, 0, 0, 55))
+        fill_lower_out = pg.FillBetweenItem(lower_item, bottom_item, brush=pg.mkBrush(255, 0, 0, 55))
 
-        # Añadir los PlotDataItems al gráfico
+        self.pwv_graph.addItem(top_item)
+        self.pwv_graph.addItem(bottom_item)
+        self.pwv_graph.addItem(fill_upper_out)
+        self.pwv_graph.addItem(fill_lower_out)
+        self.pwv_graph.addItem(fill_inside)
         self.pwv_graph.addItem(upper_item)
         self.pwv_graph.addItem(lower_item)
-
-        # --- Rellenar área entre límites con verde translúcido ---
-        # brush: (R, G, B, Alpha) con Alpha 0-255
-        #fill = pg.FillBetweenItem(upper_item, lower_item, brush=pg.mkBrush(220, 237, 200, 70))
-        fill = pg.FillBetweenItem(upper_item, lower_item, brush=pg.mkBrush(0, 255, 0, 70))
-        self.pwv_graph.addItem(fill)
-
-        # --- Dibujar línea de tendencia (media) encima del relleno ---
-        mean_item = pg.PlotDataItem(x_fit, y_mean, pen=pg.mkPen((0, 128, 0), width=2))
-        self.pwv_graph.addItem(mean_item)
-
-        # --- Texto R² ---
-        #r_value = 0.0616
-        #label = pg.TextItem(f"R² lineal = {r_value:.4f}", color='w', anchor=(1, 1))
-        # Ajusta la posición si se superpone con el eje
-        #label.setPos(75, np.min(y_lower) + 0.5)
-        #self.pwv_graph.addItem(label)
+        self.pwv_graph.addItem(center_item)
 
         # Crea un item de gráfico de dispersión para el punto del paciente
         # Será un punto grande con blanco.
@@ -1498,8 +1528,12 @@ class MainScreen(QMainWindow):
         self.pwv_graph.addItem(self.patient_point_item)
 
         # --- Agregar al layout ---
-        self.results_layout.addWidget(self.pwv_graph)
-        self.results_layout.addSpacing(20)
+        self.pwv_graph_container_layout.addWidget(self.pwv_graph)
+        self.pwv_graph_xlabel = QLabel("Edad (a\u00f1os)")
+        self.pwv_graph_xlabel.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.pwv_graph_xlabel.setStyleSheet("color: white; font-size: 11pt; padding-left: 16px;")
+        self.pwv_graph_container_layout.addWidget(self.pwv_graph_xlabel)
+        self.results_layout.addWidget(self.pwv_graph_container)
 
 
 
@@ -1615,8 +1649,8 @@ class MainScreen(QMainWindow):
         self.metrics_layout = QHBoxLayout()
         self.right_layout.addLayout(self.metrics_layout)
 
-        # PWV
-        self.pwv_label = QLabel("PWV: -- m/s")
+        # crPWV
+        self.pwv_label = QLabel("crPWV: -- m/s")
         self.pwv_label.setStyleSheet("""
             color: #d4a017;
             font-size: 18pt;
@@ -1765,7 +1799,7 @@ class MainScreen(QMainWindow):
 
     def back_to_patient_data(self):
 
-        # Limpiamos el buffer y el valor de PWV del backend para que el nuevo paciente comience de cero.
+        # Limpiamos el buffer y el valor de crPWV del backend para que el nuevo paciente comience de cero.
         processor.pwv_buffer.clear()
         processor.pwv = None
 
@@ -1819,7 +1853,7 @@ class MainScreen(QMainWindow):
                 }
             """)
             self.hr_esp_label.setText("HR: Calculando...")
-            self.pwv_label.setText("PWV: Calculando...")
+            self.pwv_label.setText("crPWV: Calculando...")
             self.start_graph_update() # <--- Esto inicia el Timer
         else:
             # --- Detener medición (Código original tuyo) ---
@@ -1845,7 +1879,7 @@ class MainScreen(QMainWindow):
             self.prox_alert_label.setVisible(False)
             self.dist_alert_label.setVisible(False)
             self.hr_esp_label.setText("HR: -- bpm")
-            self.pwv_label.setText("PWV: -- m/s")
+            self.pwv_label.setText("crPWV: -- m/s")
 
     # Arranca el gráfico
     def start_graph_update(self):
@@ -1928,13 +1962,13 @@ class MainScreen(QMainWindow):
 
         pwv_val = metrics.get("pwv")
         if pwv_val is not None:
-            self.pwv_label.setText(f"PWV: {float(pwv_val):.2f} m/s")
+            self.pwv_label.setText(f"crPWV: {float(pwv_val):.2f} m/s")
             if self.patient_age is not None:
                 self.patient_point_item.setData([self.patient_age], [float(pwv_val)])
         elif c1 and c2 and s1 and s2:
-            self.pwv_label.setText("PWV: Calculando...")
+            self.pwv_label.setText("crPWV: Calculando...")
         else:
-            self.pwv_label.setText("PWV: -- m/s")
+            self.pwv_label.setText("crPWV: -- m/s")
 
 
     # Guardar medicion
@@ -1960,7 +1994,7 @@ class MainScreen(QMainWindow):
         if pwv_val is None or hr_val is None:
             QMessageBox.warning(self, "Datos Incompletos",
                                 "No se puede guardar la medición.\n"
-                                "Asegúrese de que la PWV y la HR se estén midiendo.")
+                                "Asegúrese de que la crPWV y la HR se estén midiendo.")
             return
 
         # Formatear los datos
@@ -1969,7 +2003,7 @@ class MainScreen(QMainWindow):
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         # Encabezado
-        header = ["Fecha y Hora", "DNI", "Nombre", "Apellido", "Edad", "Altura (cm)", "Sexo", "HR (bpm)", "PWV (m/s)", "Observaciones"]
+        header = ["Fecha y Hora", "DNI", "Nombre", "Apellido", "Edad", "Altura (cm)", "Sexo", "HR (bpm)", "crPWV (m/s)", "Observaciones"]
         data_row = [timestamp, dni,  nombre, apellido, edad, altura, sexo, hr_str, pwv_str, observaciones]
 
         # Escribir en el archivo CSV
