@@ -1601,28 +1601,28 @@ class MainScreen(QMainWindow):
         self.graph1.setBackground('k')
         self.graph1.setTitle("Sensor Proximal (Carótida)", color='w', size='12pt')
         self.graph1.showGrid(x=True, y=True)
-        self.graph1.setLabel('left', 'Amplitud')
+        self.graph1.setLabel('left', 'Amplitud (u.a.)')
         self.graph1.setLabel('bottom', 'Tiempo (s)')
         self.graph1.enableAutoRange(axis='y', enable=False)
         self.graph1.setYRange(-1.0, 1.0, padding=0)
+        axis1 = self.graph1.getAxis('left')
+        axis1.setTextPen(pg.mkPen('#d0d0d0'))
+        axis1.setPen(pg.mkPen('#6f6f6f'))
         self.right_layout.addWidget(self.graph1)
-        self.prox_range_label = QLabel("Rango Proximal (Cal): min -- | max --")
-        self.prox_range_label.setStyleSheet("color: #d0d0d0; font-size: 10pt;")
-        self.right_layout.addWidget(self.prox_range_label)
 
         # Gráfico sensor 2 (distal)
         self.graph2 = pg.PlotWidget()
         self.graph2.setBackground('k')
         self.graph2.setTitle("Sensor Distal (Radial)", color='w', size='12pt')
         self.graph2.showGrid(x=True, y=True)
-        self.graph2.setLabel('left', 'Amplitud')
+        self.graph2.setLabel('left', 'Amplitud (u.a.)')
         self.graph2.setLabel('bottom', 'Tiempo (s)')
         self.graph2.enableAutoRange(axis='y', enable=False)
         self.graph2.setYRange(-1.0, 1.0, padding=0)
+        axis2 = self.graph2.getAxis('left')
+        axis2.setTextPen(pg.mkPen('#d0d0d0'))
+        axis2.setPen(pg.mkPen('#6f6f6f'))
         self.right_layout.addWidget(self.graph2)
-        self.dist_range_label = QLabel("Rango Distal (Cal): min -- | max --")
-        self.dist_range_label.setStyleSheet("color: #d0d0d0; font-size: 10pt;")
-        self.right_layout.addWidget(self.dist_range_label)
 
         # Curvas de datos
         self.curve1 = self.graph1.plot([], [], pen=pg.mkPen('red', width=2))
@@ -1859,10 +1859,21 @@ class MainScreen(QMainWindow):
             self._last_x_end = None
             self._last_valid_hr = None
             self._last_valid_pwv = None
-            self.prox_range_label.setText("Rango Proximal (Cal): calibrando...")
-            self.dist_range_label.setText("Rango Distal (Cal): calibrando...")
             self.graph1.setYRange(-1.0, 1.0, padding=0)
             self.graph2.setYRange(-1.0, 1.0, padding=0)
+            self.graph1.getAxis('left').setTicks(None)
+            self.graph2.getAxis('left').setTicks(None)
+            self.graph1.getAxis('left').setTextPen(pg.mkPen('#d0d0d0'))
+            self.graph1.getAxis('left').setPen(pg.mkPen('#6f6f6f'))
+            self.graph2.getAxis('left').setTextPen(pg.mkPen('#d0d0d0'))
+            self.graph2.getAxis('left').setPen(pg.mkPen('#6f6f6f'))
+            self.curve1.setData([], [])
+            self.curve2.setData([], [])
+            self.prox_alert_label.setVisible(False)
+            self.dist_alert_label.setVisible(False)
+            self.hr_esp_label.setText("HR: -- bpm")
+            self.pwv_label.setText("crPWV: -- m/s")
+            self.patient_point_item.setData([], [])
             self.start_graph_button.setText("Detener Medición")
             self.start_graph_button.setStyleSheet("""
                 QPushButton {
@@ -1877,8 +1888,6 @@ class MainScreen(QMainWindow):
                     background-color: #D32F2F;
                 }
             """)
-            self.hr_esp_label.setText("HR: Calculando...")
-            self.pwv_label.setText("crPWV: Calculando...")
             self.start_graph_update() # <--- Esto inicia el Timer
         else:
             # --- Detener medición (Código original tuyo) ---
@@ -1899,20 +1908,7 @@ class MainScreen(QMainWindow):
                 }
             """)
             self.stop_graph_update()
-            self.curve1.setData([], [])
-            self.curve2.setData([], [])
-            self.prox_alert_label.setVisible(False)
-            self.dist_alert_label.setVisible(False)
             self._show_calibrating_until_ready = False
-            self._last_curve1_data_time = 0.0
-            self._last_curve2_data_time = 0.0
-            self._last_x_end = None
-            self._last_valid_hr = None
-            self._last_valid_pwv = None
-            self.prox_range_label.setText("Rango Proximal (Cal): min -- | max --")
-            self.dist_range_label.setText("Rango Distal (Cal): min -- | max --")
-            self.hr_esp_label.setText("HR: -- bpm")
-            self.pwv_label.setText("crPWV: -- m/s")
 
     # Arranca el gráfico
     def start_graph_update(self):
@@ -1980,30 +1976,29 @@ class MainScreen(QMainWindow):
         iv = int(round(v))
         return iv if iv > 0 else None
 
-    def _set_range_label(self, label, prefix, cmin, cmax, saturated):
-        if cmin is None or cmax is None:
-            label.setText(f"{prefix}: calibrando...")
-            label.setStyleSheet("color: #d0d0d0; font-size: 10pt;")
+    def _set_axis_range_ticks(self, graph, cmin, cmax, saturated):
+        axis = graph.getAxis('left')
+        if cmin is None or cmax is None or cmax <= cmin:
+            axis.setTicks(None)
+            axis.setTextPen(pg.mkPen('#d0d0d0'))
+            axis.setPen(pg.mkPen('#6f6f6f'))
+            graph.setYRange(-1.0, 1.0, padding=0)
             return
 
-        sat_txt = " | SATURANDO" if saturated else ""
-        label.setText(f"{prefix}: min {cmin:.2f} | max {cmax:.2f}{sat_txt}")
+        graph.setYRange(cmin, cmax, padding=0)
+        ticks = [[
+            (cmin, f"min {cmin:.2f}"),
+            (cmax, f"max {cmax:.2f}")
+        ]]
+        axis.setTicks(ticks)
         if saturated:
-            label.setStyleSheet("color: #ffb300; font-size: 10pt; font-weight: bold;")
+            axis.setTextPen(pg.mkPen('#ffb300'))
+            axis.setPen(pg.mkPen('#ffb300'))
         else:
-            label.setStyleSheet("color: #d0d0d0; font-size: 10pt;")
+            axis.setTextPen(pg.mkPen('#d0d0d0'))
+            axis.setPen(pg.mkPen('#6f6f6f'))
 
     def _update_amplitude_ranges(self, metrics, y1, y2):
-        y1_min = self._to_float_or_none(metrics.get("y1_min"))
-        y1_max = self._to_float_or_none(metrics.get("y1_max"))
-        y2_min = self._to_float_or_none(metrics.get("y2_min"))
-        y2_max = self._to_float_or_none(metrics.get("y2_max"))
-
-        if y1_min is not None and y1_max is not None and y1_max > y1_min:
-            self.graph1.setYRange(y1_min, y1_max, padding=0)
-        if y2_min is not None and y2_max is not None and y2_max > y2_min:
-            self.graph2.setYRange(y2_min, y2_max, padding=0)
-
         cmin_p = self._to_float_or_none(metrics.get("calib_min_p"))
         cmax_p = self._to_float_or_none(metrics.get("calib_max_p"))
         cmin_d = self._to_float_or_none(metrics.get("calib_min_d"))
@@ -2020,8 +2015,8 @@ class MainScreen(QMainWindow):
             local_max = float(max(y2))
             sat2 = (local_min < cmin_d) or (local_max > cmax_d)
 
-        self._set_range_label(self.prox_range_label, "Rango Proximal (Cal)", cmin_p, cmax_p, sat1)
-        self._set_range_label(self.dist_range_label, "Rango Distal (Cal)", cmin_d, cmax_d, sat2)
+        self._set_axis_range_ticks(self.graph1, cmin_p, cmax_p, sat1)
+        self._set_axis_range_ticks(self.graph2, cmin_d, cmax_d, sat2)
 
     # Actualiza el grafico
     def update_plot(self):
