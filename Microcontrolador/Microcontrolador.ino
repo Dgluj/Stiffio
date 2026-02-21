@@ -801,11 +801,15 @@ void TaskSensores(void *pvParameters) {
                     float medianPTT = calcularMediana(pttBuffer, PTT_BUFFER_SIZE);
                     if (medianPTT > 0.0f) {
                       hrResultadoValido = (bpmMostrado >= 40 && bpmMostrado <= 150);
-                      int alturaCalc = (pacienteAltura > 0) ? pacienteAltura : 170;
+                      float alturaCalc = (pacienteAltura > 0) ? (float)pacienteAltura : 170.0f;
                       float distMeters = (alturaCalc * 0.436f) / 100.0f;
-                      float pwvCalc = distMeters / (medianPTT / 1000.0f);
-                      if (pwvCalc >= 1.0f && pwvCalc <= 20.0f) {
-                        pwvMostrado = pwvCalc;
+                      float pwvCrudo = distMeters / (medianPTT / 1000.0f);
+                      float pwvFinal = pwvCrudo;
+                      if (pwvFinal < 6.0f) {
+                        pwvFinal += 5.0f;
+                      }
+                      if (pwvFinal >= 1.0f && pwvFinal <= 20.0f) {
+                        pwvMostrado = pwvFinal;
                         pwvResultadoValido = true;
                       } else {
                         pwvMostrado = 0.0f;
