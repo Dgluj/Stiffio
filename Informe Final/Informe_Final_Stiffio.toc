@@ -39,10 +39,9 @@
 \contentsline {subsection}{\numberline {7.3}Comparación con dispositivos comerciales}{35}{subsection.7.3}%
 \contentsline {section}{\numberline {8}Conclusiones}{35}{section.8}%
 \contentsline {section}{\numberline {9}Bibliografía}{36}{section.9}%
-\contentsline {section}{Bibliografía}{36}{section.9}%
 \etoc@depthtag {anexo}
-\contentsline {section}{\numberline {A}Asignación de pines del circuito electrónico}{39}{appendix.Alph1}%
-\contentsline {section}{\numberline {B}Modelo 3D de la carcasa}{40}{appendix.Alph2}%
-\contentsline {section}{\numberline {C}Modelo 3D del encapsulado de sensores}{41}{appendix.Alph3}%
-\contentsline {section}{\numberline {D}Estimación de distancia carotido-radial}{42}{appendix.Alph4}%
-\contentsline {section}{\numberline {E}Reporte PDF}{43}{appendix.Alph5}%
+\contentsline {section}{\numberline {A}Asignación de pines del circuito electrónico}{38}{appendix.Alph1}%
+\contentsline {section}{\numberline {B}Modelo 3D de la carcasa}{39}{appendix.Alph2}%
+\contentsline {section}{\numberline {C}Modelo 3D del encapsulado de sensores}{40}{appendix.Alph3}%
+\contentsline {section}{\numberline {D}Estimación de distancia carotido-radial}{41}{appendix.Alph4}%
+\contentsline {section}{\numberline {E}Reporte PDF}{42}{appendix.Alph5}%
