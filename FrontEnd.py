@@ -526,12 +526,14 @@ class PatientDataScreen(QWidget):
 # =================================================================================================
 class HistoryScreen(QWidget):
     def save_pdf(self, report_text):
-        file_path, _ = resource_path(QFileDialog.getSaveFileName(
+
+        # ================= SELECCIÓN DE RUTA =================
+        file_path, _ = QFileDialog.getSaveFileName(
             self,
             "Guardar reporte como PDF",
             "",
             "PDF (*.pdf)"
-        ))
+        )
 
         if not file_path:
             return
@@ -539,20 +541,20 @@ class HistoryScreen(QWidget):
         if not file_path.lower().endswith(".pdf"):
             file_path += ".pdf"
 
+        # ================= CREAR PDF =================
         c = canvas.Canvas(file_path, pagesize=A4)
         width, height = A4
 
         # ================= LOGO =================
-        logo_path = "Logo.jpg"
+        logo_path = resource_path("Logo.jpg")
         if os.path.exists(logo_path):
             logo_width = 140
             logo_height = 60
-            # Calculamos x para centrar: (Ancho de hoja / 2) - (Ancho del logo / 2)
             x_centered = (width - logo_width) / 2
-            
+
             c.drawImage(
                 logo_path,
-                x=x_centered, # <--- Usamos el valor calculado
+                x=x_centered,
                 y=height - 100,
                 width=logo_width,
                 height=logo_height,
@@ -565,10 +567,10 @@ class HistoryScreen(QWidget):
         c.drawCentredString(width / 2, height - 160, "REPORTE DE MEDICIÓN")
 
         # ================= TEXTO =================
-        margen_izquierdo = 140 
+        margen_izquierdo = 140
         text = c.beginText(margen_izquierdo, height - 200)
-        text.setFont("Helvetica", 11) 
-        text.setLeading(14)           # Espaciado entre líneas
+        text.setFont("Helvetica", 11)
+        text.setLeading(14)
 
         for line in report_text.strip().split("\n"):
             text.textLine(line)
@@ -578,12 +580,13 @@ class HistoryScreen(QWidget):
         c.showPage()
         c.save()
 
-        # Mensaje de PDF guardado
+        # ================= MENSAJE DE CONFIRMACIÓN =================
         msg = QMessageBox(self)
         msg.setIcon(QMessageBox.Icon.Information)
         msg.setWindowTitle("Descarga completa")
         msg.setText("Reporte Exportado")
         msg.setInformativeText(f"El archivo se guardó correctamente en:\n{file_path}")
+
         msg.setStyleSheet("""
             QMessageBox {
                 background-color: white; 
@@ -595,15 +598,15 @@ class HistoryScreen(QWidget):
                 font-size: 10pt;
             }  
             QPushButton {
-                    background-color: #424242;
-                    color: white;
-                    font-size: 10pt;
-                    padding: 8px 16px;
-                    border-radius: 5px;
-                }
-                QPushButton:hover {
-                    background-color: #616161;
-                }
+                background-color: #424242;
+                color: white;
+                font-size: 10pt;
+                padding: 8px 16px;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #616161;
+            }
         """)
 
         msg.exec()
