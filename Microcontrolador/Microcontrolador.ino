@@ -804,11 +804,8 @@ void TaskSensores(void *pvParameters) {
                       float alturaCalc = (pacienteAltura > 0) ? (float)pacienteAltura : 170.0f;
                       float distMeters = (alturaCalc * 0.436f) / 100.0f;
                       float pwvCrudo = distMeters / (medianPTT / 1000.0f);
-                      float pwvFinal = pwvCrudo;
-                      if (pwvFinal < 6.0f) {
-                        pwvFinal += 5.0f;
-                      }
-                      if (pwvFinal >= 1.0f && pwvFinal <= 20.0f) {
+                      float pwvFinal = pwvCrudo + 5.0f;
+                      if (pwvFinal >= 4.0f && pwvFinal <= 18.0f) {
                         pwvMostrado = pwvFinal;
                         pwvResultadoValido = true;
                       } else {
@@ -1915,76 +1912,7 @@ void actualizarMedicion() {
         graphSprite.drawLine(x1, constrain(y2A,0,GRAPH_H), x2, constrain(y2B,0,GRAPH_H), COLOR_S2); 
       }
 
-      // 4. Marcar pies de onda detectados (ambos sensores) con puntos gruesos
-      unsigned long tMin = 0xFFFFFFFFUL;
-      unsigned long tMax = 0;
-      for (int i = 0; i < BUFFER_SIZE; i++) {
-        int idx = (localHead + i) % BUFFER_SIZE;
-        unsigned long ts = localTime[idx];
-        if (ts == 0) continue;
-        if (ts < tMin) tMin = ts;
-        if (ts > tMax) tMax = ts;
-      }
-
-      if (tMin <= tMax) {
-        int startS1 = localFootHeadS1 - localFootCountS1;
-        while (startS1 < 0) startS1 += FOOT_EVENT_BUFFER_SIZE;
-        for (int e = 0; e < localFootCountS1; e++) {
-          int evIdx = startS1 + e;
-          if (evIdx >= FOOT_EVENT_BUFFER_SIZE) evIdx -= FOOT_EVENT_BUFFER_SIZE;
-          unsigned long tFoot = localFootEventRelS1[evIdx];
-          if (tFoot < tMin || tFoot > tMax) continue;
-
-          int bestI = -1;
-          unsigned long bestDiff = 0xFFFFFFFFUL;
-          for (int i = 0; i < BUFFER_SIZE; i++) {
-            int idx = (localHead + i) % BUFFER_SIZE;
-            unsigned long ts = localTime[idx];
-            if (ts == 0) continue;
-            unsigned long diff = (ts > tFoot) ? (ts - tFoot) : (tFoot - ts);
-            if (bestI < 0 || diff < bestDiff) {
-              bestDiff = diff;
-              bestI = i;
-            }
-          }
-          if (bestI < 0) continue;
-
-          int idxBest = (localHead + bestI) % BUFFER_SIZE;
-          float n = (localBuf1[idxBest] - baseS1) / halfS1;
-          int x = (int)(bestI * xStep);
-          int y = (int)(yCenter - (n * yHalf));
-          graphSprite.fillCircle(x, constrain(y, 0, GRAPH_H), 3, COLOR_S1);
-        }
-
-        int startS2 = localFootHeadS2 - localFootCountS2;
-        while (startS2 < 0) startS2 += FOOT_EVENT_BUFFER_SIZE;
-        for (int e = 0; e < localFootCountS2; e++) {
-          int evIdx = startS2 + e;
-          if (evIdx >= FOOT_EVENT_BUFFER_SIZE) evIdx -= FOOT_EVENT_BUFFER_SIZE;
-          unsigned long tFoot = localFootEventRelS2[evIdx];
-          if (tFoot < tMin || tFoot > tMax) continue;
-
-          int bestI = -1;
-          unsigned long bestDiff = 0xFFFFFFFFUL;
-          for (int i = 0; i < BUFFER_SIZE; i++) {
-            int idx = (localHead + i) % BUFFER_SIZE;
-            unsigned long ts = localTime[idx];
-            if (ts == 0) continue;
-            unsigned long diff = (ts > tFoot) ? (ts - tFoot) : (tFoot - ts);
-            if (bestI < 0 || diff < bestDiff) {
-              bestDiff = diff;
-              bestI = i;
-            }
-          }
-          if (bestI < 0) continue;
-
-          int idxBest = (localHead + bestI) % BUFFER_SIZE;
-          float n = (localBuf2[idxBest] - baseS2) / halfS2;
-          int x = (int)(bestI * xStep);
-          int y = (int)(yCenter - (n * yHalf));
-          graphSprite.fillCircle(x, constrain(y, 0, GRAPH_H), 3, COLOR_S2);
-        }
-      }
+      // Visualizacion de pies de onda desactivada en test rapido.
       
       graphSprite.pushSprite(11, 51); 
 
