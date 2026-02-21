@@ -4,10 +4,11 @@ Visual-only processing pipeline for signal display.
 
 - Receives signals from ESP32 through ComunicacionMax.
 - Uses fixed normalization: (ir / 262143.0) * 100.0
+- Uses a fixed 6-second FIFO display window.
+- Starts plotting only after the 6-second buffer is complete.
 - Does NOT compute HR or PWV (those come from ESP32 JSON).
 """
 
-from bisect import bisect_left
 from collections import deque
 import math
 import time
@@ -18,9 +19,8 @@ import ComunicacionMax
 class SignalProcessor:
     def __init__(self, fs=50):
         self.fs = fs
-        self.MAX_POINTS = 300
         self.VIEW_SECONDS = 6.0
-        self.NO_DATA_HOLD_SECONDS = 1.0
+        self.MAX_POINTS = max(2, int(round(self.fs * self.VIEW_SECONDS)))
         self.MAX_ADC = 262143.0
 
         self.proximal_filtered = deque(maxlen=self.MAX_POINTS)
@@ -41,6 +41,7 @@ class SignalProcessor:
         self.last_data_time = None
         self.last_seq = -1
         self.data_seq = -1
+        self._sample_index = 0
 
     def start_session(self):
         self.session_active = True
@@ -53,6 +54,7 @@ class SignalProcessor:
         self.last_data_time = None
         self.last_seq = -1
         self.data_seq = -1
+        self._sample_index = 0
 
     def stop_session(self):
         self.session_active = False
@@ -66,6 +68,7 @@ class SignalProcessor:
         self.last_data_time = None
         self.last_seq = -1
         self.data_seq = -1
+        self._sample_index = 0
 
     def _update_status(self, snapshot):
         self.connected = bool(snapshot.get("connected", False))
@@ -124,48 +127,57 @@ class SignalProcessor:
         now = time.monotonic()
 
         if not raw_t or not raw_p or not raw_d:
-            if self.last_data_time is None or (now - self.last_data_time) > self.NO_DATA_HOLD_SECONDS:
-                self.proximal_filtered.clear()
-                self.distal_filtered.clear()
-                self.time_axis.clear()
             return
 
         self.last_data_time = now
 
-        if seq == self.last_seq and len(self.time_axis) > 1:
-            return
-
         n = min(len(raw_t), len(raw_p), len(raw_d))
+        if n <= 0:
+            return
         raw_t = raw_t[-n:]
         raw_p = raw_p[-n:]
         raw_d = raw_d[-n:]
 
-        if self.session_start_local is None:
-            self.session_start_local = float(raw_t[0])
+        if self.last_seq < 0:
+            new_count = n
+        else:
+            delta = seq - self.last_seq
+            if delta <= 0:
+                return
+            new_count = min(n, delta)
 
-        t_rel = [float(t) - self.session_start_local for t in raw_t]
-        p_norm = self._normalize_fixed(raw_p)
-        d_norm = self._normalize_fixed(raw_d)
+        if new_count <= 0:
+            return
 
-        t_end = t_rel[-1]
-        t_start = max(0.0, t_end - self.VIEW_SECONDS)
-        idx = bisect_left(t_rel, t_start)
+        new_p = raw_p[-new_count:]
+        new_d = raw_d[-new_count:]
+        p_norm = self._normalize_fixed(new_p)
+        d_norm = self._normalize_fixed(new_d)
 
-        self.time_axis = deque(t_rel[idx:], maxlen=self.MAX_POINTS)
-        self.proximal_filtered = deque(p_norm[idx:], maxlen=self.MAX_POINTS)
-        self.distal_filtered = deque(d_norm[idx:], maxlen=self.MAX_POINTS)
+        for p_val, d_val in zip(p_norm, d_norm):
+            self.time_axis.append(self._sample_index / self.fs)
+            self.proximal_filtered.append(p_val)
+            self.distal_filtered.append(d_val)
+            self._sample_index += 1
+
         self.last_seq = seq
 
     def get_signals(self):
+        if len(self.time_axis) < self.MAX_POINTS:
+            return [], [], []
         return list(self.time_axis), list(self.proximal_filtered), list(self.distal_filtered)
 
     def get_metrics(self):
+        buffer_progress = min(1.0, len(self.time_axis) / float(self.MAX_POINTS))
+        buffer_ready = len(self.time_axis) >= self.MAX_POINTS
         return {
             "hr": self.hr,
             "pwv": self.pwv,
-            "calibrating": False,
-            "calibration_progress": 1.0,
-            "calibration_ready": True,
+            "calibrating": self.session_active and (not buffer_ready),
+            "calibration_progress": buffer_progress,
+            "calibration_ready": buffer_ready,
+            "buffer_progress": buffer_progress,
+            "buffer_ready": buffer_ready,
             "calib_min_p": None,
             "calib_max_p": None,
             "calib_min_d": None,

@@ -715,31 +715,15 @@ class HistoryScreen(QWidget):
         filename = resource_path("mediciones_pwv.csv") 
         self.all_data = [] # Inicializamos para evitar el AttributeError
 
-        # Si el archivo NO existe, lo creamos con el formato correcto y datos de prueba
+        # Si el archivo NO existe, lo creamos con el formato correcto vacio
         if not os.path.exists(filename):
             print(f"Creando archivo nuevo: {filename}")
             header = ["Fecha y Hora", "DNI", "Nombre", "Apellido", "Edad", "Altura (cm)", "Sexo", "HR (bpm)", "crPWV (m/s)", "Observaciones"]
-            # Datos de prueba para que veas algo en la tabla apenas abrís
-            demo_data = [
-                ["2026-02-13 10:00:00", "43987562", "Victoria", "Orsi", "23", "168", "Femenino", "75", "6.5", "Control inicial"],
-                ["2026-02-13 10:15:00", "12345678", "Juan", "Perez", "45", "175", "Masculino", "82", "8.2", ""],
-                ["2026-02-13 11:00:00", "22333444", "Catalina", "Jonquieres", "23", "158", "Femenino", "65", "5.9", ""],
-                ["2026-02-13 11:30:00", "33444555", "Daniela", "Gluj", "22", "166", "Femenino", "60", "6.1", ""],
-                ["2026-02-13 12:00:00", "44555666", "Ricardo", "Gomez", "60", "170", "Masculino", "88", "10.5", "Riesgo alto"],
-                ["2026-02-13 12:45:00", "55666777", "Elena", "Lopez", "34", "160", "Femenino", "72", "7.1", ""],
-                ["2026-02-13 13:20:00", "66777888", "Pablo", "Sosa", "29", "182", "Masculino", "70", "6.8", "Atleta"],
-                ["2026-02-13 14:10:00", "77888999", "Lucia", "Diaz", "52", "163", "Femenino", "76", "9.2", ""],
-                ["2026-02-13 15:00:00", "88999000", "Marcos", "Ruiz", "41", "178", "Masculino", "81", "7.8", ""],
-                ["2026-02-13 15:45:00", "99000111", "Ana", "Torres", "67", "155", "Femenino", "68", "11.2", "Control preventivo"],
-                ["2026-02-13 16:30:00", "10111222", "Hugo", "Vaca", "38", "185", "Masculino", "74", "6.4", ""],
-                ["2026-02-13 17:15:00", "11222333", "Sofia", "Luna", "25", "170", "Femenino", "62", "5.5", ""]
-            ]
 
             try:
                 with open(filename, mode='w', newline='', encoding='utf-8-sig') as file:
                     writer = csv.writer(file, delimiter=';')
                     writer.writerow(header)
-                    writer.writerows(demo_data)
             except Exception as e:
                 print(f"Error al crear el archivo: {e}")
 
@@ -2045,9 +2029,10 @@ class MainScreen(QMainWindow):
         s2 = status.get("s2", False)
         now = time.monotonic()
         calibrating = bool(metrics.get("calibrating", False))
+        buffer_ready = bool(metrics.get("buffer_ready", not calibrating))
         both_signals_ok = c1 and c2 and s1 and s2
 
-        if self._show_calibrating_until_ready and (not calibrating) and both_signals_ok:
+        if self._show_calibrating_until_ready and buffer_ready and both_signals_ok:
             self._show_calibrating_until_ready = False
 
         if self._show_calibrating_until_ready:
@@ -2079,7 +2064,7 @@ class MainScreen(QMainWindow):
                 self.graph2.setXRange(0.0, 6.0, padding=0)
                 self._last_x_range = (0.0, 6.0)
 
-        allow_signal_plot = (not calibrating) and (not self._show_calibrating_until_ready)
+        allow_signal_plot = buffer_ready and (not self._show_calibrating_until_ready)
         data_seq = int(metrics.get("data_seq", -1))
         plot_mode_changed = (self._last_allow_signal_plot is None) or (self._last_allow_signal_plot != allow_signal_plot)
 
