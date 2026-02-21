@@ -715,31 +715,15 @@ class HistoryScreen(QWidget):
         filename = resource_path("mediciones_pwv.csv") 
         self.all_data = [] # Inicializamos para evitar el AttributeError
 
-        # Si el archivo NO existe, lo creamos con el formato correcto y datos de prueba
+        # Si el archivo NO existe, lo creamos con el formato correcto vacio
         if not os.path.exists(filename):
             print(f"Creando archivo nuevo: {filename}")
             header = ["Fecha y Hora", "DNI", "Nombre", "Apellido", "Edad", "Altura (cm)", "Sexo", "HR (bpm)", "crPWV (m/s)", "Observaciones"]
-            # Datos de prueba para que veas algo en la tabla apenas abrís
-            demo_data = [
-                ["2026-02-13 10:00:00", "43987562", "Victoria", "Orsi", "23", "168", "Femenino", "75", "6.5", "Control inicial"],
-                ["2026-02-13 10:15:00", "12345678", "Juan", "Perez", "45", "175", "Masculino", "82", "8.2", ""],
-                ["2026-02-13 11:00:00", "22333444", "Catalina", "Jonquieres", "23", "158", "Femenino", "65", "5.9", ""],
-                ["2026-02-13 11:30:00", "33444555", "Daniela", "Gluj", "22", "166", "Femenino", "60", "6.1", ""],
-                ["2026-02-13 12:00:00", "44555666", "Ricardo", "Gomez", "60", "170", "Masculino", "88", "10.5", "Riesgo alto"],
-                ["2026-02-13 12:45:00", "55666777", "Elena", "Lopez", "34", "160", "Femenino", "72", "7.1", ""],
-                ["2026-02-13 13:20:00", "66777888", "Pablo", "Sosa", "29", "182", "Masculino", "70", "6.8", "Atleta"],
-                ["2026-02-13 14:10:00", "77888999", "Lucia", "Diaz", "52", "163", "Femenino", "76", "9.2", ""],
-                ["2026-02-13 15:00:00", "88999000", "Marcos", "Ruiz", "41", "178", "Masculino", "81", "7.8", ""],
-                ["2026-02-13 15:45:00", "99000111", "Ana", "Torres", "67", "155", "Femenino", "68", "11.2", "Control preventivo"],
-                ["2026-02-13 16:30:00", "10111222", "Hugo", "Vaca", "38", "185", "Masculino", "74", "6.4", ""],
-                ["2026-02-13 17:15:00", "11222333", "Sofia", "Luna", "25", "170", "Femenino", "62", "5.5", ""]
-            ]
 
             try:
                 with open(filename, mode='w', newline='', encoding='utf-8-sig') as file:
                     writer = csv.writer(file, delimiter=';')
                     writer.writerow(header)
-                    writer.writerows(demo_data)
             except Exception as e:
                 print(f"Error al crear el archivo: {e}")
 
@@ -1269,8 +1253,6 @@ class MainScreen(QMainWindow):
         self._last_x_range = None
         self._last_valid_hr = None
         self._last_valid_pwv = None
-        self._axis1_state = None
-        self._axis2_state = None
         self._last_plot_seq = -1
         self._last_allow_signal_plot = None
         self.measuring = False  # Medición inicialmente desactivada
@@ -1609,13 +1591,20 @@ class MainScreen(QMainWindow):
         self.graph1.setBackground('k')
         self.graph1.setTitle("Sensor Proximal (Carótida)", color='w', size='12pt')
         self.graph1.showGrid(x=True, y=True)
-        self.graph1.setLabel('left', 'Amplitud (u.a.)')
+        self.graph1.setLabel('left', 'Amplitud Normalizada (%)')
         self.graph1.setLabel('bottom', 'Tiempo (s)')
         self.graph1.enableAutoRange(axis='y', enable=False)
-        self.graph1.setYRange(-1.0, 1.0, padding=0)
+        self.graph1.setYRange(-100.0, 100.0, padding=0)
         axis1 = self.graph1.getAxis('left')
         axis1.setTextPen(pg.mkPen('#d0d0d0'))
         axis1.setPen(pg.mkPen('#6f6f6f'))
+        axis1.setTicks([[
+            (-100.0, "-100"),
+            (-50.0, "-50"),
+            (0.0, "0"),
+            (50.0, "50"),
+            (100.0, "100"),
+        ]])
         self.right_layout.addWidget(self.graph1)
 
         # Gráfico sensor 2 (distal)
@@ -1623,13 +1612,20 @@ class MainScreen(QMainWindow):
         self.graph2.setBackground('k')
         self.graph2.setTitle("Sensor Distal (Radial)", color='w', size='12pt')
         self.graph2.showGrid(x=True, y=True)
-        self.graph2.setLabel('left', 'Amplitud (u.a.)')
+        self.graph2.setLabel('left', 'Amplitud Normalizada (%)')
         self.graph2.setLabel('bottom', 'Tiempo (s)')
         self.graph2.enableAutoRange(axis='y', enable=False)
-        self.graph2.setYRange(-1.0, 1.0, padding=0)
+        self.graph2.setYRange(-100.0, 100.0, padding=0)
         axis2 = self.graph2.getAxis('left')
         axis2.setTextPen(pg.mkPen('#d0d0d0'))
         axis2.setPen(pg.mkPen('#6f6f6f'))
+        axis2.setTicks([[
+            (-100.0, "-100"),
+            (-50.0, "-50"),
+            (0.0, "0"),
+            (50.0, "50"),
+            (100.0, "100"),
+        ]])
         self.right_layout.addWidget(self.graph2)
 
         # Curvas de datos
@@ -1885,18 +1881,28 @@ class MainScreen(QMainWindow):
             self._last_x_range = None
             self._last_valid_hr = None
             self._last_valid_pwv = None
-            self._axis1_state = None
-            self._axis2_state = None
             self._last_plot_seq = -1
             self._last_allow_signal_plot = None
-            self.graph1.setYRange(-1.0, 1.0, padding=0)
-            self.graph2.setYRange(-1.0, 1.0, padding=0)
-            self.graph1.getAxis('left').setTicks(None)
-            self.graph2.getAxis('left').setTicks(None)
+            self.graph1.setYRange(-100.0, 100.0, padding=0)
+            self.graph2.setYRange(-100.0, 100.0, padding=0)
             self.graph1.getAxis('left').setTextPen(pg.mkPen('#d0d0d0'))
             self.graph1.getAxis('left').setPen(pg.mkPen('#6f6f6f'))
             self.graph2.getAxis('left').setTextPen(pg.mkPen('#d0d0d0'))
             self.graph2.getAxis('left').setPen(pg.mkPen('#6f6f6f'))
+            self.graph1.getAxis('left').setTicks([[
+                (-100.0, "-100"),
+                (-50.0, "-50"),
+                (0.0, "0"),
+                (50.0, "50"),
+                (100.0, "100"),
+            ]])
+            self.graph2.getAxis('left').setTicks([[
+                (-100.0, "-100"),
+                (-50.0, "-50"),
+                (0.0, "0"),
+                (50.0, "50"),
+                (100.0, "100"),
+            ]])
             self.curve1.setData([], [])
             self.curve2.setData([], [])
             self.prox_alert_label.setVisible(False)
@@ -2007,60 +2013,6 @@ class MainScreen(QMainWindow):
         iv = int(round(v))
         return iv if iv > 0 else None
 
-    def _set_axis_range_ticks(self, graph, cmin, cmax, axis_id):
-        axis = graph.getAxis('left')
-        if axis_id == "prox":
-            current_state = self._axis1_state
-        else:
-            current_state = self._axis2_state
-
-        if cmin is None or cmax is None or cmax <= cmin:
-            if current_state is None:
-                return
-            axis.setTicks(None)
-            axis.setTextPen(pg.mkPen('#d0d0d0'))
-            axis.setPen(pg.mkPen('#6f6f6f'))
-            graph.setYRange(-1.0, 1.0, padding=0)
-            if axis_id == "prox":
-                self._axis1_state = None
-            else:
-                self._axis2_state = None
-            return
-
-        new_state = (round(cmin, 4), round(cmax, 4))
-        if current_state == new_state:
-            return
-
-        span = cmax - cmin
-        v25 = cmin + (0.25 * span)
-        v50 = cmin + (0.50 * span)
-        v75 = cmin + (0.75 * span)
-
-        graph.setYRange(cmin, cmax, padding=0)
-        ticks = [[
-            (cmin, f"{cmin:.2f}"),
-            (v25, f"{v25:.2f}"),
-            (v50, f"{v50:.2f}"),
-            (v75, f"{v75:.2f}"),
-            (cmax, f"{cmax:.2f}")
-        ]]
-        axis.setTicks(ticks)
-        axis.setTextPen(pg.mkPen('#d0d0d0'))
-        axis.setPen(pg.mkPen('#6f6f6f'))
-        if axis_id == "prox":
-            self._axis1_state = new_state
-        else:
-            self._axis2_state = new_state
-
-    def _update_amplitude_ranges(self, metrics):
-        cmin_p = self._to_float_or_none(metrics.get("calib_min_p"))
-        cmax_p = self._to_float_or_none(metrics.get("calib_max_p"))
-        cmin_d = self._to_float_or_none(metrics.get("calib_min_d"))
-        cmax_d = self._to_float_or_none(metrics.get("calib_max_d"))
-
-        self._set_axis_range_ticks(self.graph1, cmin_p, cmax_p, "prox")
-        self._set_axis_range_ticks(self.graph2, cmin_d, cmax_d, "dist")
-
     # Actualiza el grafico
     def update_plot(self):
         if not self.measuring:
@@ -2077,9 +2029,10 @@ class MainScreen(QMainWindow):
         s2 = status.get("s2", False)
         now = time.monotonic()
         calibrating = bool(metrics.get("calibrating", False))
+        buffer_ready = bool(metrics.get("buffer_ready", not calibrating))
         both_signals_ok = c1 and c2 and s1 and s2
 
-        if self._show_calibrating_until_ready and (not calibrating) and both_signals_ok:
+        if self._show_calibrating_until_ready and buffer_ready and both_signals_ok:
             self._show_calibrating_until_ready = False
 
         if self._show_calibrating_until_ready:
@@ -2088,8 +2041,6 @@ class MainScreen(QMainWindow):
         else:
             self._show_sensor_alert(self.prox_alert_label, "SENSOR PROXIMAL", c1, s1, "#b00020")
             self._show_sensor_alert(self.dist_alert_label, "SENSOR DISTAL", c2, s2, "#c2185b")
-
-        self._update_amplitude_ranges(metrics)
 
         if len(t) > 1:
             x_end = t[-1]
@@ -2113,7 +2064,7 @@ class MainScreen(QMainWindow):
                 self.graph2.setXRange(0.0, 6.0, padding=0)
                 self._last_x_range = (0.0, 6.0)
 
-        allow_signal_plot = (not calibrating) and (not self._show_calibrating_until_ready)
+        allow_signal_plot = buffer_ready and (not self._show_calibrating_until_ready)
         data_seq = int(metrics.get("data_seq", -1))
         plot_mode_changed = (self._last_allow_signal_plot is None) or (self._last_allow_signal_plot != allow_signal_plot)
 
