@@ -1258,6 +1258,10 @@ class MainScreen(QMainWindow):
         # Variables
         self.patient_data = patient_data
         self._show_calibrating_until_ready = False
+        self._curve_hold_seconds = 0.8
+        self._last_curve1_data_time = 0.0
+        self._last_curve2_data_time = 0.0
+        self._last_x_end = None
         self.measuring = False  # Medición inicialmente desactivada
 
         try:
@@ -1840,6 +1844,10 @@ class MainScreen(QMainWindow):
             ComunicacionMax.reset_stream_buffers()
             processor.start_session()
             self._show_calibrating_until_ready = True
+            now = time.monotonic()
+            self._last_curve1_data_time = now
+            self._last_curve2_data_time = now
+            self._last_x_end = None
             self.start_graph_button.setText("Detener Medición")
             self.start_graph_button.setStyleSheet("""
                 QPushButton {
@@ -1881,6 +1889,9 @@ class MainScreen(QMainWindow):
             self.prox_alert_label.setVisible(False)
             self.dist_alert_label.setVisible(False)
             self._show_calibrating_until_ready = False
+            self._last_curve1_data_time = 0.0
+            self._last_curve2_data_time = 0.0
+            self._last_x_end = None
             self.hr_esp_label.setText("HR: -- bpm")
             self.pwv_label.setText("crPWV: -- m/s")
 
@@ -1944,6 +1955,7 @@ class MainScreen(QMainWindow):
         c2 = status.get("c2", False)
         s1 = status.get("s1", False)
         s2 = status.get("s2", False)
+        now = time.monotonic()
         calibrating = bool(metrics.get("calibrating", False))
         both_signals_ok = c1 and c2 and s1 and s2
 
@@ -1959,20 +1971,33 @@ class MainScreen(QMainWindow):
 
         if len(t) > 1:
             x_end = t[-1]
+            self._last_x_end = x_end
             x_start = max(0.0, x_end - 6.0)
             self.graph1.setXRange(x_start, x_end, padding=0)
             self.graph2.setXRange(x_start, x_end, padding=0)
+        elif self._last_x_end is not None:
+            x_start = max(0.0, self._last_x_end - 6.0)
+            self.graph1.setXRange(x_start, self._last_x_end, padding=0)
+            self.graph2.setXRange(x_start, self._last_x_end, padding=0)
         else:
             self.graph1.setXRange(0.0, 6.0, padding=0)
             self.graph2.setXRange(0.0, 6.0, padding=0)
 
         if c1 and s1 and len(t) == len(y1) and len(y1) > 1:
             self.curve1.setData(t, y1)
+            self._last_curve1_data_time = now
+        elif c1 and s1:
+            if (now - self._last_curve1_data_time) > self._curve_hold_seconds:
+                self.curve1.setData([], [])
         else:
             self.curve1.setData([], [])
 
         if c2 and s2 and len(t) == len(y2) and len(y2) > 1:
             self.curve2.setData(t, y2)
+            self._last_curve2_data_time = now
+        elif c2 and s2:
+            if (now - self._last_curve2_data_time) > self._curve_hold_seconds:
+                self.curve2.setData([], [])
         else:
             self.curve2.setData([], [])
 

@@ -22,6 +22,7 @@ class SignalProcessor:
         self.MAX_POINTS = 300
         self.VIEW_SECONDS = 6.0
         self.CALIB_SECONDS = 10.0
+        self.NO_DATA_HOLD_SECONDS = 1.0
 
         self.proximal_filtered = deque(maxlen=self.MAX_POINTS)
         self.distal_filtered = deque(maxlen=self.MAX_POINTS)
@@ -44,6 +45,9 @@ class SignalProcessor:
         self.calib_min_d = None
         self.calib_max_d = None
 
+        self.last_data_time = None
+        self.last_seq = -1
+
     def start_session(self):
         self.session_active = True
         self.session_start_local = time.monotonic()
@@ -56,6 +60,8 @@ class SignalProcessor:
         self.proximal_filtered.clear()
         self.distal_filtered.clear()
         self.time_axis.clear()
+        self.last_data_time = None
+        self.last_seq = -1
 
     def stop_session(self):
         self.session_active = False
@@ -66,6 +72,8 @@ class SignalProcessor:
         self.time_axis.clear()
         self.hr = None
         self.pwv = None
+        self.last_data_time = None
+        self.last_seq = -1
 
     def _update_status(self, snapshot):
         self.connected = bool(snapshot.get("connected", False))
@@ -119,11 +127,19 @@ class SignalProcessor:
         raw_t = snapshot.get("t", [])
         raw_p = snapshot.get("p", [])
         raw_d = snapshot.get("d", [])
+        seq = int(snapshot.get("seq", 0))
+        now = time.monotonic()
 
         if not raw_t or not raw_p or not raw_d:
-            self.proximal_filtered.clear()
-            self.distal_filtered.clear()
-            self.time_axis.clear()
+            if self.last_data_time is None or (now - self.last_data_time) > self.NO_DATA_HOLD_SECONDS:
+                self.proximal_filtered.clear()
+                self.distal_filtered.clear()
+                self.time_axis.clear()
+            return
+
+        self.last_data_time = now
+
+        if seq == self.last_seq and len(self.time_axis) > 1:
             return
 
         n = min(len(raw_t), len(raw_p), len(raw_d))
@@ -157,6 +173,7 @@ class SignalProcessor:
         self.time_axis = deque(t_rel[idx:].tolist(), maxlen=self.MAX_POINTS)
         self.proximal_filtered = deque(norm_p[idx:].tolist(), maxlen=self.MAX_POINTS)
         self.distal_filtered = deque(norm_d[idx:].tolist(), maxlen=self.MAX_POINTS)
+        self.last_seq = seq
 
     def get_signals(self):
         return list(self.time_axis), list(self.proximal_filtered), list(self.distal_filtered)

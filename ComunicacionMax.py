@@ -29,6 +29,15 @@ import websocket
 # esp_ip = "192.168.0.177"
 esp_ip = "192.168.0.238"
 ws_url = f"ws://{esp_ip}:81/"
+WS_PING_INTERVAL_SEC = 12
+WS_PING_TIMEOUT_SEC = 6
+WS_RECONNECT_DELAY_SEC = 1.0
+
+# Tiempo de muestreo esperado en el frontend (50 Hz visuales)
+SAMPLE_DT_SEC = 1.0 / 50.0
+SAMPLE_MIN_STEP_SEC = 0.010
+SAMPLE_MAX_STEP_SEC = 0.060
+SAMPLE_DISCONTINUITY_SEC = 0.300
 
 
 # ==============================================================================
@@ -51,7 +60,11 @@ remote_hr = None
 remote_pwv = None
 
 _state_lock = threading.Lock()
+_send_lock = threading.Lock()
 _connection_thread = None
+_last_sample_time = None
+_sample_seq = 0
+_last_rx_monotonic = None
 
 
 def _to_bool(value, default=False):
@@ -96,11 +109,13 @@ def _nullable_pwv(value):
 
 
 def reset_stream_buffers(reset_metrics=True):
-    global remote_hr, remote_pwv
+    global remote_hr, remote_pwv, _last_sample_time, _sample_seq
     with _state_lock:
         sample_time_raw.clear()
         proximal_data_raw.clear()
         distal_data_raw.clear()
+        _last_sample_time = None
+        _sample_seq = 0
         if reset_metrics:
             remote_hr = None
             remote_pwv = None
@@ -119,6 +134,8 @@ def get_snapshot():
             "d": list(distal_data_raw),
             "hr": remote_hr,
             "pwv": remote_pwv,
+            "seq": _sample_seq,
+            "last_rx": _last_rx_monotonic,
         }
 
 
@@ -131,7 +148,8 @@ def enviar_datos_paciente(altura_cm, edad):
     if connected and ws_app:
         try:
             mensaje = json.dumps({"h": int(altura_cm), "a": int(edad)})
-            ws_app.send(mensaje)
+            with _send_lock:
+                ws_app.send(mensaje)
             return True
         except Exception:
             return False
@@ -149,7 +167,7 @@ def on_open(ws):
 
 def on_message(ws, message):
     global sensor1_connected, sensor2_connected, sensor1_ok, sensor2_ok
-    global remote_hr, remote_pwv
+    global remote_hr, remote_pwv, _last_sample_time, _sample_seq, _last_rx_monotonic
 
     try:
         data = json.loads(message)
@@ -158,7 +176,11 @@ def on_message(ws, message):
     except Exception:
         return
 
+    now = time.monotonic()
+
     with _state_lock:
+        _last_rx_monotonic = now
+
         # Physical connection flags
         if "c1" in data:
             sensor1_connected = _to_bool(data.get("c1"), sensor1_connected)
@@ -181,7 +203,22 @@ def on_message(ws, message):
         if "p" in data and "d" in data and sensor1_connected and sensor2_connected and sensor1_ok and sensor2_ok:
             p_val = _to_float(data.get("p"), 0.0)
             d_val = _to_float(data.get("d"), 0.0)
-            sample_time_raw.append(time.monotonic())
+
+            if _last_sample_time is None:
+                t_sample = now
+            else:
+                dt = now - _last_sample_time
+                if dt > SAMPLE_DISCONTINUITY_SEC:
+                    t_sample = now
+                else:
+                    dt = max(SAMPLE_MIN_STEP_SEC, min(SAMPLE_MAX_STEP_SEC, dt))
+                    if abs(dt - SAMPLE_DT_SEC) <= 0.020:
+                        dt = SAMPLE_DT_SEC
+                    t_sample = _last_sample_time + dt
+
+            _last_sample_time = t_sample
+            _sample_seq += 1
+            sample_time_raw.append(t_sample)
             proximal_data_raw.append(p_val)
             distal_data_raw.append(d_val)
 
@@ -194,14 +231,18 @@ def on_message(ws, message):
 
 def on_error(ws, error):
     global connected, sensor1_connected, sensor2_connected, sensor1_ok, sensor2_ok, remote_hr, remote_pwv
+    global ws_app, _last_sample_time, _last_rx_monotonic
     with _state_lock:
         connected = False
+        ws_app = None
         sensor1_connected = False
         sensor2_connected = False
         sensor1_ok = False
         sensor2_ok = False
         remote_hr = None
         remote_pwv = None
+        _last_sample_time = None
+        _last_rx_monotonic = None
         sample_time_raw.clear()
         proximal_data_raw.clear()
         distal_data_raw.clear()
@@ -209,14 +250,18 @@ def on_error(ws, error):
 
 def on_close(ws, close_status_code, close_msg):
     global connected, sensor1_connected, sensor2_connected, sensor1_ok, sensor2_ok, remote_hr, remote_pwv
+    global ws_app, _last_sample_time, _last_rx_monotonic
     with _state_lock:
         connected = False
+        ws_app = None
         sensor1_connected = False
         sensor2_connected = False
         sensor1_ok = False
         sensor2_ok = False
         remote_hr = None
         remote_pwv = None
+        _last_sample_time = None
+        _last_rx_monotonic = None
         sample_time_raw.clear()
         proximal_data_raw.clear()
         distal_data_raw.clear()
@@ -227,14 +272,25 @@ def on_close(ws, close_status_code, close_msg):
 # ==============================================================================
 def run_ws():
     global ws_app
-    ws_app = websocket.WebSocketApp(
-        ws_url,
-        on_open=on_open,
-        on_message=on_message,
-        on_error=on_error,
-        on_close=on_close,
-    )
-    ws_app.run_forever()
+    while True:
+        ws_local = websocket.WebSocketApp(
+            ws_url,
+            on_open=on_open,
+            on_message=on_message,
+            on_error=on_error,
+            on_close=on_close,
+        )
+        with _state_lock:
+            ws_app = ws_local
+        try:
+            ws_local.run_forever(
+                ping_interval=WS_PING_INTERVAL_SEC,
+                ping_timeout=WS_PING_TIMEOUT_SEC,
+            )
+        except Exception:
+            with _state_lock:
+                ws_app = None
+        time.sleep(WS_RECONNECT_DELAY_SEC)
 
 
 def start_connection():
