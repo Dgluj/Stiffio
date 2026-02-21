@@ -9,10 +9,9 @@ Visual-only processing pipeline for signal display.
 """
 
 from collections import deque
+from bisect import bisect_left
 import math
 import time
-
-import numpy as np
 
 import ComunicacionMax
 
@@ -119,13 +118,13 @@ class SignalProcessor:
         return (self.calib_max_p - self.calib_min_p) > 1e-6 and (self.calib_max_d - self.calib_min_d) > 1e-6
 
     def _update_calibration(self, p_arr, d_arr):
-        if p_arr.size == 0 or d_arr.size == 0:
+        if not p_arr or not d_arr:
             return
 
-        p_min = float(np.min(p_arr))
-        p_max = float(np.max(p_arr))
-        d_min = float(np.min(d_arr))
-        d_max = float(np.max(d_arr))
+        p_min = float(min(p_arr))
+        p_max = float(max(p_arr))
+        d_min = float(min(d_arr))
+        d_max = float(max(d_arr))
 
         self.calib_min_p = p_min if self.calib_min_p is None else min(self.calib_min_p, p_min)
         self.calib_max_p = p_max if self.calib_max_p is None else max(self.calib_max_p, p_max)
@@ -181,25 +180,25 @@ class SignalProcessor:
             return
 
         n = min(len(raw_t), len(raw_p), len(raw_d))
-        raw_t = np.asarray(raw_t[-n:], dtype=float)
-        raw_p = np.asarray(raw_p[-n:], dtype=float)
-        raw_d = np.asarray(raw_d[-n:], dtype=float)
+        raw_t = raw_t[-n:]
+        raw_p = raw_p[-n:]
+        raw_d = raw_d[-n:]
 
         # Calibrate using first 10 seconds when both sensors are physically connected and on skin.
         if self.c1 and self.c2 and self.s1 and self.s2 and self._calibration_progress() < 1.0:
-            self._update_calibration(raw_p[-1:], raw_d[-1:])
+            self._update_calibration(raw_p, raw_d)
 
         if self.session_start_local is None:
-            self.session_start_local = raw_t[0]
+            self.session_start_local = float(raw_t[0])
 
-        t_rel = raw_t - self.session_start_local
-        t_end = float(t_rel[-1])
+        t_rel = [float(t) - self.session_start_local for t in raw_t]
+        t_end = t_rel[-1]
         t_start = max(0.0, t_end - self.VIEW_SECONDS)
-        idx = int(np.searchsorted(t_rel, t_start, side="left"))
+        idx = bisect_left(t_rel, t_start)
 
-        self.time_axis = deque(t_rel[idx:].tolist(), maxlen=self.MAX_POINTS)
-        self.proximal_filtered = deque(raw_p[idx:].tolist(), maxlen=self.MAX_POINTS)
-        self.distal_filtered = deque(raw_d[idx:].tolist(), maxlen=self.MAX_POINTS)
+        self.time_axis = deque(t_rel[idx:], maxlen=self.MAX_POINTS)
+        self.proximal_filtered = deque((float(v) for v in raw_p[idx:]), maxlen=self.MAX_POINTS)
+        self.distal_filtered = deque((float(v) for v in raw_d[idx:]), maxlen=self.MAX_POINTS)
         self.last_seq = seq
 
     def get_signals(self):

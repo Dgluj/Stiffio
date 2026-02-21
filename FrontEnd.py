@@ -709,7 +709,7 @@ class HistoryScreen(QWidget):
 
 
     def load_data(self):
-        filename = resource_path("datos_stiffio.csv") 
+        filename = resource_path("mediciones_pwv.csv") 
         self.all_data = [] # Inicializamos para evitar el AttributeError
 
         # Si el archivo NO existe, lo creamos con el formato correcto y datos de prueba
@@ -1263,8 +1263,11 @@ class MainScreen(QMainWindow):
         self._last_curve1_data_time = 0.0
         self._last_curve2_data_time = 0.0
         self._last_x_end = None
+        self._last_x_range = None
         self._last_valid_hr = None
         self._last_valid_pwv = None
+        self._axis1_state = None
+        self._axis2_state = None
         self.measuring = False  # Medición inicialmente desactivada
 
         try:
@@ -1627,6 +1630,10 @@ class MainScreen(QMainWindow):
         # Curvas de datos
         self.curve1 = self.graph1.plot([], [], pen=pg.mkPen('red', width=2))
         self.curve2 = self.graph2.plot([], [], pen=pg.mkPen('pink', width=2))
+        self.curve1.setClipToView(True)
+        self.curve2.setClipToView(True)
+        self.curve1.setDownsampling(auto=True, method='subsample')
+        self.curve2.setDownsampling(auto=True, method='subsample')
 
         # Alerta para sensor 1 (proximal)
         self.prox_alert_label = QLabel("REVISAR SENSOR")
@@ -1857,8 +1864,11 @@ class MainScreen(QMainWindow):
             self._last_curve1_data_time = now
             self._last_curve2_data_time = now
             self._last_x_end = None
+            self._last_x_range = None
             self._last_valid_hr = None
             self._last_valid_pwv = None
+            self._axis1_state = None
+            self._axis2_state = None
             self.graph1.setYRange(-1.0, 1.0, padding=0)
             self.graph2.setYRange(-1.0, 1.0, padding=0)
             self.graph1.getAxis('left').setTicks(None)
@@ -1913,8 +1923,9 @@ class MainScreen(QMainWindow):
     # Arranca el gráfico
     def start_graph_update(self):
         self.timer = QTimer()
+        self.timer.setTimerType(Qt.TimerType.PreciseTimer)
         self.timer.timeout.connect(self.update_plot)
-        self.timer.start(100)  # 10 Hz (actualiza la gráfica cada 100 ms)
+        self.timer.start(33)  # ~30 Hz para visualización más fluida
 
     # Detiene el gráfico
     def stop_graph_update(self):
@@ -1976,47 +1987,59 @@ class MainScreen(QMainWindow):
         iv = int(round(v))
         return iv if iv > 0 else None
 
-    def _set_axis_range_ticks(self, graph, cmin, cmax, saturated):
+    def _set_axis_range_ticks(self, graph, cmin, cmax, axis_id):
         axis = graph.getAxis('left')
+        if axis_id == "prox":
+            current_state = self._axis1_state
+        else:
+            current_state = self._axis2_state
+
         if cmin is None or cmax is None or cmax <= cmin:
+            if current_state is None:
+                return
             axis.setTicks(None)
             axis.setTextPen(pg.mkPen('#d0d0d0'))
             axis.setPen(pg.mkPen('#6f6f6f'))
             graph.setYRange(-1.0, 1.0, padding=0)
+            if axis_id == "prox":
+                self._axis1_state = None
+            else:
+                self._axis2_state = None
             return
+
+        new_state = (round(cmin, 4), round(cmax, 4))
+        if current_state == new_state:
+            return
+
+        span = cmax - cmin
+        v25 = cmin + (0.25 * span)
+        v50 = cmin + (0.50 * span)
+        v75 = cmin + (0.75 * span)
 
         graph.setYRange(cmin, cmax, padding=0)
         ticks = [[
-            (cmin, f"min {cmin:.2f}"),
-            (cmax, f"max {cmax:.2f}")
+            (cmin, f"{cmin:.2f}"),
+            (v25, f"{v25:.2f}"),
+            (v50, f"{v50:.2f}"),
+            (v75, f"{v75:.2f}"),
+            (cmax, f"{cmax:.2f}")
         ]]
         axis.setTicks(ticks)
-        if saturated:
-            axis.setTextPen(pg.mkPen('#ffb300'))
-            axis.setPen(pg.mkPen('#ffb300'))
+        axis.setTextPen(pg.mkPen('#d0d0d0'))
+        axis.setPen(pg.mkPen('#6f6f6f'))
+        if axis_id == "prox":
+            self._axis1_state = new_state
         else:
-            axis.setTextPen(pg.mkPen('#d0d0d0'))
-            axis.setPen(pg.mkPen('#6f6f6f'))
+            self._axis2_state = new_state
 
-    def _update_amplitude_ranges(self, metrics, y1, y2):
+    def _update_amplitude_ranges(self, metrics):
         cmin_p = self._to_float_or_none(metrics.get("calib_min_p"))
         cmax_p = self._to_float_or_none(metrics.get("calib_max_p"))
         cmin_d = self._to_float_or_none(metrics.get("calib_min_d"))
         cmax_d = self._to_float_or_none(metrics.get("calib_max_d"))
 
-        sat1 = False
-        sat2 = False
-        if cmin_p is not None and cmax_p is not None and y1:
-            local_min = float(min(y1))
-            local_max = float(max(y1))
-            sat1 = (local_min < cmin_p) or (local_max > cmax_p)
-        if cmin_d is not None and cmax_d is not None and y2:
-            local_min = float(min(y2))
-            local_max = float(max(y2))
-            sat2 = (local_min < cmin_d) or (local_max > cmax_d)
-
-        self._set_axis_range_ticks(self.graph1, cmin_p, cmax_p, sat1)
-        self._set_axis_range_ticks(self.graph2, cmin_d, cmax_d, sat2)
+        self._set_axis_range_ticks(self.graph1, cmin_p, cmax_p, "prox")
+        self._set_axis_range_ticks(self.graph2, cmin_d, cmax_d, "dist")
 
     # Actualiza el grafico
     def update_plot(self):
@@ -2046,21 +2069,29 @@ class MainScreen(QMainWindow):
             self._show_sensor_alert(self.prox_alert_label, "SENSOR PROXIMAL", c1, s1, "#b00020")
             self._show_sensor_alert(self.dist_alert_label, "SENSOR DISTAL", c2, s2, "#c2185b")
 
-        self._update_amplitude_ranges(metrics, y1, y2)
+        self._update_amplitude_ranges(metrics)
 
         if len(t) > 1:
             x_end = t[-1]
             self._last_x_end = x_end
             x_start = max(0.0, x_end - 6.0)
-            self.graph1.setXRange(x_start, x_end, padding=0)
-            self.graph2.setXRange(x_start, x_end, padding=0)
+            new_x_range = (round(x_start, 3), round(x_end, 3))
+            if self._last_x_range != new_x_range:
+                self.graph1.setXRange(x_start, x_end, padding=0)
+                self.graph2.setXRange(x_start, x_end, padding=0)
+                self._last_x_range = new_x_range
         elif self._last_x_end is not None:
             x_start = max(0.0, self._last_x_end - 6.0)
-            self.graph1.setXRange(x_start, self._last_x_end, padding=0)
-            self.graph2.setXRange(x_start, self._last_x_end, padding=0)
+            new_x_range = (round(x_start, 3), round(self._last_x_end, 3))
+            if self._last_x_range != new_x_range:
+                self.graph1.setXRange(x_start, self._last_x_end, padding=0)
+                self.graph2.setXRange(x_start, self._last_x_end, padding=0)
+                self._last_x_range = new_x_range
         else:
-            self.graph1.setXRange(0.0, 6.0, padding=0)
-            self.graph2.setXRange(0.0, 6.0, padding=0)
+            if self._last_x_range != (0.0, 6.0):
+                self.graph1.setXRange(0.0, 6.0, padding=0)
+                self.graph2.setXRange(0.0, 6.0, padding=0)
+                self._last_x_range = (0.0, 6.0)
 
         allow_signal_plot = (not calibrating) and (not self._show_calibrating_until_ready)
 
