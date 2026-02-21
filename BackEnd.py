@@ -47,6 +47,7 @@ class SignalProcessor:
 
         self.last_data_time = None
         self.last_seq = -1
+        self.data_seq = -1
 
     def start_session(self):
         self.session_active = True
@@ -62,6 +63,7 @@ class SignalProcessor:
         self.time_axis.clear()
         self.last_data_time = None
         self.last_seq = -1
+        self.data_seq = -1
 
     def stop_session(self):
         self.session_active = False
@@ -74,6 +76,7 @@ class SignalProcessor:
         self.pwv = None
         self.last_data_time = None
         self.last_seq = -1
+        self.data_seq = -1
 
     def _update_status(self, snapshot):
         self.connected = bool(snapshot.get("connected", False))
@@ -165,6 +168,7 @@ class SignalProcessor:
         raw_p = snapshot.get("p", [])
         raw_d = snapshot.get("d", [])
         seq = int(snapshot.get("seq", 0))
+        self.data_seq = seq
         now = time.monotonic()
 
         if not raw_t or not raw_p or not raw_d:
@@ -184,9 +188,16 @@ class SignalProcessor:
         raw_p = raw_p[-n:]
         raw_d = raw_d[-n:]
 
+        if self.last_seq < 0:
+            new_count = n
+        else:
+            new_count = max(0, min(n, seq - self.last_seq))
+        if new_count <= 0:
+            new_count = 1
+
         # Calibrate using first 10 seconds when both sensors are physically connected and on skin.
         if self.c1 and self.c2 and self.s1 and self.s2 and self._calibration_progress() < 1.0:
-            self._update_calibration(raw_p, raw_d)
+            self._update_calibration(raw_p[-new_count:], raw_d[-new_count:])
 
         if self.session_start_local is None:
             self.session_start_local = float(raw_t[0])
@@ -226,6 +237,7 @@ class SignalProcessor:
             "y1_max": y1_max,
             "y2_min": y2_min,
             "y2_max": y2_max,
+            "data_seq": self.data_seq,
         }
 
     def get_sensor_status(self):

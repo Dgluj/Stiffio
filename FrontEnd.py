@@ -1271,6 +1271,8 @@ class MainScreen(QMainWindow):
         self._last_valid_pwv = None
         self._axis1_state = None
         self._axis2_state = None
+        self._last_plot_seq = -1
+        self._last_allow_signal_plot = None
         self.measuring = False  # Medición inicialmente desactivada
 
         try:
@@ -1872,6 +1874,8 @@ class MainScreen(QMainWindow):
             self._last_valid_pwv = None
             self._axis1_state = None
             self._axis2_state = None
+            self._last_plot_seq = -1
+            self._last_allow_signal_plot = None
             self.graph1.setYRange(-1.0, 1.0, padding=0)
             self.graph2.setYRange(-1.0, 1.0, padding=0)
             self.graph1.getAxis('left').setTicks(None)
@@ -2097,29 +2101,36 @@ class MainScreen(QMainWindow):
                 self._last_x_range = (0.0, 6.0)
 
         allow_signal_plot = (not calibrating) and (not self._show_calibrating_until_ready)
+        data_seq = int(metrics.get("data_seq", -1))
+        plot_mode_changed = (self._last_allow_signal_plot is None) or (self._last_allow_signal_plot != allow_signal_plot)
 
         if not allow_signal_plot:
-            self.curve1.setData([], [])
-            self.curve2.setData([], [])
-        elif c1 and s1 and len(t) == len(y1) and len(y1) > 1:
-            self.curve1.setData(t, y1)
-            self._last_curve1_data_time = now
-        elif c1 and s1:
-            if (now - self._last_curve1_data_time) > self._curve_hold_seconds:
+            if plot_mode_changed:
                 self.curve1.setData([], [])
-        else:
-            self.curve1.setData([], [])
-
-        if (not allow_signal_plot):
-            pass
-        elif c2 and s2 and len(t) == len(y2) and len(y2) > 1:
-            self.curve2.setData(t, y2)
-            self._last_curve2_data_time = now
-        elif c2 and s2:
-            if (now - self._last_curve2_data_time) > self._curve_hold_seconds:
                 self.curve2.setData([], [])
         else:
-            self.curve2.setData([], [])
+            should_plot_update = plot_mode_changed or (data_seq != self._last_plot_seq)
+            if should_plot_update:
+                if c1 and s1 and len(t) == len(y1) and len(y1) > 1:
+                    self.curve1.setData(t, y1)
+                    self._last_curve1_data_time = now
+                elif c1 and s1:
+                    if (now - self._last_curve1_data_time) > self._curve_hold_seconds:
+                        self.curve1.setData([], [])
+                else:
+                    self.curve1.setData([], [])
+
+                if c2 and s2 and len(t) == len(y2) and len(y2) > 1:
+                    self.curve2.setData(t, y2)
+                    self._last_curve2_data_time = now
+                elif c2 and s2:
+                    if (now - self._last_curve2_data_time) > self._curve_hold_seconds:
+                        self.curve2.setData([], [])
+                else:
+                    self.curve2.setData([], [])
+                self._last_plot_seq = data_seq
+
+        self._last_allow_signal_plot = allow_signal_plot
 
         hr_val = self._to_int_or_none(metrics.get("hr"))
         if hr_val is not None:
