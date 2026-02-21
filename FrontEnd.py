@@ -1257,6 +1257,7 @@ class MainScreen(QMainWindow):
 
         # Variables
         self.patient_data = patient_data
+        self._show_calibrating_until_ready = False
         self.measuring = False  # Medición inicialmente desactivada
 
         try:
@@ -1838,6 +1839,7 @@ class MainScreen(QMainWindow):
             self.measuring = True
             ComunicacionMax.reset_stream_buffers()
             processor.start_session()
+            self._show_calibrating_until_ready = True
             self.start_graph_button.setText("Detener Medición")
             self.start_graph_button.setStyleSheet("""
                 QPushButton {
@@ -1878,6 +1880,7 @@ class MainScreen(QMainWindow):
             self.curve2.setData([], [])
             self.prox_alert_label.setVisible(False)
             self.dist_alert_label.setVisible(False)
+            self._show_calibrating_until_ready = False
             self.hr_esp_label.setText("HR: -- bpm")
             self.pwv_label.setText("crPWV: -- m/s")
 
@@ -1891,6 +1894,18 @@ class MainScreen(QMainWindow):
     def stop_graph_update(self):
         if hasattr(self, 'timer'):
             self.timer.stop()
+
+    def _show_calibrating_alert(self, label, bg_color):
+        label.setText("CALIBRANDO")
+        label.setStyleSheet(f"""
+            background-color: {bg_color};
+            color: white;
+            font-size: 22pt;
+            font-weight: bold;
+            border-radius: 10px;
+        """)
+        label.setVisible(True)
+
     def _show_sensor_alert(self, label, sensor_name, connected_ok, skin_ok, bg_color):
         if not connected_ok:
             label.setText(f"{sensor_name} DESCONECTADO")
@@ -1929,9 +1944,18 @@ class MainScreen(QMainWindow):
         c2 = status.get("c2", False)
         s1 = status.get("s1", False)
         s2 = status.get("s2", False)
+        calibrating = bool(metrics.get("calibrating", False))
+        both_signals_ok = c1 and c2 and s1 and s2
 
-        self._show_sensor_alert(self.prox_alert_label, "SENSOR PROXIMAL", c1, s1, "#b00020")
-        self._show_sensor_alert(self.dist_alert_label, "SENSOR DISTAL", c2, s2, "#c2185b")
+        if self._show_calibrating_until_ready and (not calibrating) and both_signals_ok:
+            self._show_calibrating_until_ready = False
+
+        if self._show_calibrating_until_ready:
+            self._show_calibrating_alert(self.prox_alert_label, "#b00020")
+            self._show_calibrating_alert(self.dist_alert_label, "#c2185b")
+        else:
+            self._show_sensor_alert(self.prox_alert_label, "SENSOR PROXIMAL", c1, s1, "#b00020")
+            self._show_sensor_alert(self.dist_alert_label, "SENSOR DISTAL", c2, s2, "#c2185b")
 
         if len(t) > 1:
             x_end = t[-1]
