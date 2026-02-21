@@ -4,11 +4,12 @@ Visual-only processing pipeline for signal display.
 
 - Receives already-filtered signals from ESP32 through ComunicacionMax.
 - Runs a 10-second amplitude calibration (min/max) at session start.
-- Normalizes for stable plotting.
+- Uses fixed Y-scale from calibration min/max for plotting real amplitude.
 - Does NOT compute HR or PWV (those come from ESP32 JSON).
 """
 
 from collections import deque
+import math
 import time
 
 import numpy as np
@@ -81,8 +82,30 @@ class SignalProcessor:
         self.c2 = bool(snapshot.get("c2", False))
         self.s1 = bool(snapshot.get("s1", False))
         self.s2 = bool(snapshot.get("s2", False))
-        self.hr = snapshot.get("hr", None)
-        self.pwv = snapshot.get("pwv", None)
+        self.hr = self._coerce_optional_int(snapshot.get("hr", None))
+        self.pwv = self._coerce_optional_float(snapshot.get("pwv", None))
+
+    def _coerce_optional_int(self, value):
+        if value is None:
+            return None
+        try:
+            v = int(float(value))
+        except (TypeError, ValueError):
+            return None
+        return v if v > 0 else None
+
+    def _coerce_optional_float(self, value):
+        if value is None:
+            return None
+        if isinstance(value, str):
+            value = value.strip().replace(",", ".")
+        try:
+            v = float(value)
+        except (TypeError, ValueError):
+            return None
+        if (not math.isfinite(v)) or v <= 0.0:
+            return None
+        return v
 
     def _calibration_progress(self):
         if not self.session_active or self.session_start_local is None:
@@ -109,13 +132,28 @@ class SignalProcessor:
         self.calib_min_d = d_min if self.calib_min_d is None else min(self.calib_min_d, d_min)
         self.calib_max_d = d_max if self.calib_max_d is None else max(self.calib_max_d, d_max)
 
-    def _normalize_signal(self, signal, vmin, vmax):
-        baseline = (vmax + vmin) * 0.5
-        half = (vmax - vmin) * 0.5
-        if half < 1e-6:
-            half = 1.0
-        normalized = ((signal - baseline) / half) * 100.0
-        return np.clip(normalized, -110.0, 110.0)
+    def _safe_axis_range(self, vmin, vmax, fallback_center=0.0, fallback_half=1.0):
+        if vmin is None or vmax is None:
+            return (fallback_center - fallback_half, fallback_center + fallback_half)
+        if (not math.isfinite(vmin)) or (not math.isfinite(vmax)):
+            return (fallback_center - fallback_half, fallback_center + fallback_half)
+        if vmax < vmin:
+            vmin, vmax = vmax, vmin
+        span = vmax - vmin
+        if span < 1e-6:
+            center = (vmax + vmin) * 0.5
+            half = max(abs(center) * 0.05, fallback_half)
+            return (center - half, center + half)
+        return (vmin, vmax)
+
+    def _channel_axis_range(self, calib_min, calib_max, signal_values):
+        if calib_min is not None and calib_max is not None:
+            return self._safe_axis_range(calib_min, calib_max)
+        if signal_values:
+            local_min = float(min(signal_values))
+            local_max = float(max(signal_values))
+            return self._safe_axis_range(local_min, local_max)
+        return self._safe_axis_range(None, None)
 
     def process_all(self):
         if not self.session_active:
@@ -151,17 +189,6 @@ class SignalProcessor:
         if self.c1 and self.c2 and self.s1 and self.s2 and self._calibration_progress() < 1.0:
             self._update_calibration(raw_p[-1:], raw_d[-1:])
 
-        # Use fixed calibration when available; fallback to current window scale while calibrating.
-        if self._has_valid_calibration():
-            p_min, p_max = self.calib_min_p, self.calib_max_p
-            d_min, d_max = self.calib_min_d, self.calib_max_d
-        else:
-            p_min, p_max = float(np.min(raw_p)), float(np.max(raw_p))
-            d_min, d_max = float(np.min(raw_d)), float(np.max(raw_d))
-
-        norm_p = self._normalize_signal(raw_p, p_min, p_max)
-        norm_d = self._normalize_signal(raw_d, d_min, d_max)
-
         if self.session_start_local is None:
             self.session_start_local = raw_t[0]
 
@@ -171,19 +198,35 @@ class SignalProcessor:
         idx = int(np.searchsorted(t_rel, t_start, side="left"))
 
         self.time_axis = deque(t_rel[idx:].tolist(), maxlen=self.MAX_POINTS)
-        self.proximal_filtered = deque(norm_p[idx:].tolist(), maxlen=self.MAX_POINTS)
-        self.distal_filtered = deque(norm_d[idx:].tolist(), maxlen=self.MAX_POINTS)
+        self.proximal_filtered = deque(raw_p[idx:].tolist(), maxlen=self.MAX_POINTS)
+        self.distal_filtered = deque(raw_d[idx:].tolist(), maxlen=self.MAX_POINTS)
         self.last_seq = seq
 
     def get_signals(self):
         return list(self.time_axis), list(self.proximal_filtered), list(self.distal_filtered)
 
     def get_metrics(self):
+        y1_min, y1_max = self._channel_axis_range(
+            self.calib_min_p, self.calib_max_p, self.proximal_filtered
+        )
+        y2_min, y2_max = self._channel_axis_range(
+            self.calib_min_d, self.calib_max_d, self.distal_filtered
+        )
+
         return {
             "hr": self.hr,
             "pwv": self.pwv,
             "calibrating": self.session_active and self._calibration_progress() < 1.0,
             "calibration_progress": self._calibration_progress(),
+            "calibration_ready": self._has_valid_calibration(),
+            "calib_min_p": self.calib_min_p,
+            "calib_max_p": self.calib_max_p,
+            "calib_min_d": self.calib_min_d,
+            "calib_max_d": self.calib_max_d,
+            "y1_min": y1_min,
+            "y1_max": y1_max,
+            "y2_min": y2_min,
+            "y2_max": y2_max,
         }
 
     def get_sensor_status(self):

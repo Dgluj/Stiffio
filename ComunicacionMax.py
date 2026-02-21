@@ -91,8 +91,10 @@ def _to_float(value, default=0.0):
 def _nullable_hr(value):
     if value is None:
         return None
+    if isinstance(value, str):
+        value = value.strip().replace(",", ".")
     try:
-        v = int(value)
+        v = int(float(value))
     except (TypeError, ValueError):
         return None
     return v if v > 0 else None
@@ -101,6 +103,8 @@ def _nullable_hr(value):
 def _nullable_pwv(value):
     if value is None:
         return None
+    if isinstance(value, str):
+        value = value.strip().replace(",", ".")
     try:
         v = float(value)
     except (TypeError, ValueError):

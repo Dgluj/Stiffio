@@ -9,6 +9,7 @@ import os
 import pyqtgraph as pg
 import numpy as np
 import time
+import math
 import csv
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
@@ -1252,8 +1253,8 @@ class MainScreen(QMainWindow):
         # Inicializar comunicación (verificar si el método existe)
         try:
             ComunicacionMax.start_connection()
-        except Exception as e:
-            print(f"[FrontEnd] Error al iniciar comunicación: {e}")       
+        except Exception:
+            pass
 
         # Variables
         self.patient_data = patient_data
@@ -1262,6 +1263,8 @@ class MainScreen(QMainWindow):
         self._last_curve1_data_time = 0.0
         self._last_curve2_data_time = 0.0
         self._last_x_end = None
+        self._last_valid_hr = None
+        self._last_valid_pwv = None
         self.measuring = False  # Medición inicialmente desactivada
 
         try:
@@ -1274,10 +1277,8 @@ class MainScreen(QMainWindow):
             # Verificar si el método existe antes de llamarlo
             if hasattr(processor, 'set_height_from_frontend'):
                 processor.set_height_from_frontend(altura_m)
-                print("[Frontend] Enviando altura:", altura_m)
             elif hasattr(processor, 'set_height'):
                 processor.set_height(altura_m)
-                print("[Frontend] Enviando altura:", altura_m)
         except (ValueError, KeyError, AttributeError):
             pass
 
@@ -1600,20 +1601,28 @@ class MainScreen(QMainWindow):
         self.graph1.setBackground('k')
         self.graph1.setTitle("Sensor Proximal (Carótida)", color='w', size='12pt')
         self.graph1.showGrid(x=True, y=True)
-        self.graph1.setLabel('left', 'Amplitud Normalizada (%)')
+        self.graph1.setLabel('left', 'Amplitud')
         self.graph1.setLabel('bottom', 'Tiempo (s)')
-        self.graph1.setYRange(-110, 110, padding=0)
+        self.graph1.enableAutoRange(axis='y', enable=False)
+        self.graph1.setYRange(-1.0, 1.0, padding=0)
         self.right_layout.addWidget(self.graph1)
+        self.prox_range_label = QLabel("Rango Proximal (Cal): min -- | max --")
+        self.prox_range_label.setStyleSheet("color: #d0d0d0; font-size: 10pt;")
+        self.right_layout.addWidget(self.prox_range_label)
 
         # Gráfico sensor 2 (distal)
         self.graph2 = pg.PlotWidget()
         self.graph2.setBackground('k')
         self.graph2.setTitle("Sensor Distal (Radial)", color='w', size='12pt')
         self.graph2.showGrid(x=True, y=True)
-        self.graph2.setLabel('left', 'Amplitud Normalizada (%)')
+        self.graph2.setLabel('left', 'Amplitud')
         self.graph2.setLabel('bottom', 'Tiempo (s)')
-        self.graph2.setYRange(-110, 110, padding=0)
+        self.graph2.enableAutoRange(axis='y', enable=False)
+        self.graph2.setYRange(-1.0, 1.0, padding=0)
         self.right_layout.addWidget(self.graph2)
+        self.dist_range_label = QLabel("Rango Distal (Cal): min -- | max --")
+        self.dist_range_label.setStyleSheet("color: #d0d0d0; font-size: 10pt;")
+        self.right_layout.addWidget(self.dist_range_label)
 
         # Curvas de datos
         self.curve1 = self.graph1.plot([], [], pen=pg.mkPen('red', width=2))
@@ -1848,6 +1857,12 @@ class MainScreen(QMainWindow):
             self._last_curve1_data_time = now
             self._last_curve2_data_time = now
             self._last_x_end = None
+            self._last_valid_hr = None
+            self._last_valid_pwv = None
+            self.prox_range_label.setText("Rango Proximal (Cal): calibrando...")
+            self.dist_range_label.setText("Rango Distal (Cal): calibrando...")
+            self.graph1.setYRange(-1.0, 1.0, padding=0)
+            self.graph2.setYRange(-1.0, 1.0, padding=0)
             self.start_graph_button.setText("Detener Medición")
             self.start_graph_button.setStyleSheet("""
                 QPushButton {
@@ -1892,6 +1907,10 @@ class MainScreen(QMainWindow):
             self._last_curve1_data_time = 0.0
             self._last_curve2_data_time = 0.0
             self._last_x_end = None
+            self._last_valid_hr = None
+            self._last_valid_pwv = None
+            self.prox_range_label.setText("Rango Proximal (Cal): min -- | max --")
+            self.dist_range_label.setText("Rango Distal (Cal): min -- | max --")
             self.hr_esp_label.setText("HR: -- bpm")
             self.pwv_label.setText("crPWV: -- m/s")
 
@@ -1941,6 +1960,69 @@ class MainScreen(QMainWindow):
         else:
             label.setVisible(False)
 
+    def _to_float_or_none(self, value):
+        if value is None:
+            return None
+        if isinstance(value, str):
+            value = value.strip().replace(",", ".")
+        try:
+            v = float(value)
+        except (TypeError, ValueError):
+            return None
+        if not math.isfinite(v):
+            return None
+        return v
+
+    def _to_int_or_none(self, value):
+        v = self._to_float_or_none(value)
+        if v is None:
+            return None
+        iv = int(round(v))
+        return iv if iv > 0 else None
+
+    def _set_range_label(self, label, prefix, cmin, cmax, saturated):
+        if cmin is None or cmax is None:
+            label.setText(f"{prefix}: calibrando...")
+            label.setStyleSheet("color: #d0d0d0; font-size: 10pt;")
+            return
+
+        sat_txt = " | SATURANDO" if saturated else ""
+        label.setText(f"{prefix}: min {cmin:.2f} | max {cmax:.2f}{sat_txt}")
+        if saturated:
+            label.setStyleSheet("color: #ffb300; font-size: 10pt; font-weight: bold;")
+        else:
+            label.setStyleSheet("color: #d0d0d0; font-size: 10pt;")
+
+    def _update_amplitude_ranges(self, metrics, y1, y2):
+        y1_min = self._to_float_or_none(metrics.get("y1_min"))
+        y1_max = self._to_float_or_none(metrics.get("y1_max"))
+        y2_min = self._to_float_or_none(metrics.get("y2_min"))
+        y2_max = self._to_float_or_none(metrics.get("y2_max"))
+
+        if y1_min is not None and y1_max is not None and y1_max > y1_min:
+            self.graph1.setYRange(y1_min, y1_max, padding=0)
+        if y2_min is not None and y2_max is not None and y2_max > y2_min:
+            self.graph2.setYRange(y2_min, y2_max, padding=0)
+
+        cmin_p = self._to_float_or_none(metrics.get("calib_min_p"))
+        cmax_p = self._to_float_or_none(metrics.get("calib_max_p"))
+        cmin_d = self._to_float_or_none(metrics.get("calib_min_d"))
+        cmax_d = self._to_float_or_none(metrics.get("calib_max_d"))
+
+        sat1 = False
+        sat2 = False
+        if cmin_p is not None and cmax_p is not None and y1:
+            local_min = float(min(y1))
+            local_max = float(max(y1))
+            sat1 = (local_min < cmin_p) or (local_max > cmax_p)
+        if cmin_d is not None and cmax_d is not None and y2:
+            local_min = float(min(y2))
+            local_max = float(max(y2))
+            sat2 = (local_min < cmin_d) or (local_max > cmax_d)
+
+        self._set_range_label(self.prox_range_label, "Rango Proximal (Cal)", cmin_p, cmax_p, sat1)
+        self._set_range_label(self.dist_range_label, "Rango Distal (Cal)", cmin_d, cmax_d, sat2)
+
     # Actualiza el grafico
     def update_plot(self):
         if not self.measuring:
@@ -1969,6 +2051,8 @@ class MainScreen(QMainWindow):
             self._show_sensor_alert(self.prox_alert_label, "SENSOR PROXIMAL", c1, s1, "#b00020")
             self._show_sensor_alert(self.dist_alert_label, "SENSOR DISTAL", c2, s2, "#c2185b")
 
+        self._update_amplitude_ranges(metrics, y1, y2)
+
         if len(t) > 1:
             x_end = t[-1]
             self._last_x_end = x_end
@@ -1983,7 +2067,12 @@ class MainScreen(QMainWindow):
             self.graph1.setXRange(0.0, 6.0, padding=0)
             self.graph2.setXRange(0.0, 6.0, padding=0)
 
-        if c1 and s1 and len(t) == len(y1) and len(y1) > 1:
+        allow_signal_plot = (not calibrating) and (not self._show_calibrating_until_ready)
+
+        if not allow_signal_plot:
+            self.curve1.setData([], [])
+            self.curve2.setData([], [])
+        elif c1 and s1 and len(t) == len(y1) and len(y1) > 1:
             self.curve1.setData(t, y1)
             self._last_curve1_data_time = now
         elif c1 and s1:
@@ -1992,7 +2081,9 @@ class MainScreen(QMainWindow):
         else:
             self.curve1.setData([], [])
 
-        if c2 and s2 and len(t) == len(y2) and len(y2) > 1:
+        if (not allow_signal_plot):
+            pass
+        elif c2 and s2 and len(t) == len(y2) and len(y2) > 1:
             self.curve2.setData(t, y2)
             self._last_curve2_data_time = now
         elif c2 and s2:
@@ -2001,19 +2092,23 @@ class MainScreen(QMainWindow):
         else:
             self.curve2.setData([], [])
 
-        hr_val = metrics.get("hr")
+        hr_val = self._to_int_or_none(metrics.get("hr"))
         if hr_val is not None:
-            self.hr_esp_label.setText(f"HR: {int(hr_val)} bpm")
+            self._last_valid_hr = hr_val
+        if self._last_valid_hr is not None:
+            self.hr_esp_label.setText(f"HR: {self._last_valid_hr} bpm")
         elif c1 and c2 and s1 and s2:
             self.hr_esp_label.setText("HR: Calculando...")
         else:
             self.hr_esp_label.setText("HR: -- bpm")
 
-        pwv_val = metrics.get("pwv")
-        if pwv_val is not None:
-            self.pwv_label.setText(f"crPWV: {float(pwv_val):.2f} m/s")
+        pwv_val = self._to_float_or_none(metrics.get("pwv"))
+        if pwv_val is not None and pwv_val > 0.0:
+            self._last_valid_pwv = pwv_val
+        if self._last_valid_pwv is not None:
+            self.pwv_label.setText(f"crPWV: {self._last_valid_pwv:.2f} m/s")
             if self.patient_age is not None:
-                self.patient_point_item.setData([self.patient_age], [float(pwv_val)])
+                self.patient_point_item.setData([self.patient_age], [self._last_valid_pwv])
         elif c1 and c2 and s1 and s2:
             self.pwv_label.setText("crPWV: Calculando...")
         else:
@@ -2036,8 +2131,12 @@ class MainScreen(QMainWindow):
 
         # Obtener métricas del backend (los valores ya promediados)
         metrics = processor.get_metrics()
-        pwv_val = metrics.get('pwv')
-        hr_val = metrics.get('hr')
+        pwv_val = self._to_float_or_none(metrics.get('pwv'))
+        hr_val = self._to_int_or_none(metrics.get('hr'))
+        if pwv_val is None:
+            pwv_val = self._last_valid_pwv
+        if hr_val is None:
+            hr_val = self._last_valid_hr
 
         # Validar que tengamos datos
         if pwv_val is None or hr_val is None:
