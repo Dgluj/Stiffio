@@ -1269,8 +1269,6 @@ class MainScreen(QMainWindow):
         self._last_x_range = None
         self._last_valid_hr = None
         self._last_valid_pwv = None
-        self._axis1_state = None
-        self._axis2_state = None
         self._last_plot_seq = -1
         self._last_allow_signal_plot = None
         self.measuring = False  # Medición inicialmente desactivada
@@ -1609,13 +1607,20 @@ class MainScreen(QMainWindow):
         self.graph1.setBackground('k')
         self.graph1.setTitle("Sensor Proximal (Carótida)", color='w', size='12pt')
         self.graph1.showGrid(x=True, y=True)
-        self.graph1.setLabel('left', 'Amplitud (u.a.)')
+        self.graph1.setLabel('left', 'Amplitud Normalizada (%)')
         self.graph1.setLabel('bottom', 'Tiempo (s)')
         self.graph1.enableAutoRange(axis='y', enable=False)
-        self.graph1.setYRange(-1.0, 1.0, padding=0)
+        self.graph1.setYRange(-100.0, 100.0, padding=0)
         axis1 = self.graph1.getAxis('left')
         axis1.setTextPen(pg.mkPen('#d0d0d0'))
         axis1.setPen(pg.mkPen('#6f6f6f'))
+        axis1.setTicks([[
+            (-100.0, "-100"),
+            (-50.0, "-50"),
+            (0.0, "0"),
+            (50.0, "50"),
+            (100.0, "100"),
+        ]])
         self.right_layout.addWidget(self.graph1)
 
         # Gráfico sensor 2 (distal)
@@ -1623,13 +1628,20 @@ class MainScreen(QMainWindow):
         self.graph2.setBackground('k')
         self.graph2.setTitle("Sensor Distal (Radial)", color='w', size='12pt')
         self.graph2.showGrid(x=True, y=True)
-        self.graph2.setLabel('left', 'Amplitud (u.a.)')
+        self.graph2.setLabel('left', 'Amplitud Normalizada (%)')
         self.graph2.setLabel('bottom', 'Tiempo (s)')
         self.graph2.enableAutoRange(axis='y', enable=False)
-        self.graph2.setYRange(-1.0, 1.0, padding=0)
+        self.graph2.setYRange(-100.0, 100.0, padding=0)
         axis2 = self.graph2.getAxis('left')
         axis2.setTextPen(pg.mkPen('#d0d0d0'))
         axis2.setPen(pg.mkPen('#6f6f6f'))
+        axis2.setTicks([[
+            (-100.0, "-100"),
+            (-50.0, "-50"),
+            (0.0, "0"),
+            (50.0, "50"),
+            (100.0, "100"),
+        ]])
         self.right_layout.addWidget(self.graph2)
 
         # Curvas de datos
@@ -1885,18 +1897,28 @@ class MainScreen(QMainWindow):
             self._last_x_range = None
             self._last_valid_hr = None
             self._last_valid_pwv = None
-            self._axis1_state = None
-            self._axis2_state = None
             self._last_plot_seq = -1
             self._last_allow_signal_plot = None
-            self.graph1.setYRange(-1.0, 1.0, padding=0)
-            self.graph2.setYRange(-1.0, 1.0, padding=0)
-            self.graph1.getAxis('left').setTicks(None)
-            self.graph2.getAxis('left').setTicks(None)
+            self.graph1.setYRange(-100.0, 100.0, padding=0)
+            self.graph2.setYRange(-100.0, 100.0, padding=0)
             self.graph1.getAxis('left').setTextPen(pg.mkPen('#d0d0d0'))
             self.graph1.getAxis('left').setPen(pg.mkPen('#6f6f6f'))
             self.graph2.getAxis('left').setTextPen(pg.mkPen('#d0d0d0'))
             self.graph2.getAxis('left').setPen(pg.mkPen('#6f6f6f'))
+            self.graph1.getAxis('left').setTicks([[
+                (-100.0, "-100"),
+                (-50.0, "-50"),
+                (0.0, "0"),
+                (50.0, "50"),
+                (100.0, "100"),
+            ]])
+            self.graph2.getAxis('left').setTicks([[
+                (-100.0, "-100"),
+                (-50.0, "-50"),
+                (0.0, "0"),
+                (50.0, "50"),
+                (100.0, "100"),
+            ]])
             self.curve1.setData([], [])
             self.curve2.setData([], [])
             self.prox_alert_label.setVisible(False)
@@ -2007,60 +2029,6 @@ class MainScreen(QMainWindow):
         iv = int(round(v))
         return iv if iv > 0 else None
 
-    def _set_axis_range_ticks(self, graph, cmin, cmax, axis_id):
-        axis = graph.getAxis('left')
-        if axis_id == "prox":
-            current_state = self._axis1_state
-        else:
-            current_state = self._axis2_state
-
-        if cmin is None or cmax is None or cmax <= cmin:
-            if current_state is None:
-                return
-            axis.setTicks(None)
-            axis.setTextPen(pg.mkPen('#d0d0d0'))
-            axis.setPen(pg.mkPen('#6f6f6f'))
-            graph.setYRange(-1.0, 1.0, padding=0)
-            if axis_id == "prox":
-                self._axis1_state = None
-            else:
-                self._axis2_state = None
-            return
-
-        new_state = (round(cmin, 4), round(cmax, 4))
-        if current_state == new_state:
-            return
-
-        span = cmax - cmin
-        v25 = cmin + (0.25 * span)
-        v50 = cmin + (0.50 * span)
-        v75 = cmin + (0.75 * span)
-
-        graph.setYRange(cmin, cmax, padding=0)
-        ticks = [[
-            (cmin, f"{cmin:.2f}"),
-            (v25, f"{v25:.2f}"),
-            (v50, f"{v50:.2f}"),
-            (v75, f"{v75:.2f}"),
-            (cmax, f"{cmax:.2f}")
-        ]]
-        axis.setTicks(ticks)
-        axis.setTextPen(pg.mkPen('#d0d0d0'))
-        axis.setPen(pg.mkPen('#6f6f6f'))
-        if axis_id == "prox":
-            self._axis1_state = new_state
-        else:
-            self._axis2_state = new_state
-
-    def _update_amplitude_ranges(self, metrics):
-        cmin_p = self._to_float_or_none(metrics.get("calib_min_p"))
-        cmax_p = self._to_float_or_none(metrics.get("calib_max_p"))
-        cmin_d = self._to_float_or_none(metrics.get("calib_min_d"))
-        cmax_d = self._to_float_or_none(metrics.get("calib_max_d"))
-
-        self._set_axis_range_ticks(self.graph1, cmin_p, cmax_p, "prox")
-        self._set_axis_range_ticks(self.graph2, cmin_d, cmax_d, "dist")
-
     # Actualiza el grafico
     def update_plot(self):
         if not self.measuring:
@@ -2088,8 +2056,6 @@ class MainScreen(QMainWindow):
         else:
             self._show_sensor_alert(self.prox_alert_label, "SENSOR PROXIMAL", c1, s1, "#b00020")
             self._show_sensor_alert(self.dist_alert_label, "SENSOR DISTAL", c2, s2, "#c2185b")
-
-        self._update_amplitude_ranges(metrics)
 
         if len(t) > 1:
             x_end = t[-1]
