@@ -1,5 +1,5 @@
 // ==============================================================================================
-// LIBRERAS
+// LIBRERÏAS
 // ==============================================================================================
 #include <SPI.h>
 #include <TFT_eSPI.h>
@@ -11,15 +11,16 @@
 #include <math.h>
 #include <stdlib.h>
 #include "bitmaps.h" // Imagenes
+#include <math.h>
 
 
 // ==============================================================================================
-// CONFIGURACIN
+// CONFIGURACIÓN
 // ==============================================================================================
 
 // Wi-Fi  ===============================================================
-const char* ssid = "Gavilan GLJ 2.4";     // WiFi 
-const char* password = "a1b1c1d1e1";   // Contrasea
+const char* ssid = "iPhonedeVictoria";     // WiFi 
+const char* password = "vitucapa";         // Contraseña
 WebSocketsServer webSocket(81);
 bool wifiConectado = false;
 
@@ -73,7 +74,7 @@ volatile bool s1ok = false;
 volatile bool s2ok = false;
 volatile bool s1_conectado = true;
 volatile bool s2_conectado = true;
-const uint8_t SENSOR_I2C_ADDR = 0x57; // Direccin del MAX30102
+const uint8_t SENSOR_I2C_ADDR = 0x57; // Dirección del MAX30102
 
 // Resultados
 volatile int bpmMostrado = 0; 
@@ -86,17 +87,17 @@ volatile bool hrResultadoValido = false;
 volatile int pacienteEdad = 0;
 volatile int pacienteAltura = 0; // Se llenar desde la PC en modo estudio clnico
 
-// MODO DE OPERACIN
+// MODO DE OPERACIÓN
 enum ModoOperacion { MODO_TEST_RAPIDO, MODO_ESTUDIO_CLINICO };
 ModoOperacion modoActual = MODO_TEST_RAPIDO;
-// MODO DE VISUALIZACIN:  1 = Mtricas , 0 = Curvas 
+// MODO DE VISUALIZACIÓN:  1 = Mtricas , 0 = Curvas 
 int modoVisualizacion = 0;
 bool graficoPausado = false;
 volatile bool resetearBuffersPWVSolicitado = false;
 
 portMUX_TYPE bufferMux = portMUX_INITIALIZER_UNLOCKED;
 
-// Ventanas de clculo
+// Ventanas de cálculo
 const int RR_WINDOW_SIZE = 15;
 const int PTT_BUFFER_SIZE = 25;
 
@@ -184,7 +185,7 @@ const int BTN_PAUSA_H = 30;
 
 
 // ======================================================================
-// WEBSOCKET EVENTS (RECEPCIN DE DATOS DESDE PC)
+// WEBSOCKET EVENTS (RECEPCIÓN DE DATOS DESDE PC)
 // ======================================================================
 void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length) {
     if(type == WStype_TEXT) {
@@ -1133,6 +1134,8 @@ void iniciarWiFi() {
 #define COLOR_S2                   tft.color565(255, 0, 255)  // Rosa   
 
 
+
+
 // ------------------------------------------------------------------------------------
 // SONIDOS
 // ------------------------------------------------------------------------------------
@@ -1303,6 +1306,25 @@ bool confirmarSalir() {
     }
     yield();
   }
+}
+
+
+
+// ------------------------------------------------------------------------------------
+// CHECKEO RANGO PWW
+// ------------------------------------------------------------------------------------
+float crpwv_lower_bound(int age_years) {
+    return 4.0f * expf(0.0022f * age_years);
+}
+
+float crpwv_upper_bound(int age_years) {
+    return 12.0f * expf(0.0022f * age_years);
+}
+
+bool is_crpwv_normal(int age_years, float pwv) {
+    float lower = crpwv_lower_bound(age_years);
+    float upper = crpwv_upper_bound(age_years);
+    return (pwv >= lower && pwv <= upper);
 }
 
 
@@ -1815,14 +1837,23 @@ void actualizarMedicion() {
         tft.setTextColor(COLOR_BOTON_ACCION, COLOR_FONDO);
         tft.drawString("REINTENTAR", centroX, 150, 4);
         tft.setTextPadding(0);
-      } else if (localPwvValido && localPWV > 0.0f) {
-        tft.setTextColor(TFT_GREEN, COLOR_FONDO);
-        tft.drawString(String(localPWV, 1), centroX - 20, 150, 7);
-        tft.setTextPadding(0);
+      } 
+      
+      else if (localPwvValido && localPWV > 0.0f) {
+        if (is_crpwv_normal(pacienteEdad, localPWV)) {
+                    tft.setTextColor(TFT_GREEN, COLOR_FONDO); // Normal
+                } else {
+                    tft.setTextColor(TFT_RED, COLOR_FONDO);   // Anormal
+                }
+                tft.drawString(String(localPWV, 1), centroX - 20, 150, 7); // Modo métricas
+                tft.setTextPadding(0);
+                tft.setTextColor(COLOR_TEXTO, COLOR_FONDO);
+                tft.drawString("m/s", centroX + 70, 160, 4); 
+        }
+
+      
+      else {
         tft.setTextColor(COLOR_TEXTO, COLOR_FONDO);
-        tft.drawString("m/s", centroX + 70, 160, 4); 
-      } else {
-        tft.setTextColor(TFT_GREEN, COLOR_FONDO);
         tft.drawString("---", centroX, 150, 7);
         tft.setTextPadding(0);
       }
@@ -1926,9 +1957,14 @@ void actualizarMedicion() {
       tft.drawString("crPWV = ", 90, yInfo, 4);
       tft.setTextPadding(160);
       if (localPwvFinalizado && (!localPwvValido || !localHrValido)) tft.drawString("REINTENTAR", 180, yInfo, 4);
-      else if (localPwvValido && localPWV > 0.0f) tft.drawString(String(localPWV, 1) + " m/s", 185, yInfo, 4);
-      else tft.drawString("--- m/s", 180, yInfo, 4);
-      tft.setTextPadding(0);
+      else if (localPwvValido && localPWV > 0.0f) {
+        if (is_crpwv_normal(pacienteEdad, localPWV)) {
+            tft.setTextColor(TFT_GREEN, COLOR_FONDO);
+        } else {
+            tft.setTextColor(TFT_RED, COLOR_FONDO);
+        }
+        tft.drawString(String(localPWV, 1) + " m/s", 185, yInfo, 4);
+    }
 
       // HR
       tft.setSwapBytes(true);
