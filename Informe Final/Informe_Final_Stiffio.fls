@@ -225,6 +225,13 @@ INPUT C:\Users\Victoria\AppData\Local\Programs\MiKTeX\fonts\tfm\public\cm\cmex10
 INPUT C:\Users\Victoria\AppData\Local\Programs\MiKTeX\fonts\tfm\public\amsfonts\cmextra\cmex8.tfm
 INPUT C:\Users\Victoria\AppData\Local\Programs\MiKTeX\fonts\tfm\public\amsfonts\cmextra\cmex7.tfm
 INPUT C:\Users\Victoria\AppData\Local\Programs\MiKTeX\fonts\tfm\public\cm\cmti12.tfm
+INPUT .\images\pwv.png
+INPUT .\images\pwv.png
+INPUT .\images\pwv.png
+INPUT .\images\pwv.png
+INPUT .\images\pwv.png
+INPUT .\images\pwv.png
+INPUT .\images\pwv.png
 INPUT .\images\Diagrama de Bloques.png
 INPUT .\images\Diagrama de Bloques.png
 INPUT .\images\Diagrama de Bloques.png
@@ -339,27 +346,27 @@ INPUT .\images\Arterias.jpg
 INPUT .\images\Arterias.jpg
 INPUT .\images\Arterias.jpg
 INPUT C:\Users\Victoria\AppData\Local\Programs\MiKTeX\fonts\tfm\public\cm\cmtt12.tfm
-INPUT .\images\Menu Display.jpeg
-INPUT .\images\Menu Display.jpeg
-INPUT .\images\Menu Display.jpeg
-INPUT .\images\Menu Display.jpeg
-INPUT .\images\Menu Display.jpeg
-INPUT .\images\Menu Display.jpeg
-INPUT .\images\Menu Display.jpeg
-INPUT .\images\Teclado Numerico.jpeg
-INPUT .\images\Teclado Numerico.jpeg
-INPUT .\images\Teclado Numerico.jpeg
-INPUT .\images\Teclado Numerico.jpeg
-INPUT .\images\Teclado Numerico.jpeg
-INPUT .\images\Teclado Numerico.jpeg
-INPUT .\images\Teclado Numerico.jpeg
-INPUT .\images\Interfaz Datos.png
-INPUT .\images\Interfaz Datos.png
-INPUT .\images\Interfaz Datos.png
-INPUT .\images\Interfaz Datos.png
-INPUT .\images\Interfaz Datos.png
-INPUT .\images\Interfaz Datos.png
-INPUT .\images\Interfaz Datos.png
+INPUT .\images\Menu Display.png
+INPUT .\images\Menu Display.png
+INPUT .\images\Menu Display.png
+INPUT .\images\Menu Display.png
+INPUT .\images\Menu Display.png
+INPUT .\images\Menu Display.png
+INPUT .\images\Menu Display.png
+INPUT .\images\Teclado Numerico.png
+INPUT .\images\Teclado Numerico.png
+INPUT .\images\Teclado Numerico.png
+INPUT .\images\Teclado Numerico.png
+INPUT .\images\Teclado Numerico.png
+INPUT .\images\Teclado Numerico.png
+INPUT .\images\Teclado Numerico.png
+INPUT .\images\Resultados Display.png
+INPUT .\images\Resultados Display.png
+INPUT .\images\Resultados Display.png
+INPUT .\images\Resultados Display.png
+INPUT .\images\Resultados Display.png
+INPUT .\images\Resultados Display.png
+INPUT .\images\Resultados Display.png
 INPUT .\images\Menu Interfaz.png
 INPUT .\images\Menu Interfaz.png
 INPUT .\images\Menu Interfaz.png
@@ -367,6 +374,9 @@ INPUT .\images\Menu Interfaz.png
 INPUT .\images\Menu Interfaz.png
 INPUT .\images\Menu Interfaz.png
 INPUT .\images\Menu Interfaz.png
+INPUT .\images\Interfaz Datos.png
+INPUT .\images\Interfaz Datos.png
+INPUT .\images\Interfaz Datos.png
 INPUT .\images\Interfaz Datos.png
 INPUT .\images\Interfaz Datos.png
 INPUT .\images\Interfaz Datos.png

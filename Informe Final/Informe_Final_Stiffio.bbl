@@ -85,13 +85,6 @@ S.~A. Hossain, ``Capítulo 80: Velocidad de onda de pulso,'' \emph{Sociedad
   Argentina de Hipertensión Arterial}, 2025, disponible en:
   \url{https://www.saha.org.ar/uploads/pdf/Cap.080.pdf}.
 
-\bibitem{london2014}
-\BIBentryALTinterwordspacing
-G.~S. London. (2014) Arterial stiffness: From physiology to clinical
-  implications. [En línea]. Accedido: 14-11-2025. [Online]. Available:
-  \url{https://pmc.ncbi.nlm.nih.gov/articles/PMC4158305/#tab1}
-\BIBentrySTDinterwordspacing
-
 \bibitem{diaz2020}
 C.~L. Díaz \emph{et~al.}, ``Rigidez arterial y valores de referencia,''
   \emph{Rev. Esp. Cardiol.}, vol.~73, no.~1, pp. 70--76, 2020, disponible en:
@@ -100,6 +93,24 @@ C.~L. Díaz \emph{et~al.}, ``Rigidez arterial y valores de referencia,''
 \bibitem{bia2019}
 A.~Bia \emph{et~al.}, ``Rigidez arterial: valores de referencia y utilidad
   clínica,'' \emph{Rev. Esp. Cardiol.}, vol.~72, no.~9, pp. 740--750, 2019.
+
+\bibitem{ye2016pulse}
+C.~Ye, Y.~Pan, X.~Xu, S.~Su, H.~Snieder, F.~Treiber, G.~Kapuku, and X.~Wang,
+  ``Pulse wave velocity in elastic and muscular arteries: tracking stability
+  and association with anthropometric and hemodynamic measurements,''
+  \emph{American Journal of Hypertension}, vol.~29, no.~7, pp. 813--821, 2016.
+
+\bibitem{ye2021evaluation}
+M.~Lubin, R.~Gerbelot, R.~Prada, J.~Porcherot, and S.~Bonnet, ``Evaluation of a
+  dual-ppg system for pulse transit time monitoring,'' in \emph{Proceedings of
+  the 43rd Annual International Conference of the IEEE Engineering in Medicine
+  and Biology Society (EMBC)}.\hskip 1em plus 0.5em minus 0.4em\relax IEEE,
+  2021, pp. 1349--1352.
+
+\bibitem{karimpour2023}
+P.~Karimpour, J.~M. May, and P.~A. Kyriacou, ``Photoplethysmography for the
+  assessment of arterial stiffness,'' \emph{Sensors}, vol.~23, no.~24, p. 9882,
+  2023.
 
 \bibitem{sondeja2019}
 T.~Sondeja \emph{et~al.}, ``Validation of a new device for
@@ -114,11 +125,6 @@ H.~Hellqvist, M.~Karlsson, J.~Hoffman, T.~Kahan, and J.~Spaak, ``Estimation of
   vol.~11, p. 1350726, 2024, [En línea]. Accedido: 20-08-2025. [Online].
   Available: \url{https://doi.org/10.3389/fcvm.2024.1350726}
 \BIBentrySTDinterwordspacing
-
-\bibitem{karimpour2023}
-P.~Karimpour, J.~M. May, and P.~A. Kyriacou, ``Photoplethysmography for the
-  assessment of arterial stiffness,'' \emph{Sensors}, vol.~23, no.~24, p. 9882,
-  2023.
 
 \bibitem{paperPPG}
 \BIBentryALTinterwordspacing
@@ -142,11 +148,5 @@ J.~Wang, R.~Zhang, M.~Sun, X.~Zhao, H.~Wang, and L.~Guo, ``Assessment of aortic
   healthy and hypertensive individuals,'' \emph{Scientific Reports}, vol.~13,
   no.~1, p. 23487, Dec. 2023, disponible en:
   \url{https://www.nature.com/articles/s41598-023-46932-0}.
-
-\bibitem{sorensen2015}
-D.~J. Sorensen \emph{et~al.}, ``Verification \& validation benchmarks for
-  assessing and demonstrating the credibility of computational medical device
-  evaluation,'' in \emph{IEEE}, 2015, disponible en:
-  \url{http://ieeexplore.ieee.org/abstract/document/7228601/}.
 
 \end{thebibliography}

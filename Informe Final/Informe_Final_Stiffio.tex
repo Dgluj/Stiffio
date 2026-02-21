@@ -44,6 +44,7 @@
 \usepackage[colorlinks=true, linkcolor=black, citecolor=black, urlcolor=cyan]{hyperref}
 \usepackage{url}
 
+
 % BIBLIOGRAFÍA Y PARCHES
 \usepackage{etoolbox}
 \renewcommand{\refname}{} % Quita el título “Referencias” del entorno thebibliography
@@ -104,8 +105,10 @@
 \etocsettagdepth{anexo}{none}           % Ocultar completamente 'anexo'
 \tableofcontents                     
 
+
+\vspace{0.4cm}
+
 % Índice Anexos
-\newpage
 \pagenumbering{gobble}
 \etocsettagdepth{main}{none}         % Ocultar 'main'
 \etocsettagdepth{anexo}{subsection}  % Mostrar 'anexo' hasta nivel subsection
@@ -119,7 +122,19 @@
 \newpage
 \pagenumbering{gobble}
 \section*{Lista de contracciones}
-ECV : Enfermedad Cardiovascular
+
+\begin{description}
+\item[ADC] Conversor analógico–digital.
+\item[ECG] Electrocardiograma.
+\item[ECV] Enfermedades cardiovasculares.
+\item[HR] Frecuencia cardíaca.
+\item[oPTT] Tiempo de tránsito óptico del pulso.
+\item[PPG] Fotopletismografía.
+\item[pPTT] Tiempo de tránsito de la onda de presión.
+\item[PTT] Tiempo de tránsito del pulso.
+\item[PWV] Velocidad de la onda de pulso.
+\item[RA] Rigidez arterial.
+\end{description}
 
 
 
@@ -133,72 +148,73 @@ ECV : Enfermedad Cardiovascular
 
     Las enfermedades cardiovasculares (ECV) constituyen uno de los principales problemas de salud pública a nivel mundial y representan la causa más frecuente de morbimortalidad. Según la Organización Mundial de la Salud, las ECV son responsables de aproximadamente 17,9 millones de muertes anuales, lo que equivale a cerca del 33\% del total de fallecimientos a escala global \cite{WHO_CVDs_2023}. Esta tendencia se replica en Argentina, concentrando alrededor del 27\% de las muertes registradas \cite{sac2025}. Asimismo, se estima que estas afecciones impactan en el 36,3\% de los adultos, proporción que aumenta hasta el 46,6\% en personas mayores de 45 años.
 
-    \vspace{0.1cm}
-
     Dada su elevada prevalencia y las severas consecuencias clínicas asociadas, la detección temprana de factores de riesgo cardiovascular resulta fundamental para reducir la carga de estas patologías. En este contexto, la rigidez arterial (RA) emerge como un marcador subclínico relevante, ya que permite identificar alteraciones vasculares antes de la aparición de manifestaciones clínicas evidentes , favoreciendo la implementación de estrategias preventivas y terapéuticas oportunas \cite{ramirez-velez2015}. 
 
     \vspace{0.3cm}
 
     La RA se define como la pérdida progresiva de la capacidad elástica de las arterias, fenómeno que ocurre de manera natural con el envejecimiento, pero que puede verse acelerado por la presencia de diversos factores de riesgo y enfermedades cardiovasculares. Este proceso refleja alteraciones estructurales y funcionales en la pared arterial, tales como el aumento del contenido de colágeno y la disminución de fibras elásticas, lo que conduce a una menor capacidad de amortiguación del pulso cardíaco. 
 
-    \vspace{0.1cm}
-
-    Diversas patologías presentan una asociación directa con el aumento de la rigidez arterial, entre las que se incluyen la hipertensión arterial, la enfermedad coronaria, la insuficiencia cardíaca y el accidente cerebrovascular. En particular, la hipertensión arterial se destaca como uno de los principales determinantes del endurecimiento vascular, ya que la exposición crónica a niveles elevados de presión induce modificaciones estructurales y funcionales en la pared arterial \cite{gomez-sanchez2019}.
-
-    \vspace{0.1cm}
-    
-    Asimismo, enfermedades inflamatorias crónicas, como la artritis reumatoide, se asocian a un riesgo cardiovascular entre dos y tres veces mayor, también atribuible en parte a la inflamación sistémica y endurecimiento progresivo de la pared arterial. \textcolor{red}{(ACÁ FALTA CITA)}
-    
-    \vspace{0.1cm}
-    De manera similar, las comorbilidades metabólicas, como la diabetes y la obesidad, se encuentran estrechamente vinculadas al aumento de la rigidez arterial. En estos pacientes, mecanismos como el estrés oxidativo, la glicación avanzada de proteínas de la matriz extracelular y la alteración de la función endotelial promueven cambios estructurales en el árbol vascular, acelerando el proceso de endurecimiento arterial. Diversos estudios poblacionales han demostrado que estas alteraciones se asocian a un mayor riesgo de eventos cardiovasculares y cerebrovasculares \cite{banegas2019, sochob2022}.
+    Diversas patologías presentan una asociación directa con el aumento de la rigidez arterial, entre las que se incluyen la hipertensión arterial, la enfermedad coronaria, la insuficiencia cardíaca y el accidente cerebrovascular. En particular, la hipertensión arterial se destaca como uno de los principales determinantes del endurecimiento vascular, ya que la exposición crónica a niveles elevados de presión induce modificaciones estructurales y funcionales en la pared arterial \cite{gomez-sanchez2019}. De manera similar, las comorbilidades metabólicas, como la diabetes y la obesidad, se encuentran estrechamente vinculadas al aumento de la rigidez arterial. En estos pacientes, mecanismos como el estrés oxidativo, la glicación avanzada de proteínas de la matriz extracelular y la alteración de la función endotelial promueven cambios estructurales en el árbol vascular, acelerando el proceso de endurecimiento arterial. Diversos estudios poblacionales han demostrado que estas alteraciones se asocian a un mayor riesgo de eventos cardiovasculares y cerebrovasculares \cite{banegas2019, sochob2022}.
 
 
 
     \subsection{Velocidad de onda de pulso}
+    La medición de la velocidad de la onda de pulso (PWV, por sus siglas en inglés) constituye el método no invasivo de referencia para la evaluación de la rigidez arterial \cite{aplimed, benshlomo2014}. De hecho, es considerada el \textit{gold standard} para este propósito, debido a su sólida asociación con el riesgo cardiovascular global, la incidencia de eventos ateroscleróticos y la presencia de daño de órgano blanco en etapas subclínicas \cite{hossain2025}.
+     
+    La determinación de la PWV se basa en la medición del tiempo de tránsito del pulso (PTT) entre dos ubicaciones arteriales, generalmente un punto proximal y otro distal, como se muestra en la Figura~\ref{fig:calculo_pwv}, junto con la estimación de la distancia anatómica recorrida por la onda de presión. La velocidad de la onda de pulso se calcula a partir de la siguiente relación:
 
-    La medición de la velocidad de la onda de pulso (PWV, por sus siglas en inglés) se considera el estándar de referencia no invasivo para la evaluación de la rigidez arterial \cite{aplimed, benshlomo2014}. La PWV es ampliamente reconocida como el \textit{gold standard} para este propósito, dado que presenta una fuerte correlación con el riesgo cardiovascular, la ocurrencia de eventos ateroscleróticos y el daño de órgano subclínico \cite{hossain2025}. Tanto la rigidez arterial como la velocidad de la onda de pulso (PWV) aumentan de manera casi lineal con la edad, fenómeno ampliamente documentado en la literatura \cite{ramirez-velez2015, banegas2019, london2014}.
+    \[\mathrm{PWV} = \frac{Dist}{PTT}\]
 
-    \vspace{0.1cm}
 
-    La determinación de la PWV se basa en el registro del tiempo de tránsito del pulso (PTT) entre dos ubicaciones arteriales, generalmente un punto proximal y otro distal, junto con la estimación de la distancia anatómica recorrida por la onda de presión:
+    \begin{figure}[H]
+    \centering
+    \includegraphics[width=0.6\textwidth]{images/pwv.png}
+    \caption{Cálculo del tiempo de tránsito de pulso en el trayecto carótido-radial.}
+    \label{fig:calculo_pwv}
+    \end{figure}
 
-    \[
-    \mathrm{PWV} = \frac{Dist}{PTT}
-    \]
+    \vspace{0.2cm}
+
+
+
 
     El trayecto carotídeo-femoral constituye el estándar de referencia para esta medición. En este caso, se recomienda aplicar un coeficiente de corrección de 0,8 sobre la distancia superficial medida, con el objetivo de aproximar la trayectoria real del flujo arterial. Dicho factor se encuentra respaldado por estudios que comparan mediciones externas con longitudes vasculares reales obtenidas mediante técnicas de imagen, y ha sido validado por consensos internacionales \cite{diaz2020}.
 
-    \vspace{0.1cm}
-
-    Desde el punto de vista fisiológico, las arterias sanas presentan mayor capacidad de amortiguación de la presión pulsátil, lo que enlentece la propagación de la onda. En contraste, arterias rígidas transmiten la onda de presión a mayor velocidad, reflejándose en valores elevados de PWV, los cuales se asocian a un mayor riesgo de infarto de miocardio, accidente cerebrovascular, disecciones arteriales y aneurismas \cite{WHO_CVDs_2023, bia2019}.
+    Desde el punto de vista fisiológico, las arterias sanas presentan mayor capacidad de amortiguación de la presión pulsátil, lo que enlentece la propagación de la onda. En contraste, arterias rígidas transmiten la onda de presión a mayor velocidad, reflejándose en valores elevados de PWV, los cuales se asocian a un mayor riesgo de infarto de miocardio, accidente cerebrovascular, disecciones arteriales y aneurismas \cite{WHO_CVDs_2023, bia2019}. Cabe destacar que los valores de PWV no son uniformes en todo el árbol arterial, sino que dependen del trayecto evaluado y de las características estructurales de los distintos segmentos vasculares. Las arterias elásticas centrales, como la aorta, presentan mayor contenido de elastina y, por lo tanto, menor velocidad de propagación en condiciones fisiológicas. En cambio, las arterias musculares periféricas poseen mayor proporción de músculo liso y menor distensibilidad, lo que se traduce en valores de PWV relativamente más elevados. Estas diferencias estructurales explican por qué la PWV varía según el segmento arterial analizado y refuerzan la importancia de estandarizar el trayecto de medición en estudios comparativos \cite{ye2016pulse}.
 
 
-    \subsection{Estado del arte}
 
-    La rigidez arterial puede evaluarse mediante diversas técnicas no invasivas, entre las que se destacan la tonometría de aplanamiento, la oscilometría avanzada y la bioimpedancia \cite{bia2019}. Estas metodologías difieren tanto en el principio físico de medición como en la forma de estimar la velocidad de la onda de pulso (PWV), pudiendo realizar mediciones directas o indirectas, simultáneas o secuenciales.
+    \subsection{Tecnologías disponibles para la medición de la PWV}
 
-    \vspace{0.1cm}
+    La rigidez arterial puede evaluarse mediante diversas técnicas no invasivas que difieren tanto en el principio físico de medición como en la forma de estimar la PWV, pudiendo realizar mediciones directas o indirectas, simultáneas o secuenciales.
 
-    La tonometría de aplanamiento es una de las técnicas más validadas para la evaluación de la rigidez arterial y se considera el método de referencia clínico para la medición de la PWV carotídeo-femoral. Este método utiliza un sensor piezoeléctrico que se coloca sobre una arteria superficial, generalmente la carótida y la femoral, registrando de manera secuencial la forma de la onda de pulso en cada sitio. El tiempo de tránsito de la onda se calcula utilizando un electrocardiograma (ECG) como referencia temporal, y la PWV se obtiene a partir de la distancia estimada entre ambos puntos de medición. Un ejemplo ampliamente utilizado de esta tecnología es el sistema SphygmoCor, que ofrece mediciones indirectas pero altamente reproducibles de la rigidez arterial.
+    La tonometría de aplanamiento es una de las técnicas más validadas para la evaluación de la rigidez arterial y se considera el método de referencia clínico para la medición de la PWV carotídeo-femoral. Este método utiliza un sensor piezoeléctrico que se coloca sobre una arteria superficial, generalmente la carótida y la femoral, registrando de manera secuencial la forma de la onda de pulso en cada sitio. El tiempo de tránsito de la onda se calcula utilizando un electrocardiograma (ECG) como referencia temporal, y la PWV se obtiene a partir de la distancia estimada entre ambos puntos de medición. Un ejemplo ampliamente utilizado de esta tecnología es el sistema \textit{SphygmoCor}, que ofrece mediciones indirectas pero altamente reproducibles de la rigidez arterial.
 
-    \vspace{0.1cm}
+    Por otro lado, la oscilometría avanzada permite evaluar la rigidez arterial a partir de registros de presión obtenidos mediante un manguito inflable, similar al utilizado en la medición convencional de la presión arterial. Sistemas como \textit{Arteriograp} utilizan un único manguito colocado generalmente en el brazo, con el cual registran las oscilaciones de presión generadas por la onda de pulso incidente y su correspondiente onda reflejada. A partir del análisis temporal entre ambos componentes de la señal, estos dispositivos estiman de manera indirecta la velocidad de la onda de pulso central basándose en modelos hemodinámicos y supuestos teóricos acerca de la propagación y reflexión de la onda de pulso en el árbol arterial.
 
-    Por otro lado, la oscilometría avanzada permite evaluar la rigidez arterial a partir de registros de presión obtenidos mediante un manguito inflable, similar al utilizado en la medición convencional de la presión arterial. Sistemas como Arteriograph utilizan un único manguito colocado generalmente en el brazo, con el cual registran las oscilaciones de presión generadas por la onda de pulso incidente y su correspondiente onda reflejada. A partir del análisis temporal entre ambos componentes de la señal, estos dispositivos estiman de manera indirecta la velocidad de la onda de pulso central basándose en modelos hemodinámicos y supuestos teóricos acerca de la propagación y reflexión de la onda de pulso en el árbol arterial.
+    Asimismo, técnicas basadas en ultrasonido Doppler también permiten la evaluación de la velocidad de la onda de pulso. En este caso, se emplean transductores ecográficos para registrar simultáneamente o de manera secuencial el flujo sanguíneo en dos segmentos arteriales, generalmente combinando mediciones en la arteria carótida y femoral o en la aorta abdominal. A partir del análisis de la señal Doppler pulsada, se determina el tiempo de tránsito entre los sitios evaluados y, junto con la estimación de la distancia anatómica correspondiente, se calcula la PWV. A diferencia de los métodos tonométricos u oscilométricos, el Doppler permite una visualización directa del vaso y del perfil de flujo, lo que puede mejorar la precisión en la identificación del punto de inicio de la onda. Sin embargo, su implementación requiere equipamiento especializado y un operador entrenado, lo que limita su aplicabilidad.
 
-    \vspace{0.1cm}
 
+
+    \subsection{Comparación entre métodos basados en presión y métodos ópticos}
+    Es importante distinguir entre el tiempo de tránsito de la onda de presión y el tiempo de tránsito medido mediante técnicas ópticas, ya que ambos reflejan fenómenos fisiológicos relacionados pero no equivalentes.
+    
+    Los sistemas basados en tonometría u oscilometría estiman el tiempo de tránsito de la onda de presión (pPTT, por sus siglas en inglés), el cual cuantifica la propagación de la energía mecánica a lo largo de la pared arterial. Este parámetro está directamente vinculado a las propiedades elásticas del vaso y a la velocidad con la que la onda de presión se transmite por el árbol arterial.
+    
+    En contraste, la fotopletismografía permite estimar el denominado tiempo de tránsito óptico (oPTT), el cual no mide directamente la propagación de la onda de presión, sino el cambio volumétrico local asociado a la llegada de la sangre al lecho microvascular. Para que el sensor PPG detecte dicha variación, es necesario que la sangre supere la resistencia periférica y produzca la distensión de arteriolas y capilares subcutáneos.
+
+    Desde el punto de vista fisiológico, este proceso implica un componente viscoelástico y un tiempo de llenado tisular que introduce un retardo adicional respecto a la onda de presión registrada en el mismo sitio anatómico. Como consecuencia, la señal PPG se manifiesta sistemáticamente con un desfase temporal posterior a la onda de presión, lo que puede elongar el tiempo de tránsito medido cuando se emplean métodos ópticos \cite{ye2021evaluation}.
 
 
 
 % JUSTIFICACIÓN DEL PROYECTO =====================================================================================================
 \section{Justificación del Proyecto}
+El valor de este proyecto radica en contribuir al desarrollo de herramientas complementarias para la evaluación de la rigidez arterial, abordando ciertos desafíos prácticos asociados a los dispositivos actualmente utilizados en la práctica clínica. Si bien los métodos convencionales, como la tonometría de aplanamiento, han demostrado alta validez clínica y constituyen referencias ampliamente aceptadas, su implementación requiere equipamiento costoso y capacitación técnica, lo que puede limitar su utilización en entornos ambulatorios y controles de rutina.
 
-El valor de este proyecto radica en superar limitaciones centrales de los dispositivos actualmente disponibles en la práctica clínica  ... \cite{aplimed}.
+En este contexto, la fotopletismografía (PPG) ha emergido como una alternativa prometedora y complementaria. Este método permite registrar la onda de pulso mediante principios ópticos, con potencial de integración en dispositivos portátiles, de menor costo y más fácilmente escalables \cite{karimpour2023}. Diversos estudios han demostrado que la sincronización de señales PPG obtenidas en distintos puntos corporales, así como la combinación de señales PPG y ECG, permite estimar la velocidad de la onda de pulso (PWV) y otros parámetros asociados a la rigidez arterial \cite{sondeja2019, hellqvist2024}.
 
-Los métodos convencionales para evaluar la rigidez arterial, como la tonometría de aplanamiento o los sistemas de oscilometría avanzada, exigen personal entrenado, resultan poco prácticos para traslados y no permiten un monitoreo domiciliario ni un seguimiento frecuente \cite{aplimed}. Por otra parte, los sensores piezoeléctricos requieren un contacto rígido con la piel, son muy sensibles al movimiento y dependen de la presión aplicada por el operador, lo que dificulta la reproducibilidad y limita su aplicabilidad en consultorios generales \cite{sondeja2019}.
-la necesidad de fijación manual del sensor sobre la arteria y la dependencia de la pericia del operador restringen su escalabilidad. Estudios recientes han mostrado que la señal fotopletismográfica (PPG) es una alternativa válida y cada vez más utilizada, ya que ofrece buena tolerancia al movimiento, flexibilidad en los puntos de medición y potencial de integración en dispositivos más accesibles \cite{hellqvist2024}.
+No obstante, la señal PPG presenta desafíos propios, tales como la sensibilidad a la presión de contacto, el adecuado posicionamiento del sensor y la interferencia por luz ambiental. Estos factores resaltan la importancia de implementar estrategias de procesamiento y corrección robustas que optimicen la precisión, estabilidad y confiabilidad de los sistemas basados en PPG.
 
-    La fotopletismografía (PPG) ha ganado relevancia como alternativa práctica, al permitir registrar la onda de pulso de manera óptica, con buena tolerancia al movimiento y flexibilidad en los puntos de medición (dedo, lóbulo de la oreja, tobillo, etc.) \cite{karimpour2023}. Estudios recientes muestran que la sincronización de señales PPG en diferentes sitios corporales, o bien la combinación PPG-ECG, puede estimar la PWV y otros parámetros de rigidez arterial con resultados comparables a la tonometría \cite{sondeja2019}. Sin embargo, factores como la presión de contacto, la luz ambiental y la variabilidad fisiológica influyen en la señal obtenida, lo cual subraya la importancia de algoritmos de corrección y análisis robustos.
 
 
 
@@ -586,7 +602,7 @@ El dispositivo está dirigido al uso en consultorio clínico. La propuesta no bu
 
         \begin{figure}[H]
         \centering
-        \includegraphics[width=0.6\textwidth]{images/Menu Display.jpeg}
+        \includegraphics[width=0.7\textwidth]{images/Menu Display.png}
         \captionsetup{margin=1.5cm, justification=centering}
         \caption{Menú principal de la interfaz táctil en el display integrado. Selección de modo de uso.}
         \label{fig:MenuDisplay}
@@ -600,7 +616,7 @@ El dispositivo está dirigido al uso en consultorio clínico. La propuesta no bu
         
         \begin{figure}[H]
         \centering
-        \includegraphics[width=0.7\textwidth]{images/Teclado Numerico.jpeg}
+        \includegraphics[width=0.7\textwidth]{images/Teclado Numerico.png}
         \captionsetup{margin=1.5cm, justification=centering}
         \caption{Teclado numérico para el ingreso de datos de la interfaz táctil en el display integrado.}
         \label{fig:TecladoNumerico}
@@ -618,7 +634,7 @@ El dispositivo está dirigido al uso en consultorio clínico. La propuesta no bu
 
         \begin{figure}[H]
         \centering
-        \includegraphics[width=0.9\textwidth]{images/Interfaz Datos.png}
+        \includegraphics[width=0.7\textwidth]{images/Resultados Display.png}
         \captionsetup{margin=1.5cm, justification=centering}
         \caption{Pantalla de visualización de resultados de la interfaz táctil en el display integrado.}
         \label{fig:MedicionDisplay}
@@ -669,7 +685,7 @@ El dispositivo está dirigido al uso en consultorio clínico. La propuesta no bu
 
         Los parámetros medidos pueden almacenarse junto con los datos del paciente mediante el botón Guardar Medición. De este modo, se genera un registro histórico que permite conservar las mediciones en el tiempo, funcionando como una historia clínica digital.
         
-        Si se desea realizar una nueva medición, el botón Nuevo Paciente redirige nuevamente a la ventana de carga de datos. Para regresar al menú principal, se dispone de un botón "Salir" ubicado justo al lado.
+        Si se desea realizar una nueva medición, el botón Nuevo Paciente redirige nuevamente a la ventana de carga de datos. Para regresar al menú principal, se dispone de un botón SALIR ubicado justo al lado.
 
 
         \begin{figure}[H]
@@ -709,9 +725,6 @@ El dispositivo está dirigido al uso en consultorio clínico. La propuesta no bu
     \subsection{Metodología de evaluación y validación}
     En esta sección se describe el enfoque metodológico adoptado para la evaluación del dispositivo, detallando las condiciones bajo las cuales se realizaron las mediciones y los criterios utilizados para su análisis.
 
-
-    \textcolor{red}{NO SE DE QUE ES ESTA CITA \cite{sorensen2015}}
-
         \subsubsection{Protocolo de Medición}
 
         \begin{enumerate}
@@ -748,11 +761,11 @@ El dispositivo está dirigido al uso en consultorio clínico. La propuesta no bu
 
 
         \subsubsection{Análisis de repetitibilidad}
-        Para determinar la precisión y la variabilidad intra-sujeto de las mediciones, se realizó un análisis de repetitibilidad. El estudio se llevó a cabo sobre un mismo sujeto siguiendo estrictamente el protocolo de medición establecido. 
+        Para determinar la precisión y la variabilidad intra-sujeto de las mediciones, se realizó un análisis de repetitibilidad. El estudio se llevó a cabo sobre dos sujetos diferentes, siguiendo estrictamente el protocolo de medición previamente establecido. 
         
-        El sujeto evaluado fue un voluntario sano de 23 años de edad, sin antecedentes de enfermedad cardiovascular ni factores de riesgo conocidos. Durante el procedimiento se mantuvieron constantes las condiciones ambientales, la postura corporal y el estado de reposo previo a cada adquisición, con el fin de minimizar posibles variaciones fisiológicas que pudieran influir en los resultados. Todas las adquisiciones se realizaron en la misma sesión, evitando cambios en el estado hemodinámico del sujeto.
+        Los sujetos evaluados fueron dos voluntarios sanos, sin antecedentes de enfermedad cardiovascular ni factores de riesgo conocidos. Durante el procedimiento se mantuvieron constantes las condiciones ambientales, la postura corporal y el estado de reposo previo a cada adquisición, con el fin de minimizar posibles variaciones fisiológicas que pudieran influir en los resultados. Todas las mediciones correspondientes a cada sujeto se realizaron en una misma sesión, evitando cambios significativos en el estado hemodinámico.
 
-        Se analizaron dos escenarios experimentales. En primer lugar, se realizaron 10 mediciones consecutivas sin retirar ni modificar la posición de los sensores entre adquisiciones. Luego, se realizaron otras 10 mediciones consecutivas, pero retirando completamente y volviendo a colocar los sensores entre cada adquisición. La comparación entre ambas condiciones tiene como objetivo discriminar qué proporción de la variabilidad total se atribuye al reposicionamiento de los sensores y a la intervención del operador, y qué parte corresponde a la variabilidad intrínseca del sistema electrónico y del algoritmo de procesamiento.
+        Para cada sujeto se analizaron dos escenarios experimentales. En primer lugar, se realizaron 10 mediciones consecutivas sin retirar ni modificar la posición de los sensores entre adquisiciones. Posteriormente, se efectuaron otras 10 mediciones consecutivas, retirando completamente y recolocando los sensores antes de cada adquisición. La comparación entre ambas condiciones tiene como objetivo discriminar qué proporción de la variabilidad total se atribuye al reposicionamiento de los sensores y a la intervención del operador, y qué parte corresponde a la variabilidad intrínseca del sistema electrónico y del algoritmo de procesamiento.
 
         Para cada conjunto de mediciones se calculó la media, el desvío estándar y el coeficiente de variación (CV\%), definido como:
 
@@ -790,7 +803,9 @@ El dispositivo está dirigido al uso en consultorio clínico. La propuesta no bu
 
         El Arteriograph estima la PWV aórtica mediante un método oscilométrico basado en la medición de variaciones de presión obtenidas a través de un manguito braquial. A partir del análisis de la onda de presión y sus reflexiones, el sistema calcula la velocidad de propagación de la onda a lo largo de la aorta. Dado que este procedimiento se basa en señales de presión arterial central, mientras que Stiffio determina la PWV a partir de señales pletismográficas registradas en dos sitios arteriales periféricos, ambos dispositivos no evalúan exactamente el mismo trayecto arterial ni emplean el mismo principio físico de medición. En consecuencia, no se espera una coincidencia absoluta entre los valores obtenidos, sino una concordancia fisiológica y una correspondencia dentro de rangos clínicamente aceptables.En este sentido, se espera que sujetos clasificados dentro del rango fisiológico normal por el Arteriograph presenten, de manera consistente, valores compatibles con el rango considerado normal según los criterios establecidos para Stiffio, aun cuando puedan existir diferencias numéricas atribuibles a la metodología empleada por cada sistema.
 
-        Se evaluaron tres sujetos, realizando tres mediciones consecutivas por cada uno con ambos dispositivos. Los participantes fueron adultos jóvenes de entre 20 y 25 años de edad, sin antecedentes cardiovasculares conocidos ni diagnóstico de patología arterial. Todas las mediciones se realizaron siguiendo el protocolo de medicion del respectivo equipo.
+        Si bien el Arteriograph proporciona un valor de frecuencia cardíaca (HR) como parámetro adicional durante la medición, dicho valor se obtiene como resultado derivado del registro oscilométrico y no mediante monitoreo continuo latido a latido. Dado que Stiffio estima la frecuencia cardíaca en tiempo real a partir de la señal pletismográfica, se incorporó un oxímetro de pulso comercial como referencia adicional para la validación de HR. Este dispositivo, al basarse también en fotopletismografía y ofrecer medición continua en tiempo real, resulta metodológicamente más comparable al principio de funcionamiento de Stiffio para la evaluación de este parámetro.
+
+        La evaluación se llevó acabo con tres sujetos, realizando tres mediciones consecutivas por cada uno con ambos dispositivos. Los participantes fueron adultos jóvenes de entre 20 y 25 años de edad, sin antecedentes cardiovasculares conocidos ni diagnóstico de patología arterial. Todas las mediciones se realizaron siguiendo el protocolo de medicion del respectivo equipo.
  
 
 
@@ -809,20 +824,20 @@ Los resultados correspondientes al análisis de repetitibilidad se presentan en 
 \hline
 Medición & PWV (m/s) & HR (bpm) \\
 \hline
-1  &  &  \\
-2  &  &  \\
-3  &  &  \\
-4  &  &  \\
-5  &  &  \\
-6  &  &  \\
-7  &  &  \\
-8  &  &  \\
-9  &  &  \\
-10 &  &  \\
+1  & 8.0 & - 72\\
+2  & 8.3 & - 74\\
+3  & 8.4 & - 73\\
+4  & 8.6 & - 77\\
+5  & 9.2 & - 80\\
+6  & 8.0 & - 83\\
+7  & 8.4 & - 75\\
+8  & 9.0 & - 78\\
+9  & 8.4 & - 74\\
+10 & 8.1 & - 73\\
 \hline
-Media &  &  \\
-Desvío estándar &  &  \\
-CV (\%) &  &  \\
+Media & 3.22 & - \\
+Desvío estándar & 0.23 & - \\
+CV (\%) & 6.99\% & - \\
 \hline
 \end{tabular}
 \end{table}
@@ -836,20 +851,20 @@ CV (\%) &  &  \\
 \hline
 Medición & PWV (m/s) & HR (bpm) \\
 \hline
-1  &  &  \\
-2  &  &  \\
-3  &  &  \\
-4  &  &  \\
-5  &  &  \\
-6  &  &  \\
-7  &  &  \\
-8  &  &  \\
-9  &  &  \\
-10 &  &  \\
+1  & 1.9 & - \\
+2  & 3.0 & - \\
+3  & 3.0 & - \\
+4  & 2.1 & - \\
+5  & 3.3 & - \\
+6  & 3.0 & - \\
+7  & 3.0 & - \\
+8  & 2.8 & - \\
+9  & 2.7 & - \\
+10 & 2.6 & - \\
 \hline
-Media &  &  \\
-Desvío estándar &  &  \\
-CV (\%) &  &  \\
+Media & 2.74 & - \\
+Desvío estándar & 0.44 & - \\
+CV (\%) & 15.97\% & - \\
 \hline
 \end{tabular}
 \end{table}
@@ -904,7 +919,7 @@ Grupo & PWV media (m/s) & PWV DE & HR media (lpm) & HR DE \\
 
 
 
-Para el grupo de 20 a 25 años, la media obtenida fue de X m/s, en comparación con el valor de referencia reportado en la literatura de Y m/s. El análisis mediante prueba t de Student arrojó un valor de t = ... y p = ...
+Para el grupo de 20 a 25 años, la media obtenida fue de X m/s, en comparación con el valor de referencia reportado en la literatura de Y m/s. El análisis mediante prueba t de Student arrojó un valor de ... No se observaron diferencias estadísticamente significativas respecto al valor de referencia (p > 0,05).
 
 Para el grupo de 55 a60 años, la media fue de ... m/s, con un valor de p = ...
 
@@ -948,7 +963,9 @@ Para consolidar su aplicabilidad clínica, es necesario ampliar el tamaño muest
 % BIBLIOGRAFÍA =====================================================================================================
 
 \newpage
+\section{Bibliografía}
 \addcontentsline{toc}{section}{Bibliografía} 
+\renewcommand{\refname}{} % evita el título automático
 \bibliographystyle{IEEEtran}
 \bibliography{Referencias}
 
