@@ -1260,6 +1260,15 @@ class MainScreen(QMainWindow):
         self._last_patient_data_send_attempt = 0.0
         self._patient_data_retry_sec = 1.0
         self._dist_alert_color = "#ff6fae"
+        self._default_y_ticks = [
+            (-100.0, "-100"),
+            (-50.0, "-50"),
+            (0.0, "0"),
+            (50.0, "50"),
+            (100.0, "100"),
+        ]
+        self._axis1_ticks_key = None
+        self._axis2_ticks_key = None
         self.measuring = False  # Medición inicialmente desactivada
 
         try:
@@ -1596,20 +1605,14 @@ class MainScreen(QMainWindow):
         self.graph1.setBackground('k')
         self.graph1.setTitle("Sensor Proximal (Carótida)", color='w', size='12pt')
         self.graph1.showGrid(x=True, y=True)
-        self.graph1.setLabel('left', 'Amplitud Normalizada (%)')
+        self.graph1.setLabel('left', 'Amplitud (escala calibrada)')
         self.graph1.setLabel('bottom', 'Tiempo (s)')
         self.graph1.enableAutoRange(axis='y', enable=False)
         self.graph1.setYRange(-100.0, 100.0, padding=0)
         axis1 = self.graph1.getAxis('left')
         axis1.setTextPen(pg.mkPen('#d0d0d0'))
         axis1.setPen(pg.mkPen('#6f6f6f'))
-        axis1.setTicks([[
-            (-100.0, "-100"),
-            (-50.0, "-50"),
-            (0.0, "0"),
-            (50.0, "50"),
-            (100.0, "100"),
-        ]])
+        axis1.setTicks([self._default_y_ticks])
         self.right_layout.addWidget(self.graph1)
 
         # Gráfico sensor 2 (distal)
@@ -1617,20 +1620,14 @@ class MainScreen(QMainWindow):
         self.graph2.setBackground('k')
         self.graph2.setTitle("Sensor Distal (Radial)", color='w', size='12pt')
         self.graph2.showGrid(x=True, y=True)
-        self.graph2.setLabel('left', 'Amplitud Normalizada (%)')
+        self.graph2.setLabel('left', 'Amplitud (escala calibrada)')
         self.graph2.setLabel('bottom', 'Tiempo (s)')
         self.graph2.enableAutoRange(axis='y', enable=False)
         self.graph2.setYRange(-100.0, 100.0, padding=0)
         axis2 = self.graph2.getAxis('left')
         axis2.setTextPen(pg.mkPen('#d0d0d0'))
         axis2.setPen(pg.mkPen('#6f6f6f'))
-        axis2.setTicks([[
-            (-100.0, "-100"),
-            (-50.0, "-50"),
-            (0.0, "0"),
-            (50.0, "50"),
-            (100.0, "100"),
-        ]])
+        axis2.setTicks([self._default_y_ticks])
         self.right_layout.addWidget(self.graph2)
 
         # Curvas de datos
@@ -1909,20 +1906,10 @@ class MainScreen(QMainWindow):
                 self.graph1.getAxis('left').setPen(pg.mkPen('#6f6f6f'))
                 self.graph2.getAxis('left').setTextPen(pg.mkPen('#d0d0d0'))
                 self.graph2.getAxis('left').setPen(pg.mkPen('#6f6f6f'))
-                self.graph1.getAxis('left').setTicks([[
-                    (-100.0, "-100"),
-                    (-50.0, "-50"),
-                    (0.0, "0"),
-                    (50.0, "50"),
-                    (100.0, "100"),
-                ]])
-                self.graph2.getAxis('left').setTicks([[
-                    (-100.0, "-100"),
-                    (-50.0, "-50"),
-                    (0.0, "0"),
-                    (50.0, "50"),
-                    (100.0, "100"),
-                ]])
+                self._axis1_ticks_key = None
+                self._axis2_ticks_key = None
+                self._set_default_y_ticks(self.graph1, 1)
+                self._set_default_y_ticks(self.graph2, 2)
                 self.curve1.setData([], [])
                 self.curve2.setData([], [])
                 self.prox_alert_label.setVisible(False)
@@ -2048,6 +2035,71 @@ class MainScreen(QMainWindow):
         iv = int(round(v))
         return iv if iv > 0 else None
 
+    def _format_axis_tick(self, value):
+        if value is None or (not math.isfinite(value)):
+            return "--"
+        abs_v = abs(value)
+        if abs_v >= 1000.0:
+            return f"{value:.0f}"
+        if abs_v >= 100.0:
+            return f"{value:.1f}"
+        if abs_v >= 10.0:
+            return f"{value:.2f}"
+        return f"{value:.3f}"
+
+    def _set_default_y_ticks(self, graph, axis_id):
+        axis = graph.getAxis('left')
+        key = ("default",)
+        if axis_id == 1:
+            if self._axis1_ticks_key == key:
+                return
+            self._axis1_ticks_key = key
+        else:
+            if self._axis2_ticks_key == key:
+                return
+            self._axis2_ticks_key = key
+        axis.setTicks([self._default_y_ticks])
+
+    def _set_calibrated_y_ticks(self, graph, axis_id, vmin, vmax):
+        if (vmin is None) or (vmax is None):
+            self._set_default_y_ticks(graph, axis_id)
+            return
+        if (not math.isfinite(vmin)) or (not math.isfinite(vmax)):
+            self._set_default_y_ticks(graph, axis_id)
+            return
+        span = vmax - vmin
+        if span <= 1e-9:
+            self._set_default_y_ticks(graph, axis_id)
+            return
+
+        key = (round(vmin, 6), round(vmax, 6))
+        if axis_id == 1:
+            if self._axis1_ticks_key == key:
+                return
+            self._axis1_ticks_key = key
+        else:
+            if self._axis2_ticks_key == key:
+                return
+            self._axis2_ticks_key = key
+
+        # Keep drawing on [-100, 100], but show calibrated amplitude values.
+        ticks = [
+            (-100.0, self._format_axis_tick(vmin)),
+            (-50.0, self._format_axis_tick(vmin + 0.25 * span)),
+            (0.0, self._format_axis_tick(vmin + 0.50 * span)),
+            (50.0, self._format_axis_tick(vmin + 0.75 * span)),
+            (100.0, self._format_axis_tick(vmax)),
+        ]
+        graph.getAxis('left').setTicks([ticks])
+
+    def _update_y_axis_ticks(self, metrics):
+        p_min = self._to_float_or_none(metrics.get("y1_min"))
+        p_max = self._to_float_or_none(metrics.get("y1_max"))
+        d_min = self._to_float_or_none(metrics.get("y2_min"))
+        d_max = self._to_float_or_none(metrics.get("y2_max"))
+        self._set_calibrated_y_ticks(self.graph1, 1, p_min, p_max)
+        self._set_calibrated_y_ticks(self.graph2, 2, d_min, d_max)
+
     # Actualiza el grafico
     def update_plot(self):
         if not self.measuring:
@@ -2072,12 +2124,13 @@ class MainScreen(QMainWindow):
         calibrating = bool(metrics.get("calibrating", False))
         buffer_ready = bool(metrics.get("buffer_ready", not calibrating))
         both_signals_ok = c1 and c2 and s1 and s2
+        self._update_y_axis_ticks(metrics)
 
         if not ws_connected:
             self._show_connection_alert(self.prox_alert_label, "#b00020")
             self._show_connection_alert(self.dist_alert_label, self._dist_alert_color)
         else:
-            if self._show_calibrating_until_ready and buffer_ready and both_signals_ok:
+            if self._show_calibrating_until_ready and buffer_ready:
                 self._show_calibrating_until_ready = False
 
             if self._show_calibrating_until_ready and both_signals_ok:

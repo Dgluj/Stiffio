@@ -3,9 +3,10 @@ BACKEND.PY
 Visual-only processing pipeline for signal display.
 
 - Receives signals from ESP32 through ComunicacionMax.
-- Uses fixed normalization: (ir / 262143.0) * 100.0
-- Uses a fixed 6-second FIFO display window.
-- Starts plotting only after the 6-second buffer is complete.
+- Performs a 10-second startup calibration (per channel min/max).
+- Starts plotting only after calibration is complete.
+- Uses delayed playback (5 s) to smooth jitter.
+- Scales both signals with fixed calibration ranges to [-100, 100].
 - Does NOT compute HR or PWV (those come from ESP32 JSON).
 """
 
@@ -20,30 +21,35 @@ class SignalProcessor:
     def __init__(self, fs=50):
         self.fs = fs
         self.VIEW_SECONDS = 6.0
-        self.INITIAL_BUFFER_SECONDS = 10.0
+        self.CALIB_SECONDS = 10.0
         self.PLAYBACK_DELAY_SECONDS = 5.0
-        self.INPUT_BUFFER_SECONDS = 30.0
+        self.INPUT_BUFFER_SECONDS = 40.0
+
         self.MAX_POINTS = max(2, int(round(self.fs * self.VIEW_SECONDS)))
-        self.INITIAL_BUFFER_POINTS = max(2, int(round(self.fs * self.INITIAL_BUFFER_SECONDS)))
+        self.CALIB_POINTS = max(2, int(round(self.fs * self.CALIB_SECONDS)))
         self.PLAYBACK_DELAY_POINTS = max(0, int(round(self.fs * self.PLAYBACK_DELAY_SECONDS)))
         self.INPUT_MAX_POINTS = max(
-            self.MAX_POINTS + self.INITIAL_BUFFER_POINTS + self.PLAYBACK_DELAY_POINTS,
+            self.MAX_POINTS + self.CALIB_POINTS + self.PLAYBACK_DELAY_POINTS,
             int(round(self.fs * self.INPUT_BUFFER_SECONDS)),
         )
-        self.MAX_ADC = 262143.0
-        # Ganancia comun para ambos canales (preserva proporcion fisiologica).
-        # Se ajusta automaticamente al inicio segun amplitud proximal.
-        self.TARGET_PROX_P95 = 45.0
-        self.COMMON_GAIN_MIN = 50.0
-        self.COMMON_GAIN_MAX = 5000.0
-        self.display_gain_common = 1000.0
-        self._common_gain_locked = False
 
+        # Output window (already scaled for plotting)
         self.proximal_filtered = deque(maxlen=self.MAX_POINTS)
         self.distal_filtered = deque(maxlen=self.MAX_POINTS)
         self.time_axis = deque(maxlen=self.MAX_POINTS)
+
+        # Raw input queue used for delayed playback
         self._input_prox = deque(maxlen=self.INPUT_MAX_POINTS)
         self._input_dist = deque(maxlen=self.INPUT_MAX_POINTS)
+
+        # Raw calibration buffers (first 10 s with both sensors OK)
+        self._calib_prox = deque(maxlen=self.CALIB_POINTS)
+        self._calib_dist = deque(maxlen=self.CALIB_POINTS)
+        self._calibration_ready = False
+        self.calib_min_p = None
+        self.calib_max_p = None
+        self.calib_min_d = None
+        self.calib_max_d = None
 
         self.hr = None
         self.pwv = None
@@ -68,18 +74,27 @@ class SignalProcessor:
         self.session_start_local = time.monotonic()
         self.hr = None
         self.pwv = None
+
         self.proximal_filtered.clear()
         self.distal_filtered.clear()
         self.time_axis.clear()
         self._input_prox.clear()
         self._input_dist.clear()
+        self._calib_prox.clear()
+        self._calib_dist.clear()
+
+        self._calibration_ready = False
+        self.calib_min_p = None
+        self.calib_max_p = None
+        self.calib_min_d = None
+        self.calib_max_d = None
+
         self.last_data_time = None
         self.last_seq = -1
         self.data_seq = -1
         self._sample_index = 0
         self._playback_started = False
         self._last_playback_time = None
-        self._common_gain_locked = False
 
     def stop_session(self):
         self.session_active = False
@@ -90,15 +105,23 @@ class SignalProcessor:
         self.time_axis.clear()
         self._input_prox.clear()
         self._input_dist.clear()
+        self._calib_prox.clear()
+        self._calib_dist.clear()
+
         self.hr = None
         self.pwv = None
+        self._calibration_ready = False
+        self.calib_min_p = None
+        self.calib_max_p = None
+        self.calib_min_d = None
+        self.calib_max_d = None
+
         self.last_data_time = None
         self.last_seq = -1
         self.data_seq = -1
         self._sample_index = 0
         self._playback_started = False
         self._last_playback_time = None
-        self._common_gain_locked = False
 
     def _update_status(self, snapshot):
         self.connected = bool(snapshot.get("connected", False))
@@ -131,52 +154,62 @@ class SignalProcessor:
             return None
         return v
 
-    def _normalize_fixed(self, values):
+    def _coerce_sample_pair(self, p_val, d_val):
+        try:
+            p = float(p_val)
+            d = float(d_val)
+        except (TypeError, ValueError):
+            return None
+        if (not math.isfinite(p)) or (not math.isfinite(d)):
+            return None
+        return (p, d)
+
+    def _try_finalize_calibration(self):
+        if self._calibration_ready:
+            return
+        if len(self._calib_prox) < self.CALIB_POINTS or len(self._calib_dist) < self.CALIB_POINTS:
+            return
+
+        p_min = min(self._calib_prox)
+        p_max = max(self._calib_prox)
+        d_min = min(self._calib_dist)
+        d_max = max(self._calib_dist)
+
+        if (p_max - p_min) <= 1e-9 or (d_max - d_min) <= 1e-9:
+            return
+
+        self.calib_min_p = float(p_min)
+        self.calib_max_p = float(p_max)
+        self.calib_min_d = float(d_min)
+        self.calib_max_d = float(d_max)
+        self._calibration_ready = True
+
+    def _scale_with_minmax(self, values, vmin, vmax):
+        if not values:
+            return []
+        span = vmax - vmin
+        if span <= 1e-9:
+            return [0.0 for _ in values]
+
         out = []
         for v in values:
-            norm = (float(v) / self.MAX_ADC) * 100.0
-            out.append(norm)
+            scaled = ((float(v) - vmin) / span) * 200.0 - 100.0
+            if scaled > 100.0:
+                scaled = 100.0
+            elif scaled < -100.0:
+                scaled = -100.0
+            out.append(scaled)
         return out
 
-    def _clip_pct(self, v):
-        if v > 100.0:
-            return 100.0
-        if v < -100.0:
-            return -100.0
-        return v
-
-    def _percentile_abs(self, values, q):
-        if not values:
-            return 0.0
-        arr = sorted(abs(float(v)) for v in values)
-        if len(arr) == 1:
-            return arr[0]
-        q = max(0.0, min(100.0, float(q)))
-        pos = (len(arr) - 1) * (q / 100.0)
-        lo = int(pos)
-        hi = min(len(arr) - 1, lo + 1)
-        frac = pos - lo
-        return arr[lo] * (1.0 - frac) + arr[hi] * frac
-
-    def _update_common_gain_from_prox(self):
-        p95 = self._percentile_abs(self._input_prox, 95.0)
-        if p95 <= 1e-6:
-            gain = self.display_gain_common
-        else:
-            gain = self.TARGET_PROX_P95 / p95
-        gain = max(self.COMMON_GAIN_MIN, min(self.COMMON_GAIN_MAX, gain))
-        self.display_gain_common = gain
-
     def _advance_playback(self, now):
+        if not self._calibration_ready:
+            return
         if (not self._input_prox) or (not self._input_dist):
             return
 
         if not self._playback_started:
-            if len(self._input_prox) < self.INITIAL_BUFFER_POINTS:
+            if min(len(self._input_prox), len(self._input_dist)) <= self.PLAYBACK_DELAY_POINTS:
                 return
-            if not self._common_gain_locked:
-                self._update_common_gain_from_prox()
-                self._common_gain_locked = True
             self._playback_started = True
             self._last_playback_time = now
             return
@@ -195,7 +228,6 @@ class SignalProcessor:
 
         available = min(len(self._input_prox), len(self._input_dist)) - self.PLAYBACK_DELAY_POINTS
         if available <= 0:
-            # Sin margen de atraso, reseteamos deuda de tiempo para no producir saltos grandes.
             self._last_playback_time = now
             return
 
@@ -204,10 +236,8 @@ class SignalProcessor:
             return
 
         for _ in range(emit):
-            p_raw = self._input_prox.popleft()
-            d_raw = self._input_dist.popleft()
-            p_val = self._clip_pct(p_raw * self.display_gain_common)
-            d_val = self._clip_pct(d_raw * self.display_gain_common)
+            p_val = self._input_prox.popleft()
+            d_val = self._input_dist.popleft()
             self.time_axis.append(self._sample_index / self.fs)
             self.proximal_filtered.append(p_val)
             self.distal_filtered.append(d_val)
@@ -239,8 +269,8 @@ class SignalProcessor:
 
         n = min(len(raw_t), len(raw_p), len(raw_d))
         if n <= 0:
+            self._advance_playback(now)
             return
-        raw_t = raw_t[-n:]
         raw_p = raw_p[-n:]
         raw_d = raw_d[-n:]
 
@@ -257,14 +287,30 @@ class SignalProcessor:
             self._advance_playback(now)
             return
 
+        both_signals_ok = self.c1 and self.c2 and self.s1 and self.s2
+        if (not self._calibration_ready) and (not both_signals_ok):
+            # Exigimos 10 s continuos válidos para calibrar.
+            self._calib_prox.clear()
+            self._calib_dist.clear()
+            self._input_prox.clear()
+            self._input_dist.clear()
+
         new_p = raw_p[-new_count:]
         new_d = raw_d[-new_count:]
-        p_norm = self._normalize_fixed(new_p)
-        d_norm = self._normalize_fixed(new_d)
 
-        for p_val, d_val in zip(p_norm, d_norm):
-            self._input_prox.append(p_val)
-            self._input_dist.append(d_val)
+        if both_signals_ok:
+            for p_val, d_val in zip(new_p, new_d):
+                pair = self._coerce_sample_pair(p_val, d_val)
+                if pair is None:
+                    continue
+                p, d = pair
+                self._input_prox.append(p)
+                self._input_dist.append(d)
+                if not self._calibration_ready:
+                    self._calib_prox.append(p)
+                    self._calib_dist.append(d)
+
+            self._try_finalize_calibration()
 
         self.last_seq = seq
         self._advance_playback(now)
@@ -272,31 +318,36 @@ class SignalProcessor:
     def get_signals(self):
         if (not self._playback_started) or (len(self.time_axis) <= 1):
             return [], [], []
-        return list(self.time_axis), list(self.proximal_filtered), list(self.distal_filtered)
+
+        t = list(self.time_axis)
+        p = self._scale_with_minmax(list(self.proximal_filtered), self.calib_min_p, self.calib_max_p)
+        d = self._scale_with_minmax(list(self.distal_filtered), self.calib_min_d, self.calib_max_d)
+        return t, p, d
 
     def get_metrics(self):
         if self._playback_started:
-            buffer_progress = 1.0
+            progress = 1.0
             buffer_ready = True
         else:
-            buffer_progress = min(1.0, len(self._input_prox) / float(self.INITIAL_BUFFER_POINTS))
+            progress = min(1.0, len(self._calib_prox) / float(self.CALIB_POINTS))
             buffer_ready = False
+
         return {
             "hr": self.hr,
             "pwv": self.pwv,
             "calibrating": self.session_active and (not buffer_ready),
-            "calibration_progress": buffer_progress,
-            "calibration_ready": buffer_ready,
-            "buffer_progress": buffer_progress,
+            "calibration_progress": progress,
+            "calibration_ready": self._calibration_ready,
+            "buffer_progress": progress,
             "buffer_ready": buffer_ready,
-            "calib_min_p": None,
-            "calib_max_p": None,
-            "calib_min_d": None,
-            "calib_max_d": None,
-            "y1_min": -100.0,
-            "y1_max": 100.0,
-            "y2_min": -100.0,
-            "y2_max": 100.0,
+            "calib_min_p": self.calib_min_p,
+            "calib_max_p": self.calib_max_p,
+            "calib_min_d": self.calib_min_d,
+            "calib_max_d": self.calib_max_d,
+            "y1_min": self.calib_min_p,
+            "y1_max": self.calib_max_p,
+            "y2_min": self.calib_min_d,
+            "y2_max": self.calib_max_d,
             "data_seq": self.data_seq,
         }
 
@@ -311,3 +362,4 @@ class SignalProcessor:
 
 
 processor = SignalProcessor()
+
