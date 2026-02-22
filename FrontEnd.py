@@ -39,10 +39,6 @@ def resource_path(relative_path):
     except Exception:
         base_path = os.path.abspath(".")
     return os.path.join(base_path, relative_path)
-
-
-def measurements_csv_path():
-    return resource_path("mediciones_pwv.csv")
 # =================================================================================================
 # Ventana de Inicio
 # =================================================================================================
@@ -678,7 +674,6 @@ class HistoryScreen(QWidget):
 
         self.layout.addLayout(search_layout)
         self.layout.addSpacing(20)
-        self.current_table_data = []
 
         self.load_data()
 
@@ -717,9 +712,8 @@ class HistoryScreen(QWidget):
 
 
     def load_data(self):
-        filename = measurements_csv_path()
+        filename = resource_path("mediciones_pwv.csv") 
         self.all_data = [] # Inicializamos para evitar el AttributeError
-        self.current_table_data = []
 
         # Si el archivo NO existe, lo creamos con el formato correcto vacio
         if not os.path.exists(filename):
@@ -756,7 +750,6 @@ class HistoryScreen(QWidget):
         self.layout.addWidget(label)
 
     def show_table(self, data):
-        self.current_table_data = list(data)
         self.table = QTableWidget()
         self.table.setRowCount(len(data))
         visible_headers = ["Fecha y Hora", "DNI", "Nombre",  "Apellido", "Edad", "Altura", "Sexo", "HR", "crPWV", "Acciones"]
@@ -871,7 +864,7 @@ class HistoryScreen(QWidget):
                     background-color: rgba(255, 255, 255, 0.1);
                 }
             """)
-            delete_button.clicked.connect(lambda checked, row_data=row: self.delete_record(row_data))
+            delete_button.clicked.connect(lambda checked, row=r: self.delete_record(row))
             actions_layout.addWidget(delete_button)
 
             self.table.setCellWidget(r, 9, actions_widget)
@@ -889,7 +882,7 @@ class HistoryScreen(QWidget):
 
         self.layout.addWidget(self.table)
 
-    def delete_record(self, record):
+    def delete_record(self, row):
 
         # Mensaje de confirmación
         msg = QMessageBox(self)
@@ -937,39 +930,24 @@ class HistoryScreen(QWidget):
 
         # Si el usuario confirmed la eliminación
         if msg.clickedButton() == yes_button:
-            self.perform_deletion(record)
+            self.perform_deletion(row)
 
-    def perform_deletion(self, record):
-        filename = measurements_csv_path()
+    def perform_deletion(self, row):
+        filename = resource_path("mediciones_pwv.csv")
 
         try:
             # Leer el archivo CSV completo
             with open(filename, 'r', newline='', encoding='utf-8-sig') as file:
                 rows = list(csv.reader(file, delimiter=';'))
 
-            if len(rows) <= 1:
-                raise ValueError("No hay registros para eliminar.")
-
-            header = rows[0]
-            body = rows[1:]
-
-            target = [str(v) for v in record]
-            row_to_delete = None
-            for idx, csv_row in enumerate(body):
-                if csv_row == target:
-                    row_to_delete = idx
-                    break
-
-            if row_to_delete is None:
-                raise ValueError("No se encontró el registro en el archivo CSV.")
-
-            del body[row_to_delete]
+            # Eliminar la fila (row+1 porque row 0 es el header)
+            if len(rows) > row + 1:
+                del rows[row + 1]
 
             # Reescribir el archivo CSV sin la fila eliminada
             with open(filename, 'w', newline='', encoding='utf-8-sig') as file:
                 writer = csv.writer(file, delimiter=';')
-                writer.writerow(header)
-                writer.writerows(body)
+                writer.writerows(rows)
 
             # Recargar la tabla
             self.refresh_table()
@@ -1014,10 +992,6 @@ class HistoryScreen(QWidget):
             error_msg.exec()
 
     def refresh_table(self):
-        current_filter = ""
-        if hasattr(self, 'search_input'):
-            current_filter = self.search_input.text()
-
         # Eliminar la tabla existente
         if hasattr(self, 'table'):
             self.table.setParent(None)
@@ -1025,8 +999,6 @@ class HistoryScreen(QWidget):
 
         # Recargar los datos
         self.load_data()
-        if current_filter:
-            self.filter_table(current_filter)
 
     def filter_table(self, text):
         if not hasattr(self, 'table'):
@@ -2192,7 +2164,7 @@ class MainScreen(QMainWindow):
 
     # Guardar medicion
     def save_measurement(self):
-        filename = measurements_csv_path()
+        filename = resource_path("mediciones_pwv.csv")
 
         # Datos del paciente
         # (Usamos .get() para evitar errores si una clave no existe)
