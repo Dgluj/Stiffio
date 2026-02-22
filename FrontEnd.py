@@ -1259,6 +1259,7 @@ class MainScreen(QMainWindow):
         self._patient_data_sent = False
         self._last_patient_data_send_attempt = 0.0
         self._patient_data_retry_sec = 1.0
+        self._dist_alert_color = "#ff6fae"
         self.measuring = False  # Medición inicialmente desactivada
 
         try:
@@ -1659,7 +1660,7 @@ class MainScreen(QMainWindow):
         self.dist_alert_label = QLabel("REVISAR SENSOR")
         self.dist_alert_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.dist_alert_label.setStyleSheet("""
-            background-color: pink;
+            background-color: #ff6fae;
             color: white;
             font-size: 22pt;
             font-weight: bold;
@@ -2063,6 +2064,7 @@ class MainScreen(QMainWindow):
         s2 = status.get("s2", False)
         ws_connected = bool(status.get("connected", False))
         now = time.monotonic()
+        prev_x_end = self._last_x_end
         if (not self._patient_data_sent) and (now - self._last_patient_data_send_attempt >= self._patient_data_retry_sec):
             self._last_patient_data_send_attempt = now
             self._try_send_patient_data()
@@ -2073,17 +2075,17 @@ class MainScreen(QMainWindow):
 
         if not ws_connected:
             self._show_connection_alert(self.prox_alert_label, "#b00020")
-            self._show_connection_alert(self.dist_alert_label, "#c2185b")
+            self._show_connection_alert(self.dist_alert_label, self._dist_alert_color)
         else:
             if self._show_calibrating_until_ready and buffer_ready and both_signals_ok:
                 self._show_calibrating_until_ready = False
 
             if self._show_calibrating_until_ready and both_signals_ok:
                 self._show_calibrating_alert(self.prox_alert_label, "#b00020")
-                self._show_calibrating_alert(self.dist_alert_label, "#c2185b")
+                self._show_calibrating_alert(self.dist_alert_label, self._dist_alert_color)
             else:
                 self._show_sensor_alert(self.prox_alert_label, "SENSOR PROXIMAL", c1, s1, "#b00020")
-                self._show_sensor_alert(self.dist_alert_label, "SENSOR DISTAL", c2, s2, "#c2185b")
+                self._show_sensor_alert(self.dist_alert_label, "SENSOR DISTAL", c2, s2, self._dist_alert_color)
 
         if len(t) > 1:
             x_end = t[-1]
@@ -2110,13 +2112,16 @@ class MainScreen(QMainWindow):
         allow_signal_plot = buffer_ready and (not self._show_calibrating_until_ready)
         data_seq = int(metrics.get("data_seq", -1))
         plot_mode_changed = (self._last_allow_signal_plot is None) or (self._last_allow_signal_plot != allow_signal_plot)
+        playback_advanced = (
+            len(t) > 0 and (prev_x_end is None or abs(t[-1] - prev_x_end) > 1e-6)
+        )
 
         if not allow_signal_plot:
             if plot_mode_changed:
                 self.curve1.setData([], [])
                 self.curve2.setData([], [])
         else:
-            should_plot_update = plot_mode_changed or (data_seq != self._last_plot_seq)
+            should_plot_update = plot_mode_changed or playback_advanced or (data_seq != self._last_plot_seq)
             if should_plot_update:
                 if len(t) == len(y1) and len(y1) > 1:
                     self.curve1.setData(t, y1)

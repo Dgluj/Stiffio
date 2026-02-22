@@ -20,13 +20,27 @@ class SignalProcessor:
     def __init__(self, fs=50):
         self.fs = fs
         self.VIEW_SECONDS = 6.0
+        self.INITIAL_BUFFER_SECONDS = 10.0
+        self.PLAYBACK_DELAY_SECONDS = 5.0
+        self.INPUT_BUFFER_SECONDS = 30.0
         self.MAX_POINTS = max(2, int(round(self.fs * self.VIEW_SECONDS)))
+        self.INITIAL_BUFFER_POINTS = max(2, int(round(self.fs * self.INITIAL_BUFFER_SECONDS)))
+        self.PLAYBACK_DELAY_POINTS = max(0, int(round(self.fs * self.PLAYBACK_DELAY_SECONDS)))
+        self.INPUT_MAX_POINTS = max(
+            self.MAX_POINTS + self.INITIAL_BUFFER_POINTS + self.PLAYBACK_DELAY_POINTS,
+            int(round(self.fs * self.INPUT_BUFFER_SECONDS)),
+        )
         self.MAX_ADC = 262143.0
-        self.DISPLAY_GAIN = 1000.0
+        # Ganancias de visualizacion por canal para compensar sensibilidad distinta
+        # entre proximal y distal sin tocar el firmware.
+        self.PROX_DISPLAY_GAIN = 650.0
+        self.DIST_DISPLAY_GAIN = 2500.0
 
         self.proximal_filtered = deque(maxlen=self.MAX_POINTS)
         self.distal_filtered = deque(maxlen=self.MAX_POINTS)
         self.time_axis = deque(maxlen=self.MAX_POINTS)
+        self._input_prox = deque(maxlen=self.INPUT_MAX_POINTS)
+        self._input_dist = deque(maxlen=self.INPUT_MAX_POINTS)
 
         self.hr = None
         self.pwv = None
@@ -43,6 +57,8 @@ class SignalProcessor:
         self.last_seq = -1
         self.data_seq = -1
         self._sample_index = 0
+        self._playback_started = False
+        self._last_playback_time = None
 
     def start_session(self):
         self.session_active = True
@@ -52,10 +68,14 @@ class SignalProcessor:
         self.proximal_filtered.clear()
         self.distal_filtered.clear()
         self.time_axis.clear()
+        self._input_prox.clear()
+        self._input_dist.clear()
         self.last_data_time = None
         self.last_seq = -1
         self.data_seq = -1
         self._sample_index = 0
+        self._playback_started = False
+        self._last_playback_time = None
 
     def stop_session(self):
         self.session_active = False
@@ -64,12 +84,16 @@ class SignalProcessor:
         self.proximal_filtered.clear()
         self.distal_filtered.clear()
         self.time_axis.clear()
+        self._input_prox.clear()
+        self._input_dist.clear()
         self.hr = None
         self.pwv = None
         self.last_data_time = None
         self.last_seq = -1
         self.data_seq = -1
         self._sample_index = 0
+        self._playback_started = False
+        self._last_playback_time = None
 
     def _update_status(self, snapshot):
         self.connected = bool(snapshot.get("connected", False))
@@ -102,17 +126,62 @@ class SignalProcessor:
             return None
         return v
 
-    def _normalize_fixed(self, values):
+    def _normalize_fixed(self, values, gain):
         out = []
         for v in values:
             norm = (float(v) / self.MAX_ADC) * 100.0
-            norm *= self.DISPLAY_GAIN
+            norm *= gain
             if norm > 100.0:
                 norm = 100.0
             elif norm < -100.0:
                 norm = -100.0
             out.append(norm)
         return out
+
+    def _advance_playback(self, now):
+        if (not self._input_prox) or (not self._input_dist):
+            return
+
+        if not self._playback_started:
+            if len(self._input_prox) < self.INITIAL_BUFFER_POINTS:
+                return
+            self._playback_started = True
+            self._last_playback_time = now
+            return
+
+        if self._last_playback_time is None:
+            self._last_playback_time = now
+            return
+
+        elapsed = now - self._last_playback_time
+        if elapsed <= 0.0:
+            return
+
+        frames_due = int(elapsed * self.fs)
+        if frames_due <= 0:
+            return
+
+        available = min(len(self._input_prox), len(self._input_dist)) - self.PLAYBACK_DELAY_POINTS
+        if available <= 0:
+            # Sin margen de atraso, reseteamos deuda de tiempo para no producir saltos grandes.
+            self._last_playback_time = now
+            return
+
+        emit = min(frames_due, available, self.MAX_POINTS)
+        if emit <= 0:
+            return
+
+        for _ in range(emit):
+            p_val = self._input_prox.popleft()
+            d_val = self._input_dist.popleft()
+            self.time_axis.append(self._sample_index / self.fs)
+            self.proximal_filtered.append(p_val)
+            self.distal_filtered.append(d_val)
+            self._sample_index += 1
+
+        self._last_playback_time += emit / self.fs
+        if emit < frames_due:
+            self._last_playback_time = now
 
     def process_all(self):
         if not self.session_active:
@@ -129,6 +198,7 @@ class SignalProcessor:
         now = time.monotonic()
 
         if not raw_t or not raw_p or not raw_d:
+            self._advance_playback(now)
             return
 
         self.last_data_time = now
@@ -145,33 +215,38 @@ class SignalProcessor:
         else:
             delta = seq - self.last_seq
             if delta <= 0:
+                self._advance_playback(now)
                 return
             new_count = min(n, delta)
 
         if new_count <= 0:
+            self._advance_playback(now)
             return
 
         new_p = raw_p[-new_count:]
         new_d = raw_d[-new_count:]
-        p_norm = self._normalize_fixed(new_p)
-        d_norm = self._normalize_fixed(new_d)
+        p_norm = self._normalize_fixed(new_p, self.PROX_DISPLAY_GAIN)
+        d_norm = self._normalize_fixed(new_d, self.DIST_DISPLAY_GAIN)
 
         for p_val, d_val in zip(p_norm, d_norm):
-            self.time_axis.append(self._sample_index / self.fs)
-            self.proximal_filtered.append(p_val)
-            self.distal_filtered.append(d_val)
-            self._sample_index += 1
+            self._input_prox.append(p_val)
+            self._input_dist.append(d_val)
 
         self.last_seq = seq
+        self._advance_playback(now)
 
     def get_signals(self):
-        if len(self.time_axis) < self.MAX_POINTS:
+        if (not self._playback_started) or (len(self.time_axis) <= 1):
             return [], [], []
         return list(self.time_axis), list(self.proximal_filtered), list(self.distal_filtered)
 
     def get_metrics(self):
-        buffer_progress = min(1.0, len(self.time_axis) / float(self.MAX_POINTS))
-        buffer_ready = len(self.time_axis) >= self.MAX_POINTS
+        if self._playback_started:
+            buffer_progress = 1.0
+            buffer_ready = True
+        else:
+            buffer_progress = min(1.0, len(self._input_prox) / float(self.INITIAL_BUFFER_POINTS))
+            buffer_ready = False
         return {
             "hr": self.hr,
             "pwv": self.pwv,
