@@ -31,10 +31,13 @@ class SignalProcessor:
             int(round(self.fs * self.INPUT_BUFFER_SECONDS)),
         )
         self.MAX_ADC = 262143.0
-        # Ganancias de visualizacion por canal para compensar sensibilidad distinta
-        # entre proximal y distal sin tocar el firmware.
-        self.PROX_DISPLAY_GAIN = 650.0
-        self.DIST_DISPLAY_GAIN = 2500.0
+        # Ganancia comun para ambos canales (preserva proporcion fisiologica).
+        # Se ajusta automaticamente al inicio segun amplitud proximal.
+        self.TARGET_PROX_P95 = 45.0
+        self.COMMON_GAIN_MIN = 50.0
+        self.COMMON_GAIN_MAX = 5000.0
+        self.display_gain_common = 1000.0
+        self._common_gain_locked = False
 
         self.proximal_filtered = deque(maxlen=self.MAX_POINTS)
         self.distal_filtered = deque(maxlen=self.MAX_POINTS)
@@ -76,6 +79,7 @@ class SignalProcessor:
         self._sample_index = 0
         self._playback_started = False
         self._last_playback_time = None
+        self._common_gain_locked = False
 
     def stop_session(self):
         self.session_active = False
@@ -94,6 +98,7 @@ class SignalProcessor:
         self._sample_index = 0
         self._playback_started = False
         self._last_playback_time = None
+        self._common_gain_locked = False
 
     def _update_status(self, snapshot):
         self.connected = bool(snapshot.get("connected", False))
@@ -126,17 +131,41 @@ class SignalProcessor:
             return None
         return v
 
-    def _normalize_fixed(self, values, gain):
+    def _normalize_fixed(self, values):
         out = []
         for v in values:
             norm = (float(v) / self.MAX_ADC) * 100.0
-            norm *= gain
-            if norm > 100.0:
-                norm = 100.0
-            elif norm < -100.0:
-                norm = -100.0
             out.append(norm)
         return out
+
+    def _clip_pct(self, v):
+        if v > 100.0:
+            return 100.0
+        if v < -100.0:
+            return -100.0
+        return v
+
+    def _percentile_abs(self, values, q):
+        if not values:
+            return 0.0
+        arr = sorted(abs(float(v)) for v in values)
+        if len(arr) == 1:
+            return arr[0]
+        q = max(0.0, min(100.0, float(q)))
+        pos = (len(arr) - 1) * (q / 100.0)
+        lo = int(pos)
+        hi = min(len(arr) - 1, lo + 1)
+        frac = pos - lo
+        return arr[lo] * (1.0 - frac) + arr[hi] * frac
+
+    def _update_common_gain_from_prox(self):
+        p95 = self._percentile_abs(self._input_prox, 95.0)
+        if p95 <= 1e-6:
+            gain = self.display_gain_common
+        else:
+            gain = self.TARGET_PROX_P95 / p95
+        gain = max(self.COMMON_GAIN_MIN, min(self.COMMON_GAIN_MAX, gain))
+        self.display_gain_common = gain
 
     def _advance_playback(self, now):
         if (not self._input_prox) or (not self._input_dist):
@@ -145,6 +174,9 @@ class SignalProcessor:
         if not self._playback_started:
             if len(self._input_prox) < self.INITIAL_BUFFER_POINTS:
                 return
+            if not self._common_gain_locked:
+                self._update_common_gain_from_prox()
+                self._common_gain_locked = True
             self._playback_started = True
             self._last_playback_time = now
             return
@@ -172,8 +204,10 @@ class SignalProcessor:
             return
 
         for _ in range(emit):
-            p_val = self._input_prox.popleft()
-            d_val = self._input_dist.popleft()
+            p_raw = self._input_prox.popleft()
+            d_raw = self._input_dist.popleft()
+            p_val = self._clip_pct(p_raw * self.display_gain_common)
+            d_val = self._clip_pct(d_raw * self.display_gain_common)
             self.time_axis.append(self._sample_index / self.fs)
             self.proximal_filtered.append(p_val)
             self.distal_filtered.append(d_val)
@@ -225,8 +259,8 @@ class SignalProcessor:
 
         new_p = raw_p[-new_count:]
         new_d = raw_d[-new_count:]
-        p_norm = self._normalize_fixed(new_p, self.PROX_DISPLAY_GAIN)
-        d_norm = self._normalize_fixed(new_d, self.DIST_DISPLAY_GAIN)
+        p_norm = self._normalize_fixed(new_p)
+        d_norm = self._normalize_fixed(new_d)
 
         for p_val, d_val in zip(p_norm, d_norm):
             self._input_prox.append(p_val)
