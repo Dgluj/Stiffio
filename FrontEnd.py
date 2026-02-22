@@ -1259,7 +1259,7 @@ class MainScreen(QMainWindow):
         self._last_patient_data_send_attempt = 0.0
         self._patient_data_retry_sec = 1.0
         self._dist_alert_color = "#ff6fae"
-        self._plot_refresh_interval_sec = 1.0 / 30.0
+        self._plot_refresh_interval_sec = 1.0 / 24.0
         self._last_plot_refresh_time = 0.0
         self._default_y_ticks = [
             (-100.0, "-100"),
@@ -1636,8 +1636,8 @@ class MainScreen(QMainWindow):
         self.curve2 = self.graph2.plot([], [], pen=pg.mkPen('pink', width=2))
         self.curve1.setClipToView(True)
         self.curve2.setClipToView(True)
-        self.curve1.setDownsampling(auto=True, method='subsample')
-        self.curve2.setDownsampling(auto=True, method='subsample')
+        self.curve1.setDownsampling(auto=False)
+        self.curve2.setDownsampling(auto=False)
 
         # Alerta para sensor 1 (proximal)
         self.prox_alert_label = QLabel("REVISAR SENSOR")

@@ -39,8 +39,8 @@ else:
     _candidates = [env_ip] if env_ip else list(DEFAULT_ESP_IPS)
 ESP_IP_CANDIDATES = list(dict.fromkeys(_candidates))
 WS_URL_CANDIDATES = [f"ws://{ip}:81/" for ip in ESP_IP_CANDIDATES]
-WS_PING_INTERVAL_SEC = 12
-WS_PING_TIMEOUT_SEC = 6
+WS_PING_INTERVAL_SEC = 15
+WS_PING_TIMEOUT_SEC = 10
 WS_RECONNECT_DELAY_SEC = 1.0
 WS_CONNECT_TIMEOUT_SEC = 3.0
 
@@ -70,6 +70,9 @@ MAX_POINTS = 600
 sample_time_raw = deque(maxlen=MAX_POINTS)
 proximal_data_raw = deque(maxlen=MAX_POINTS)
 distal_data_raw = deque(maxlen=MAX_POINTS)
+PENDING_MAX_POINTS = 2000
+pending_proximal = deque(maxlen=PENDING_MAX_POINTS)
+pending_distal = deque(maxlen=PENDING_MAX_POINTS)
 
 remote_hr = None
 remote_pwv = None
@@ -133,6 +136,8 @@ def reset_stream_buffers(reset_metrics=True):
         sample_time_raw.clear()
         proximal_data_raw.clear()
         distal_data_raw.clear()
+        pending_proximal.clear()
+        pending_distal.clear()
         _last_sample_time = None
         _sample_seq = 0
         if reset_metrics:
@@ -140,23 +145,52 @@ def reset_stream_buffers(reset_metrics=True):
             remote_pwv = None
 
 
-def get_snapshot():
+def get_snapshot(include_stream=True):
     with _state_lock:
-        return {
+        snapshot = {
             "connected": connected,
             "ws_url": active_ws_url,
             "c1": sensor1_connected,
             "c2": sensor2_connected,
             "s1": sensor1_ok,
             "s2": sensor2_ok,
-            "t": list(sample_time_raw),
-            "p": list(proximal_data_raw),
-            "d": list(distal_data_raw),
             "hr": remote_hr,
             "pwv": remote_pwv,
             "seq": _sample_seq,
             "last_rx": _last_rx_monotonic,
         }
+        if include_stream:
+            snapshot["t"] = list(sample_time_raw)
+            snapshot["p"] = list(proximal_data_raw)
+            snapshot["d"] = list(distal_data_raw)
+        else:
+            snapshot["t"] = []
+            snapshot["p"] = []
+            snapshot["d"] = []
+        return snapshot
+
+
+def consume_pending_samples(max_items=None):
+    with _state_lock:
+        available = min(len(pending_proximal), len(pending_distal))
+        if available <= 0:
+            return {"p": [], "d": [], "count": 0, "seq": _sample_seq}
+
+        if max_items is None:
+            take = available
+        else:
+            try:
+                take = max(0, min(int(max_items), available))
+            except (TypeError, ValueError):
+                take = available
+
+        p_out = []
+        d_out = []
+        for _ in range(take):
+            p_out.append(pending_proximal.popleft())
+            d_out.append(pending_distal.popleft())
+
+        return {"p": p_out, "d": d_out, "count": take, "seq": _sample_seq}
 
 
 # ==============================================================================
@@ -255,6 +289,8 @@ def on_message(ws, message):
             sample_time_raw.append(t_sample)
             proximal_data_raw.append(p_val)
             distal_data_raw.append(d_val)
+            pending_proximal.append(p_val)
+            pending_distal.append(d_val)
 
         # Metrics already computed by ESP32
         if "hr" in data:
@@ -280,6 +316,8 @@ def on_error(ws, error):
         sample_time_raw.clear()
         proximal_data_raw.clear()
         distal_data_raw.clear()
+        pending_proximal.clear()
+        pending_distal.clear()
 
 
 def on_close(ws, close_status_code, close_msg):
@@ -299,6 +337,8 @@ def on_close(ws, close_status_code, close_msg):
         sample_time_raw.clear()
         proximal_data_raw.clear()
         distal_data_raw.clear()
+        pending_proximal.clear()
+        pending_distal.clear()
 
 
 # ==============================================================================

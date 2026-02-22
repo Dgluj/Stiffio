@@ -23,13 +23,23 @@ class SignalProcessor:
         self.VIEW_SECONDS = 6.0
         self.CALIB_SECONDS = 10.0
         self.PLAYBACK_DELAY_SECONDS = 5.0
+        self.STARTUP_FILL_SECONDS = 10.0
+        self.HOLDOVER_SECONDS = 0.0
+        self.PLAYBACK_RATE_SLOW = 0.90
+        self.PLAYBACK_RATE_FAST = 1.00
+        self.QUEUE_LOW_SECONDS = 0.80
+        self.QUEUE_HIGH_SECONDS = 2.20
         self.INPUT_BUFFER_SECONDS = 40.0
 
         self.MAX_POINTS = max(2, int(round(self.fs * self.VIEW_SECONDS)))
         self.CALIB_POINTS = max(2, int(round(self.fs * self.CALIB_SECONDS)))
         self.PLAYBACK_DELAY_POINTS = max(0, int(round(self.fs * self.PLAYBACK_DELAY_SECONDS)))
+        self.STARTUP_FILL_POINTS = max(0, int(round(self.fs * self.STARTUP_FILL_SECONDS)))
+        self.HOLDOVER_MAX_POINTS = max(0, int(round(self.fs * self.HOLDOVER_SECONDS)))
+        self.QUEUE_LOW_POINTS = max(0, int(round(self.fs * self.QUEUE_LOW_SECONDS)))
+        self.QUEUE_HIGH_POINTS = max(self.QUEUE_LOW_POINTS + 1, int(round(self.fs * self.QUEUE_HIGH_SECONDS)))
         self.INPUT_MAX_POINTS = max(
-            self.MAX_POINTS + self.CALIB_POINTS + self.PLAYBACK_DELAY_POINTS,
+            self.MAX_POINTS + self.CALIB_POINTS + self.PLAYBACK_DELAY_POINTS + self.STARTUP_FILL_POINTS,
             int(round(self.fs * self.INPUT_BUFFER_SECONDS)),
         )
 
@@ -68,6 +78,7 @@ class SignalProcessor:
         self._sample_index = 0
         self._playback_started = False
         self._last_playback_time = None
+        self._holdover_used_points = 0
 
     def start_session(self):
         self.session_active = True
@@ -95,6 +106,7 @@ class SignalProcessor:
         self._sample_index = 0
         self._playback_started = False
         self._last_playback_time = None
+        self._holdover_used_points = 0
 
     def stop_session(self):
         self.session_active = False
@@ -122,6 +134,7 @@ class SignalProcessor:
         self._sample_index = 0
         self._playback_started = False
         self._last_playback_time = None
+        self._holdover_used_points = 0
 
     def _update_status(self, snapshot):
         self.connected = bool(snapshot.get("connected", False))
@@ -201,6 +214,17 @@ class SignalProcessor:
             out.append(scaled)
         return out
 
+    def _select_playback_rate(self):
+        reserve = self.PLAYBACK_DELAY_POINTS + self.STARTUP_FILL_POINTS
+        queue_len = min(len(self._input_prox), len(self._input_dist))
+        headroom = max(0, queue_len - reserve)
+
+        if headroom <= self.QUEUE_LOW_POINTS:
+            return self.PLAYBACK_RATE_SLOW
+        if headroom >= self.QUEUE_HIGH_POINTS:
+            return self.PLAYBACK_RATE_FAST
+        return 1.0
+
     def _advance_playback(self, now):
         if not self._calibration_ready:
             return
@@ -208,7 +232,8 @@ class SignalProcessor:
             return
 
         if not self._playback_started:
-            if min(len(self._input_prox), len(self._input_dist)) <= self.PLAYBACK_DELAY_POINTS:
+            required = self.PLAYBACK_DELAY_POINTS + self.STARTUP_FILL_POINTS
+            if min(len(self._input_prox), len(self._input_dist)) <= required:
                 return
             self._playback_started = True
             self._last_playback_time = now
@@ -222,13 +247,41 @@ class SignalProcessor:
         if elapsed <= 0.0:
             return
 
-        frames_due = int(elapsed * self.fs)
+        playback_rate = self._select_playback_rate()
+        frames_due = int(elapsed * self.fs * playback_rate)
         if frames_due <= 0:
             return
 
         available = min(len(self._input_prox), len(self._input_dist)) - self.PLAYBACK_DELAY_POINTS
         if available <= 0:
-            self._last_playback_time = now
+            if (
+                frames_due <= 0
+                or self.HOLDOVER_MAX_POINTS <= 0
+                or self._holdover_used_points >= self.HOLDOVER_MAX_POINTS
+                or (not self.proximal_filtered)
+                or (not self.distal_filtered)
+            ):
+                self._last_playback_time = now
+                return
+
+            hold_budget = self.HOLDOVER_MAX_POINTS - self._holdover_used_points
+            emit_hold = min(frames_due, hold_budget, self.MAX_POINTS)
+            if emit_hold <= 0:
+                self._last_playback_time = now
+                return
+
+            p_hold = self.proximal_filtered[-1]
+            d_hold = self.distal_filtered[-1]
+            for _ in range(emit_hold):
+                self.time_axis.append(self._sample_index / self.fs)
+                self.proximal_filtered.append(p_hold)
+                self.distal_filtered.append(d_hold)
+                self._sample_index += 1
+
+            self._holdover_used_points += emit_hold
+            self._last_playback_time += emit_hold / self.fs
+            if emit_hold < frames_due:
+                self._last_playback_time = now
             return
 
         emit = min(frames_due, available, self.MAX_POINTS)
@@ -242,6 +295,7 @@ class SignalProcessor:
             self.proximal_filtered.append(p_val)
             self.distal_filtered.append(d_val)
             self._sample_index += 1
+        self._holdover_used_points = 0
 
         self._last_playback_time += emit / self.fs
         if emit < frames_due:
@@ -251,41 +305,28 @@ class SignalProcessor:
         if not self.session_active:
             return
 
-        snapshot = ComunicacionMax.get_snapshot()
+        snapshot = ComunicacionMax.get_snapshot(include_stream=False)
         self._update_status(snapshot)
 
-        raw_t = snapshot.get("t", [])
-        raw_p = snapshot.get("p", [])
-        raw_d = snapshot.get("d", [])
-        seq = int(snapshot.get("seq", 0))
+        pending = ComunicacionMax.consume_pending_samples(max_items=self.INPUT_MAX_POINTS)
+        raw_p = pending.get("p", [])
+        raw_d = pending.get("d", [])
+        seq = int(pending.get("seq", snapshot.get("seq", 0)))
         self.data_seq = seq
         now = time.monotonic()
 
-        if not raw_t or not raw_p or not raw_d:
+        if not raw_p or not raw_d:
             self._advance_playback(now)
             return
 
         self.last_data_time = now
 
-        n = min(len(raw_t), len(raw_p), len(raw_d))
+        n = min(len(raw_p), len(raw_d))
         if n <= 0:
             self._advance_playback(now)
             return
         raw_p = raw_p[-n:]
         raw_d = raw_d[-n:]
-
-        if self.last_seq < 0:
-            new_count = n
-        else:
-            delta = seq - self.last_seq
-            if delta <= 0:
-                self._advance_playback(now)
-                return
-            new_count = min(n, delta)
-
-        if new_count <= 0:
-            self._advance_playback(now)
-            return
 
         both_signals_ok = self.c1 and self.c2 and self.s1 and self.s2
         if (not self._calibration_ready) and (not both_signals_ok):
@@ -295,10 +336,11 @@ class SignalProcessor:
             self._input_prox.clear()
             self._input_dist.clear()
 
-        new_p = raw_p[-new_count:]
-        new_d = raw_d[-new_count:]
+        new_p = raw_p
+        new_d = raw_d
+        ingest_enabled = self._calibration_ready or both_signals_ok
 
-        if both_signals_ok:
+        if ingest_enabled:
             for p_val, d_val in zip(new_p, new_d):
                 pair = self._coerce_sample_pair(p_val, d_val)
                 if pair is None:
@@ -310,7 +352,8 @@ class SignalProcessor:
                     self._calib_prox.append(p)
                     self._calib_dist.append(d)
 
-            self._try_finalize_calibration()
+            if not self._calibration_ready:
+                self._try_finalize_calibration()
 
         self.last_seq = seq
         self._advance_playback(now)
@@ -362,4 +405,3 @@ class SignalProcessor:
 
 
 processor = SignalProcessor()
-
