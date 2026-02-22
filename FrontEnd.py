@@ -1283,6 +1283,10 @@ class MainScreen(QMainWindow):
         self._last_valid_pwv = None
         self._last_plot_seq = -1
         self._last_allow_signal_plot = None
+        self._session_started_once = False
+        self._patient_data_sent = False
+        self._last_patient_data_send_attempt = 0.0
+        self._patient_data_retry_sec = 1.0
         self.measuring = False  # Medición inicialmente desactivada
 
         try:
@@ -1732,12 +1736,27 @@ class MainScreen(QMainWindow):
         except Exception:
             pass
 
+    def _try_send_patient_data(self):
+        try:
+            h_val = int(self.patient_data.get('altura', 170))
+            a_val = int(self.patient_data.get('edad', 30))
+            ok = ComunicacionMax.enviar_datos_paciente(h_val, a_val)
+            if ok:
+                self._patient_data_sent = True
+            return ok
+        except Exception:
+            return False
+
     def _limpiar_sesion_local(self):
         self.measuring = False
         self.stop_graph_update()
         processor.stop_session()
         processor.clear_buffers()
         ComunicacionMax.reset_stream_buffers()
+        self._session_started_once = False
+        self._show_calibrating_until_ready = False
+        self._patient_data_sent = False
+        self._last_patient_data_send_attempt = 0.0
     
     # Volver a la ventana de inicio
     def go_back(self):
@@ -1885,59 +1904,66 @@ class MainScreen(QMainWindow):
     # Iniciar medición
     def toggle_measurement(self):
         if not self.measuring:
-            # =======================================================
-            # BLOQUE NUEVO: ENVIAR DATOS AL ESP32
-            # =======================================================
-            try:
-                h_val = int(self.patient_data.get('altura', 170))
-                a_val = int(self.patient_data.get('edad', 30))
-                if ComunicacionMax.connected:
-                    ComunicacionMax.enviar_datos_paciente(h_val, a_val)
-            except Exception:
-                pass
-            # =======================================================
-
-            # --- Iniciar medición (Código original tuyo) ---
-            self.measuring = True
-            ComunicacionMax.reset_stream_buffers()
-            processor.start_session()
-            self._show_calibrating_until_ready = True
             now = time.monotonic()
-            self._last_curve1_data_time = now
-            self._last_curve2_data_time = now
-            self._last_x_end = None
-            self._last_x_range = None
-            self._last_valid_hr = None
-            self._last_valid_pwv = None
-            self._last_plot_seq = -1
-            self._last_allow_signal_plot = None
-            self.graph1.setYRange(-100.0, 100.0, padding=0)
-            self.graph2.setYRange(-100.0, 100.0, padding=0)
-            self.graph1.getAxis('left').setTextPen(pg.mkPen('#d0d0d0'))
-            self.graph1.getAxis('left').setPen(pg.mkPen('#6f6f6f'))
-            self.graph2.getAxis('left').setTextPen(pg.mkPen('#d0d0d0'))
-            self.graph2.getAxis('left').setPen(pg.mkPen('#6f6f6f'))
-            self.graph1.getAxis('left').setTicks([[
-                (-100.0, "-100"),
-                (-50.0, "-50"),
-                (0.0, "0"),
-                (50.0, "50"),
-                (100.0, "100"),
-            ]])
-            self.graph2.getAxis('left').setTicks([[
-                (-100.0, "-100"),
-                (-50.0, "-50"),
-                (0.0, "0"),
-                (50.0, "50"),
-                (100.0, "100"),
-            ]])
-            self.curve1.setData([], [])
-            self.curve2.setData([], [])
-            self.prox_alert_label.setVisible(False)
-            self.dist_alert_label.setVisible(False)
-            self.hr_esp_label.setText("HR: -- bpm")
-            self.pwv_label.setText("crPWV: -- m/s")
-            self.patient_point_item.setData([], [])
+            self._last_patient_data_send_attempt = now
+            self._try_send_patient_data()
+
+            first_start = (not self._session_started_once)
+            self.measuring = True
+            now = time.monotonic()
+
+            if first_start:
+                ComunicacionMax.reset_stream_buffers()
+                processor.start_session()
+                self._session_started_once = True
+                self._show_calibrating_until_ready = True
+                self._patient_data_sent = False
+                self._last_patient_data_send_attempt = now
+                self._try_send_patient_data()
+
+                self._last_curve1_data_time = now
+                self._last_curve2_data_time = now
+                self._last_x_end = None
+                self._last_x_range = None
+                self._last_valid_hr = None
+                self._last_valid_pwv = None
+                self._last_plot_seq = -1
+                self._last_allow_signal_plot = None
+
+                self.graph1.setYRange(-100.0, 100.0, padding=0)
+                self.graph2.setYRange(-100.0, 100.0, padding=0)
+                self.graph1.getAxis('left').setTextPen(pg.mkPen('#d0d0d0'))
+                self.graph1.getAxis('left').setPen(pg.mkPen('#6f6f6f'))
+                self.graph2.getAxis('left').setTextPen(pg.mkPen('#d0d0d0'))
+                self.graph2.getAxis('left').setPen(pg.mkPen('#6f6f6f'))
+                self.graph1.getAxis('left').setTicks([[
+                    (-100.0, "-100"),
+                    (-50.0, "-50"),
+                    (0.0, "0"),
+                    (50.0, "50"),
+                    (100.0, "100"),
+                ]])
+                self.graph2.getAxis('left').setTicks([[
+                    (-100.0, "-100"),
+                    (-50.0, "-50"),
+                    (0.0, "0"),
+                    (50.0, "50"),
+                    (100.0, "100"),
+                ]])
+                self.curve1.setData([], [])
+                self.curve2.setData([], [])
+                self.prox_alert_label.setVisible(False)
+                self.dist_alert_label.setVisible(False)
+                self.hr_esp_label.setText("HR: -- bpm")
+                self.pwv_label.setText("crPWV: -- m/s")
+                self.patient_point_item.setData([], [])
+            else:
+                self._last_curve1_data_time = now
+                self._last_curve2_data_time = now
+                self._last_allow_signal_plot = None
+                metrics = processor.get_metrics()
+                self._show_calibrating_until_ready = bool(metrics.get("calibrating", False))
+
             self.start_graph_button.setText("Detener Medición")
             self.start_graph_button.setStyleSheet("""
                 QPushButton {
@@ -1954,9 +1980,7 @@ class MainScreen(QMainWindow):
             """)
             self.start_graph_update() # <--- Esto inicia el Timer
         else:
-            # --- Detener medición (Código original tuyo) ---
             self.measuring = False
-            processor.stop_session()
             self.start_graph_button.setText("Iniciar Medición")
             self.start_graph_button.setStyleSheet("""
                 QPushButton {
@@ -1972,14 +1996,13 @@ class MainScreen(QMainWindow):
                 }
             """)
             self.stop_graph_update()
-            self._show_calibrating_until_ready = False
 
-    # Arranca el gráfico
+    # Arranca el grafico
     def start_graph_update(self):
         self.timer = QTimer()
         self.timer.setTimerType(Qt.TimerType.PreciseTimer)
         self.timer.timeout.connect(self.update_plot)
-        self.timer.start(33)  # ~30 Hz para visualización más fluida
+        self.timer.start(20)  # ~50 Hz para visualizacion mas fluida
 
     # Detiene el gráfico
     def stop_graph_update(self):
@@ -1992,6 +2015,17 @@ class MainScreen(QMainWindow):
             background-color: {bg_color};
             color: white;
             font-size: 22pt;
+            font-weight: bold;
+            border-radius: 10px;
+        """)
+        label.setVisible(True)
+
+    def _show_connection_alert(self, label, bg_color):
+        label.setText("SIN CONEXION ESP32")
+        label.setStyleSheet(f"""
+            background-color: {bg_color};
+            color: white;
+            font-size: 20pt;
             font-weight: bold;
             border-radius: 10px;
         """)
@@ -2055,20 +2089,29 @@ class MainScreen(QMainWindow):
         c2 = status.get("c2", False)
         s1 = status.get("s1", False)
         s2 = status.get("s2", False)
+        ws_connected = bool(status.get("connected", False))
         now = time.monotonic()
+        if (not self._patient_data_sent) and (now - self._last_patient_data_send_attempt >= self._patient_data_retry_sec):
+            self._last_patient_data_send_attempt = now
+            self._try_send_patient_data()
+
         calibrating = bool(metrics.get("calibrating", False))
         buffer_ready = bool(metrics.get("buffer_ready", not calibrating))
         both_signals_ok = c1 and c2 and s1 and s2
 
-        if self._show_calibrating_until_ready and buffer_ready and both_signals_ok:
-            self._show_calibrating_until_ready = False
-
-        if self._show_calibrating_until_ready:
-            self._show_calibrating_alert(self.prox_alert_label, "#b00020")
-            self._show_calibrating_alert(self.dist_alert_label, "#c2185b")
+        if not ws_connected:
+            self._show_connection_alert(self.prox_alert_label, "#b00020")
+            self._show_connection_alert(self.dist_alert_label, "#c2185b")
         else:
-            self._show_sensor_alert(self.prox_alert_label, "SENSOR PROXIMAL", c1, s1, "#b00020")
-            self._show_sensor_alert(self.dist_alert_label, "SENSOR DISTAL", c2, s2, "#c2185b")
+            if self._show_calibrating_until_ready and buffer_ready and both_signals_ok:
+                self._show_calibrating_until_ready = False
+
+            if self._show_calibrating_until_ready and both_signals_ok:
+                self._show_calibrating_alert(self.prox_alert_label, "#b00020")
+                self._show_calibrating_alert(self.dist_alert_label, "#c2185b")
+            else:
+                self._show_sensor_alert(self.prox_alert_label, "SENSOR PROXIMAL", c1, s1, "#b00020")
+                self._show_sensor_alert(self.dist_alert_label, "SENSOR DISTAL", c2, s2, "#c2185b")
 
         if len(t) > 1:
             x_end = t[-1]
@@ -2103,19 +2146,19 @@ class MainScreen(QMainWindow):
         else:
             should_plot_update = plot_mode_changed or (data_seq != self._last_plot_seq)
             if should_plot_update:
-                if c1 and s1 and len(t) == len(y1) and len(y1) > 1:
+                if len(t) == len(y1) and len(y1) > 1:
                     self.curve1.setData(t, y1)
                     self._last_curve1_data_time = now
-                elif c1 and s1:
+                elif len(y1) > 0:
                     if (now - self._last_curve1_data_time) > self._curve_hold_seconds:
                         self.curve1.setData([], [])
                 else:
                     self.curve1.setData([], [])
 
-                if c2 and s2 and len(t) == len(y2) and len(y2) > 1:
+                if len(t) == len(y2) and len(y2) > 1:
                     self.curve2.setData(t, y2)
                     self._last_curve2_data_time = now
-                elif c2 and s2:
+                elif len(y2) > 0:
                     if (now - self._last_curve2_data_time) > self._curve_hold_seconds:
                         self.curve2.setData([], [])
                 else:
@@ -2138,7 +2181,7 @@ class MainScreen(QMainWindow):
         if pwv_val is not None and pwv_val > 0.0:
             self._last_valid_pwv = pwv_val
         if self._last_valid_pwv is not None:
-            self.pwv_label.setText(f"crPWV: {self._last_valid_pwv:.2f} m/s")
+            self.pwv_label.setText(f"crPWV: {self._last_valid_pwv:.1f} m/s")
             if self.patient_age is not None:
                 self.patient_point_item.setData([self.patient_age], [self._last_valid_pwv])
         elif c1 and c2 and s1 and s2:

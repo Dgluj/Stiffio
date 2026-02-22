@@ -22,6 +22,7 @@ class SignalProcessor:
         self.VIEW_SECONDS = 6.0
         self.MAX_POINTS = max(2, int(round(self.fs * self.VIEW_SECONDS)))
         self.MAX_ADC = 262143.0
+        self.DISPLAY_GAIN = 1000.0
 
         self.proximal_filtered = deque(maxlen=self.MAX_POINTS)
         self.distal_filtered = deque(maxlen=self.MAX_POINTS)
@@ -105,6 +106,7 @@ class SignalProcessor:
         out = []
         for v in values:
             norm = (float(v) / self.MAX_ADC) * 100.0
+            norm *= self.DISPLAY_GAIN
             if norm > 100.0:
                 norm = 100.0
             elif norm < -100.0:

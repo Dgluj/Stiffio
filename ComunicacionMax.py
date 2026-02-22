@@ -16,6 +16,7 @@ Outgoing JSON (Python -> ESP32):
 """
 
 import json
+import os
 import threading
 import time
 from collections import deque
@@ -26,12 +27,25 @@ import websocket
 # ==============================================================================
 # NETWORK CONFIG
 # ==============================================================================
-esp_ip = "172.20.10.4" #CelVit
-# esp_ip = "192.168.0.238" #CasaDani
-ws_url = f"ws://{esp_ip}:81/"
+DEFAULT_ESP_IPS = [
+    "192.168.0.238", # CasaDani (default actual)
+    "172.20.10.4",   # CelVit
+]
+env_ips = os.getenv("STIFFIO_ESP_IPS", "").strip()
+if env_ips:
+    _candidates = [ip.strip() for ip in env_ips.split(",") if ip.strip()]
+else:
+    env_ip = os.getenv("STIFFIO_ESP_IP", "").strip()
+    _candidates = [env_ip] if env_ip else list(DEFAULT_ESP_IPS)
+ESP_IP_CANDIDATES = list(dict.fromkeys(_candidates))
+WS_URL_CANDIDATES = [f"ws://{ip}:81/" for ip in ESP_IP_CANDIDATES]
 WS_PING_INTERVAL_SEC = 12
 WS_PING_TIMEOUT_SEC = 6
 WS_RECONNECT_DELAY_SEC = 1.0
+WS_CONNECT_TIMEOUT_SEC = 3.0
+
+# Evita quedar bloqueado mucho tiempo en una IP inalcanzable antes de pasar a la siguiente.
+websocket.setdefaulttimeout(WS_CONNECT_TIMEOUT_SEC)
 
 # Tiempo de muestreo esperado en el frontend (50 Hz visuales)
 SAMPLE_DT_SEC = 1.0 / 50.0
@@ -45,6 +59,7 @@ SAMPLE_DISCONTINUITY_SEC = 0.300
 # ==============================================================================
 connected = False
 ws_app = None
+active_ws_url = WS_URL_CANDIDATES[0] if WS_URL_CANDIDATES else ""
 
 sensor1_connected = False
 sensor2_connected = False
@@ -129,6 +144,7 @@ def get_snapshot():
     with _state_lock:
         return {
             "connected": connected,
+            "ws_url": active_ws_url,
             "c1": sensor1_connected,
             "c2": sensor2_connected,
             "s1": sensor1_ok,
@@ -217,8 +233,8 @@ def on_message(ws, message):
         if "s2" in data:
             sensor2_ok = _to_bool(data.get("s2"), sensor2_ok)
 
-        # Signal samples
-        if "p" in data and "d" in data and sensor1_connected and sensor2_connected and sensor1_ok and sensor2_ok:
+        # Signal samples (always ingest when present to keep a continuous FIFO on Python side)
+        if "p" in data and "d" in data:
             p_val = _to_float(data.get("p"), 0.0)
             d_val = _to_float(data.get("d"), 0.0)
 
@@ -289,10 +305,18 @@ def on_close(ws, close_status_code, close_msg):
 # THREAD / STARTUP
 # ==============================================================================
 def run_ws():
-    global ws_app
+    global ws_app, active_ws_url
+    url_index = 0
     while True:
+        if not WS_URL_CANDIDATES:
+            time.sleep(WS_RECONNECT_DELAY_SEC)
+            continue
+
+        target_url = WS_URL_CANDIDATES[url_index % len(WS_URL_CANDIDATES)]
+        url_index += 1
+
         ws_local = websocket.WebSocketApp(
-            ws_url,
+            target_url,
             on_open=on_open,
             on_message=on_message,
             on_error=on_error,
@@ -300,6 +324,7 @@ def run_ws():
         )
         with _state_lock:
             ws_app = ws_local
+            active_ws_url = target_url
         try:
             ws_local.run_forever(
                 ping_interval=WS_PING_INTERVAL_SEC,

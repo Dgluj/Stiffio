@@ -19,8 +19,10 @@
 // ==============================================================================================
 
 // Wi-Fi  ===============================================================
-const char* ssid = "iPhonedeVictoria";     // WiFi 
-const char* password = "vitucapa";         // Contraseña
+// const char* ssid = "iPhonedeVictoria";     // WiFi 
+// const char* password = "vitucapa";         // Contraseña
+const char* ssid = "Gavilan GLJ 2.4";
+const char* password = "a1b1c1d1e1";     
 WebSocketsServer webSocket(81);
 bool wifiConectado = false;
 
