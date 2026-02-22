@@ -1253,13 +1253,14 @@ class MainScreen(QMainWindow):
         self._last_x_range = None
         self._last_valid_hr = None
         self._last_valid_pwv = None
-        self._last_plot_seq = -1
         self._last_allow_signal_plot = None
         self._session_started_once = False
         self._patient_data_sent = False
         self._last_patient_data_send_attempt = 0.0
         self._patient_data_retry_sec = 1.0
         self._dist_alert_color = "#ff6fae"
+        self._plot_refresh_interval_sec = 1.0 / 30.0
+        self._last_plot_refresh_time = 0.0
         self._default_y_ticks = [
             (-100.0, "-100"),
             (-50.0, "-50"),
@@ -1897,8 +1898,8 @@ class MainScreen(QMainWindow):
                 self._last_x_range = None
                 self._last_valid_hr = None
                 self._last_valid_pwv = None
-                self._last_plot_seq = -1
                 self._last_allow_signal_plot = None
+                self._last_plot_refresh_time = 0.0
 
                 self.graph1.setYRange(-100.0, 100.0, padding=0)
                 self.graph2.setYRange(-100.0, 100.0, padding=0)
@@ -1921,6 +1922,7 @@ class MainScreen(QMainWindow):
                 self._last_curve1_data_time = now
                 self._last_curve2_data_time = now
                 self._last_allow_signal_plot = None
+                self._last_plot_refresh_time = 0.0
                 metrics = processor.get_metrics()
                 self._show_calibrating_until_ready = bool(metrics.get("calibrating", False))
 
@@ -2143,18 +2145,29 @@ class MainScreen(QMainWindow):
         if len(t) > 1:
             x_end = t[-1]
             self._last_x_end = x_end
-            x_start = max(0.0, x_end - 6.0)
-            new_x_range = (round(x_start, 3), round(x_end, 3))
+            # Primer llenado suave: ventana fija 0..6 s hasta completar los 6 s.
+            if x_end < 6.0:
+                x_start = 0.0
+                x_stop = 6.0
+            else:
+                x_start = x_end - 6.0
+                x_stop = x_end
+            new_x_range = (round(x_start, 2), round(x_stop, 2))
             if self._last_x_range != new_x_range:
-                self.graph1.setXRange(x_start, x_end, padding=0)
-                self.graph2.setXRange(x_start, x_end, padding=0)
+                self.graph1.setXRange(x_start, x_stop, padding=0)
+                self.graph2.setXRange(x_start, x_stop, padding=0)
                 self._last_x_range = new_x_range
         elif self._last_x_end is not None:
-            x_start = max(0.0, self._last_x_end - 6.0)
-            new_x_range = (round(x_start, 3), round(self._last_x_end, 3))
+            if self._last_x_end < 6.0:
+                x_start = 0.0
+                x_stop = 6.0
+            else:
+                x_start = self._last_x_end - 6.0
+                x_stop = self._last_x_end
+            new_x_range = (round(x_start, 2), round(x_stop, 2))
             if self._last_x_range != new_x_range:
-                self.graph1.setXRange(x_start, self._last_x_end, padding=0)
-                self.graph2.setXRange(x_start, self._last_x_end, padding=0)
+                self.graph1.setXRange(x_start, x_stop, padding=0)
+                self.graph2.setXRange(x_start, x_stop, padding=0)
                 self._last_x_range = new_x_range
         else:
             if self._last_x_range != (0.0, 6.0):
@@ -2163,7 +2176,6 @@ class MainScreen(QMainWindow):
                 self._last_x_range = (0.0, 6.0)
 
         allow_signal_plot = buffer_ready and (not self._show_calibrating_until_ready)
-        data_seq = int(metrics.get("data_seq", -1))
         plot_mode_changed = (self._last_allow_signal_plot is None) or (self._last_allow_signal_plot != allow_signal_plot)
         playback_advanced = (
             len(t) > 0 and (prev_x_end is None or abs(t[-1] - prev_x_end) > 1e-6)
@@ -2174,7 +2186,10 @@ class MainScreen(QMainWindow):
                 self.curve1.setData([], [])
                 self.curve2.setData([], [])
         else:
-            should_plot_update = plot_mode_changed or playback_advanced or (data_seq != self._last_plot_seq)
+            should_plot_update = plot_mode_changed or playback_advanced
+            if should_plot_update and (not plot_mode_changed):
+                if (now - self._last_plot_refresh_time) < self._plot_refresh_interval_sec:
+                    should_plot_update = False
             if should_plot_update:
                 if len(t) == len(y1) and len(y1) > 1:
                     self.curve1.setData(t, y1)
@@ -2193,7 +2208,7 @@ class MainScreen(QMainWindow):
                         self.curve2.setData([], [])
                 else:
                     self.curve2.setData([], [])
-                self._last_plot_seq = data_seq
+                self._last_plot_refresh_time = now
 
         self._last_allow_signal_plot = allow_signal_plot
 
