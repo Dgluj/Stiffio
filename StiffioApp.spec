@@ -5,7 +5,7 @@ a = Analysis(
     ['FrontEnd.py'],
     pathex=[],
     binaries=[],
-    datas=[('Logo invertido.png', '.'), ('Logo.jpg', '.'), ('download-icon.png', '.'), ('delete-icon.png', '.'), ('datos_stiffio.csv', '.'), ('mediciones_pwv.csv', '.'), ('Imagenes', 'Imagenes')],
+    datas=[('Logo invertido.png', '.'), ('Logo.jpg', '.'), ('download-icon.png', '.'), ('delete-icon.png', '.'), ('mediciones_pwv.csv', '.'), ('Imagenes', 'Imagenes')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
